@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime/debug"
 )
 
 func main() {
@@ -13,6 +14,18 @@ func main() {
 }
 
 func mainImpl() int {
+
+	// Generic panic handler so we get stack trace
+	defer func() {
+		if e := recover(); e != nil {
+			fmt.Println("git-lob panic: ", e)
+			fmt.Println(string(debug.Stack()))
+			os.Exit(99)
+		}
+
+	}()
+
+	// Command line processing
 	flag.Usage = func() { printUsage() }
 	if err := flag.CommandLine.Parse(os.Args[1:]); err != nil {
 		flag.CommandLine.Usage()
