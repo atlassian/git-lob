@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"runtime/debug"
@@ -26,25 +25,22 @@ func mainImpl() int {
 	}()
 
 	// Command line processing
-	flag.Usage = func() { printUsage() }
-	if err := flag.CommandLine.Parse(os.Args[1:]); err != nil {
-		flag.CommandLine.Usage()
+	// Don't use flag package because it doesn't support options after commands, and
+	// uses the form -option instead of --option which is non-standard for git
+	opts, ok := parseCommandLine(os.Args)
+
+	if !ok {
+		printUsage()
 		return 1
 	}
 
-	remargs := flag.CommandLine.Args()
-
-	if len(remargs) == 0 {
-		fmt.Fprintf(os.Stderr, "git-lob: command required\n")
-		return 1
-	}
-	switch remargs[0] {
+	switch opts.Command {
 	case "filter-smudge":
 		return SmudgeFilter()
 	case "filter-clean":
 		return CleanFilter()
 	default:
-		fmt.Fprintf(os.Stderr, "git-lob: unknown command '%v'\n", remargs[0])
+		fmt.Fprintf(os.Stderr, "git-lob: unknown command '%v'\n", opts.Command)
 		return 1
 	}
 
