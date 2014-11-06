@@ -8,22 +8,22 @@ import (
 var _ = Describe("Args", func() {
 	var args []string
 	var opts *CommandLineOptions
-	var ok bool
+	var errors []string
 
 	Describe("Checking command", func() {
 		It("fails when command is missing", func() {
 			args = []string{"git-lob"}
-			opts, ok = parseCommandLine(args)
-			Expect(ok).To(Equal(false))
+			opts, errors = parseCommandLine(args)
+			Expect(errors).ToNot(BeEmpty())
 			// Command required, with other options
 			args = []string{"git-lob", "--force", "-q"}
-			opts, ok = parseCommandLine(args)
-			Expect(ok).To(Equal(false))
+			opts, errors = parseCommandLine(args)
+			Expect(errors).ToNot(BeEmpty())
 		})
 		It("succeeds when command is present", func() {
 			args = []string{"git-lob", "lock"}
-			opts, ok = parseCommandLine(args)
-			Expect(ok).To(Equal(true))
+			opts, errors = parseCommandLine(args)
+			Expect(errors).To(BeEmpty())
 			Expect(opts.Command).To(Equal("lock"))
 			Expect(opts.Force).To(Equal(false))
 			Expect(opts.Quiet).To(Equal(false))
@@ -34,8 +34,8 @@ var _ = Describe("Args", func() {
 		})
 		It("detects short options", func() {
 			args = []string{"git-lob", "lock", "-q", "-v", "-f", "-n"}
-			opts, ok = parseCommandLine(args)
-			Expect(ok).To(Equal(true))
+			opts, errors = parseCommandLine(args)
+			Expect(errors).To(BeEmpty())
 			Expect(opts.Command).To(Equal("lock"))
 			Expect(opts.Force).To(Equal(true))
 			Expect(opts.Quiet).To(Equal(true))
@@ -46,8 +46,8 @@ var _ = Describe("Args", func() {
 		})
 		It("detects long options", func() {
 			args = []string{"git-lob", "lock", "--quiet", "--verbose", "--force", "--noninteractive"}
-			opts, ok = parseCommandLine(args)
-			Expect(ok).To(Equal(true))
+			opts, errors = parseCommandLine(args)
+			Expect(errors).To(BeEmpty())
 			Expect(opts.Command).To(Equal("lock"))
 			Expect(opts.Force).To(Equal(true))
 			Expect(opts.Quiet).To(Equal(true))
@@ -58,8 +58,8 @@ var _ = Describe("Args", func() {
 		})
 		It("accepts additional options", func() {
 			args = []string{"git-lob", "lock", "--verbose", "--option1=foo", "--option2=bar"}
-			opts, ok = parseCommandLine(args)
-			Expect(ok).To(Equal(true))
+			opts, errors = parseCommandLine(args)
+			Expect(errors).To(BeEmpty())
 			Expect(opts.Command).To(Equal("lock"))
 			Expect(opts.Force).To(Equal(false))
 			Expect(opts.Quiet).To(Equal(false))
@@ -70,8 +70,8 @@ var _ = Describe("Args", func() {
 		})
 		It("accepts additional arguments", func() {
 			args = []string{"git-lob", "lock", "--verbose", "file/one/test.jpg", "file/two/another.png"}
-			opts, ok = parseCommandLine(args)
-			Expect(ok).To(Equal(true))
+			opts, errors = parseCommandLine(args)
+			Expect(errors).To(BeEmpty())
 			Expect(opts.Command).To(Equal("lock"))
 			Expect(opts.Force).To(Equal(false))
 			Expect(opts.Quiet).To(Equal(false))

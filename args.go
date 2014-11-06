@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"regexp"
 )
 
@@ -26,9 +25,9 @@ type CommandLineOptions struct {
 
 // Parse incoming arguments and convert to useful structure, with validation
 // Args should be exactly as provided by os.Args, ie first entry is the executable name
-func parseCommandLine(args []string) (opts *CommandLineOptions, ok bool) {
+func parseCommandLine(args []string) (opts *CommandLineOptions, errors []string) {
 
-	ok = true
+	errors = make([]string, 0, 1)
 	opts = &CommandLineOptions{
 		StringOpts: make(map[string]string),
 		Args:       make([]string, 0, 5)}
@@ -58,9 +57,7 @@ func parseCommandLine(args []string) (opts *CommandLineOptions, ok bool) {
 			case "force":
 				opts.Force = true
 			default:
-				fmt.Fprintf(os.Stderr, "git-lob: invalid option: %v\n", arg)
-				ok = false
-
+				errors = append(errors, fmt.Sprintf("git-lob: invalid option: %v", arg))
 			}
 
 		} else if match := shortBoolRegex.FindStringSubmatch(arg); match != nil {
@@ -75,8 +72,7 @@ func parseCommandLine(args []string) (opts *CommandLineOptions, ok bool) {
 			case "f":
 				opts.Force = true
 			default:
-				fmt.Fprintf(os.Stderr, "git-lob: invalid option: %v\n", arg)
-				ok = false
+				errors = append(errors, fmt.Sprintf("git-lob: invalid option: %v", arg))
 			}
 		} else {
 			if !foundCommand {
@@ -90,8 +86,7 @@ func parseCommandLine(args []string) (opts *CommandLineOptions, ok bool) {
 	}
 
 	if opts.Command == "" {
-		fmt.Fprintf(os.Stderr, "git-lob: command required\n")
-		ok = false
+		errors = append(errors, "git-lob: command required")
 	}
 
 	return

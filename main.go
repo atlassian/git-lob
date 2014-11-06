@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"runtime/debug"
+	"strings"
 )
 
 func main() {
@@ -27,9 +28,10 @@ func mainImpl() int {
 	// Command line processing
 	// Don't use flag package because it doesn't support options after commands, and
 	// uses the form -option instead of --option which is non-standard for git
-	opts, ok := parseCommandLine(os.Args)
+	opts, errors := parseCommandLine(os.Args)
 
-	if !ok {
+	if len(errors) > 0 {
+		fmt.Fprintf(os.Stderr, "%v\n", strings.Join(errors, "\n"))
 		printUsage()
 		return 1
 	}
