@@ -80,6 +80,17 @@ var _ = Describe("Args", func() {
 			Expect(opts.Args).To(Equal([]string{"file/one/test.jpg", "file/two/another.png"}))
 			Expect(opts.StringOpts).To(Equal(map[string]string{}))
 		})
+		It("fails with invalid short option", func() {
+			args = []string{"git-lob", "lock", "-x"}
+			opts, errors = parseCommandLine(args)
+			Expect(errors).ToNot(BeEmpty())
+		})
+		It("fails with invalid long option", func() {
+			args = []string{"git-lob", "lock", "--invalidoption"}
+			opts, errors = parseCommandLine(args)
+			Expect(errors).ToNot(BeEmpty())
+		})
+
 	})
 
 })
