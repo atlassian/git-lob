@@ -34,12 +34,12 @@ var _ = Describe("Hash", func() {
 
 	It("correctly calculates a SHA", func() {
 		testSHA, err := CalculateFileSHA(testFileName)
-		Expect(err).Should(BeNil())
+		Expect(err).To(BeNil())
 		Expect(testSHA).To(Equal(correctSHA))
 
 	})
 	It("correctly fails on missing file", func() {
 		_, err := CalculateFileSHA("/Users/imaginaryperson/this/does/not/exist")
-		Expect(err).ShouldNot(BeNil())
+		Expect(err).ToNot(BeNil())
 	})
 })
