@@ -29,7 +29,9 @@ type CommandLineOptions struct {
 func parseCommandLine(args []string) (opts *CommandLineOptions, ok bool) {
 
 	ok = true
-	opts = &CommandLineOptions{StringOpts: make(map[string]string), Args: make([]string, 0, 5)}
+	opts = &CommandLineOptions{
+		StringOpts: make(map[string]string),
+		Args:       make([]string, 0, 5)}
 	valueRegex := regexp.MustCompile(`^--(\w+)=(\w+)$`)
 	boolRegex := regexp.MustCompile(`^--(\w+)$`)
 	shortBoolRegex := regexp.MustCompile(`^-(\w)$`)

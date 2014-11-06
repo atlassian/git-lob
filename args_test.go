@@ -1,27 +1,37 @@
 package main
 
 import (
-	"testing"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 )
 
-func TestParseCommandLine(t *testing.T) {
+var _ = Describe("Args", func() {
 	var args []string
 	var opts *CommandLineOptions
 	var ok bool
 
-	// Command required
-	args = []string{"git-lob"}
-	opts, ok = parseCommandLine(args)
-	if ok {
-		t.Error("Should have failed because no command specified")
-	}
-	// Command required, with other options
-	args = []string{"git-lob", "--force", "-q"}
-	opts, ok = parseCommandLine(args)
-	if ok {
-		t.Error("Should have failed because no command specified")
-	}
+	Describe("Checking command", func() {
+		It("fails when command is missing", func() {
+			args = []string{"git-lob"}
+			opts, ok = parseCommandLine(args)
+			Expect(ok).To(Equal(false))
+			// Command required, with other options
+			args = []string{"git-lob", "--force", "-q"}
+			opts, ok = parseCommandLine(args)
+			Expect(ok).To(Equal(false))
+		})
+		It("succeeds when command is present", func() {
+			args = []string{"git-lob", "lock"}
+			opts, ok = parseCommandLine(args)
+			Expect(ok).To(Equal(true))
+			Expect(opts.Command).To(Equal("lock"))
+			Expect(opts.Force).To(Equal(false))
+			Expect(opts.Quiet).To(Equal(false))
+			Expect(opts.Verbose).To(Equal(false))
+			Expect(opts.NonInteractive).To(Equal(false))
+			Expect(opts.Args).To(Equal([]string{}))
+			Expect(opts.StringOpts).To(Equal(map[string]string{}))
+		})
+	})
 
-	_ = opts
-
-}
+})
