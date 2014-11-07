@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 )
 
@@ -22,6 +23,8 @@ var (
 func LogErrorf(format string, v ...interface{}) {
 	errorFileLog.Printf(format, v...)
 	errorConsoleLog.Printf(format, v...)
+	// Also dump stack trace to log
+	errorFileLog.Println(debug.Stack())
 }
 
 // Log debug message with format (if verbose)
