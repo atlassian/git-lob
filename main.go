@@ -7,6 +7,10 @@ import (
 	"strings"
 )
 
+var (
+	GlobalOptions *CommandLineOptions
+)
+
 func main() {
 	// Need to send the result code to the OS but also need to support 'defer'
 	// os.Exit would finish before any defers, so wrap everything in mainImpl()
@@ -28,21 +32,25 @@ func mainImpl() int {
 	// Command line processing
 	// Don't use flag package because it doesn't support options after commands, and
 	// uses the form -option instead of --option which is non-standard for git
-	opts, errors := parseCommandLine(os.Args)
+	GlobalOptions, errors := parseCommandLine(os.Args)
+
+	// Init logging after command line opts
+	InitLogging()
+	defer ShutDownLogging()
 
 	if len(errors) > 0 {
-		fmt.Fprintf(os.Stderr, "%v\n", strings.Join(errors, "\n"))
+		LogErrorf("%v\n", strings.Join(errors, "\n"))
 		printUsage()
 		return 1
 	}
 
-	switch opts.Command {
+	switch GlobalOptions.Command {
 	case "filter-smudge":
 		return SmudgeFilter()
 	case "filter-clean":
 		return CleanFilter()
 	default:
-		fmt.Fprintf(os.Stderr, "git-lob: unknown command '%v'\n", opts.Command)
+		fmt.Fprintf(os.Stderr, "git-lob: unknown command '%v'\n", GlobalOptions.Command)
 		return 1
 	}
 
