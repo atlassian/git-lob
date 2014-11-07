@@ -22,7 +22,14 @@ func SmudgeFilter() int {
 	if c == SHALineLen {
 		if match := shaRegex.FindStringSubmatch(string(buf)); match != nil {
 			sha := match[1]
-			return writeLOB(sha, os.Stdout)
+			lobinfo, err := RetrieveLOB(sha, os.Stdout)
+			if err == nil {
+				LogDebugf("Retrieved LOB for %v from %v chunks\n", sha, lobinfo.NumChunks)
+				return 0
+			} else {
+				LogErrorf("Error obtaining LOB data: %v\n", err)
+			}
+
 		}
 	}
 	// Otherwise, pass through content
@@ -42,9 +49,6 @@ func CleanFilter() int {
 	return -1
 }
 
-func writeLOB(sha string, out io.Writer) int {
-	return -1
-}
-func createLOB(in io.Reader) int {
+func retrieveLOB(sha string, out io.Writer) int {
 	return -1
 }

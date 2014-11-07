@@ -1,11 +1,23 @@
 package main
 
 import (
+	"encoding/json"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
 )
+
+// Information about a LOB
+type LOBInfo struct {
+	// SHA of the LOB
+	SHA string
+	// Total size of the LOB (all chunks)
+	Size int64
+	// Number of chunks that make up the whole LOB (integrity check)
+	NumChunks int
+}
 
 // Gets the root folder of this git repository (the one containing .git)
 func GetRepoRoot() (path string, isSeparateGitDir bool) {
@@ -69,4 +81,65 @@ func GetLOBFolder(sha string) string {
 		return ""
 	}
 	return filepath.Join(GetLOBRoot(), sha[:2])
+}
+
+func getLOBMetaFilename(lobfld string, sha string) string {
+	return filepath.Join(lobfld, sha+"_meta")
+}
+
+// Retrieve information about an existing stored LOB
+func GetLOBInfo(sha string) (*LOBInfo, error) {
+	fld := GetLOBFolder(sha)
+	meta := getLOBMetaFilename(fld, sha)
+	infobytes, err := ioutil.ReadFile(meta)
+
+	if err != nil {
+		// Maybe just that it's not been downloaded yet
+		// Let caller decide
+		return nil, err
+	}
+	// Read JSON metadata
+	info := &LOBInfo{}
+	err = json.Unmarshal(infobytes, info)
+	if err != nil {
+		// Fatal, corruption
+		LogErrorf("Unable to interpret meta file %v: %v\n", meta, err)
+		return nil, err
+	}
+
+	return info, nil
+
+}
+
+// Retrieve LOB from storage
+func RetrieveLOB(sha string, out io.Writer) (info *LOBInfo, err error) {
+	info, err = GetLOBInfo(sha)
+
+	if err != nil {
+		if os.IsNotExist(err) {
+			// We don't have this file yet
+			// Potentially auto-download
+			// TODO
+		} else {
+			// A problem
+			LogErrorf("Unable to retrieve LOB with SHA %v: %v\n", sha, err)
+			return nil, err
+		}
+	}
+
+	for i := 0; i < info.NumChunks; i++ {
+		// Check each chunk file exists, and is correct size
+		// if not, maybe download (again)
+		// TODO
+	}
+
+	return
+
+}
+
+// Store a LOB from a file stream
+func StoreLOB(in io.Reader) (info *LOBInfo, err error) {
+	// TODO
+	return
+
 }
