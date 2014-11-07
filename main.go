@@ -22,8 +22,8 @@ func mainImpl() int {
 	// Generic panic handler so we get stack trace
 	defer func() {
 		if e := recover(); e != nil {
-			fmt.Println("git-lob panic: ", e)
-			fmt.Println(string(debug.Stack()))
+			LogErrorf("git-lob panic: \n", e)
+			LogError(string(debug.Stack()))
 			os.Exit(99)
 		}
 
@@ -39,7 +39,7 @@ func mainImpl() int {
 	defer ShutDownLogging()
 
 	if len(errors) > 0 {
-		LogErrorf("%v\n", strings.Join(errors, "\n"))
+		fmt.Fprintf(os.Stderr, "%v\n", strings.Join(errors, "\n"))
 		printUsage()
 		return 1
 	}
