@@ -8,15 +8,19 @@ import (
 	"os"
 )
 
+const BUFSIZE = 8192
+const NUMBUFS = 4
+
+// TODO make chunking user-configurable, default to 32MB
+// chunk limit MUST be a multiple of BUFSIZE right now
+const CHUNKLIMIT = BUFSIZE * 4086
+
+type BufferData struct {
+	BufIdx int
+	Count  int
+}
+
 func CalculateFileSHA(fullpath string) (retsha string, err error) {
-
-	const BUFSIZE = 8192
-	const NUMBUFS = 4
-
-	type BufferData struct {
-		BufIdx int
-		Count  int
-	}
 
 	// Channel indicating data in a buffer is ready
 	datachan := make(chan BufferData, NUMBUFS)

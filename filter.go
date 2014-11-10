@@ -45,10 +45,36 @@ func SmudgeFilter() int {
 
 func CleanFilter() int {
 	LogDebug("Running clean filter")
-	// stdin / stdout
-	return -1
-}
+	shaRegex := regexp.MustCompile("^git-lob: ([0-9A-Fa-f]{40})$")
+	// read working copy content from stdin
+	// First check if this is an unexpanded LOB SHA (not downloaded)
+	buf := make([]byte, SHALineLen)
+	c, err := os.Stdin.Read(buf)
+	if c == SHALineLen {
+		if match := shaRegex.FindStringSubmatch(string(buf)); match != nil {
+			sha := match[1]
+			LogDebugf("Unexpanded LOB SHA in file content (%v), clean filter will not change\n", sha)
+			// Yes, unexpanded SHA, just write
+			os.Stdout.Write(buf[:c])
+			_, err = io.Copy(os.Stdout, os.Stdin)
+			if err == nil {
+				return 0
+			} else {
+				LogErrorf("Error writing unexpanded LOB in clean filter: %v\n", err)
+				return 3
+			}
 
-func retrieveLOB(sha string, out io.Writer) int {
-	return -1
+		}
+	}
+	// Otherwise if we got here, this is just binary data we need to hash
+	lobinfo, err := StoreLOB(os.Stdin, buf)
+
+	if err != nil {
+		LogErrorf("Error storing LOB in clean filter: %v\n", err)
+		return 4
+	}
+
+	LogDebugf("Successfully stored/checked LOB data for SHA %v, %d chunks, total size %v\n", lobinfo.SHA, lobinfo.NumChunks, lobinfo.Size)
+
+	return 0
 }

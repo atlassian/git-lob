@@ -1,7 +1,9 @@
 package main
 
 import (
+	"crypto/sha1"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -70,7 +72,13 @@ func GetGitDir() string {
 
 // Gets the root directory for LOB files & creates if necessary
 func GetLOBRoot() string {
-	return filepath.Join(GetGitDir(), "git-lob")
+	ret := filepath.Join(GetGitDir(), "git-lob")
+	err := os.MkdirAll(ret, 0777)
+	if err != nil {
+		LogErrorf("Unable to create LOB root folder at %v: %v", ret, err)
+		panic(err)
+	}
+	return ret
 }
 
 // Gets the containing folder for a given LOB SHA & creates if necessary
@@ -83,14 +91,18 @@ func GetLOBDir(sha string) string {
 	return filepath.Join(GetLOBRoot(), sha[:2])
 }
 
-func getLOBMetaFilename(lobfld string, sha string) string {
-	return filepath.Join(lobfld, sha+"_meta")
+func getLOBMetaFilename(sha string) string {
+	fld := GetLOBDir(sha)
+	return filepath.Join(fld, sha+"_meta")
+}
+func getLOBChunkFilename(sha string, chunkIdx int) string {
+	fld := GetLOBDir(sha)
+	return filepath.Join(fld, fmt.Sprintf("%v_%d", sha, chunkIdx))
 }
 
 // Retrieve information about an existing stored LOB
 func GetLOBInfo(sha string) (*LOBInfo, error) {
-	fld := GetLOBDir(sha)
-	meta := getLOBMetaFilename(fld, sha)
+	meta := getLOBMetaFilename(sha)
 	infobytes, err := ioutil.ReadFile(meta)
 
 	if err != nil {
@@ -137,9 +149,122 @@ func RetrieveLOB(sha string, out io.Writer) (info *LOBInfo, err error) {
 
 }
 
-// Store a LOB from a file stream
-func StoreLOB(in io.Reader) (info *LOBInfo, err error) {
-	// TODO
-	return
+// Read from a stream and calculate SHA, while also writing content to chunked content
+// leader is a slice of bytes that has already been read (probe for SHA)
+func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
+
+	sha := sha1.New()
+	// Write chunks to temporary files, then move based on SHA filename once calculated
+	chunkFilenames := make([]string, 0, 5)
+
+	var outf *os.File
+	writeLeader := true
+	buf := make([]byte, BUFSIZE)
+	var fatalError error
+	currentChunkSize := 0
+	var totalSize int64 = 0
+
+	for {
+		// New chunk file?
+		if outf == nil {
+			outf, err := ioutil.TempFile("", "")
+			if err != nil {
+				LogErrorf("Unable to create chunk %d: %v", len(chunkFilenames), err)
+				fatalError = err
+				break
+			}
+			chunkFilenames = append(chunkFilenames, outf.Name())
+			currentChunkSize = 0
+		}
+		if writeLeader {
+			sha.Write(leader)
+			c, err := outf.Write(leader)
+			if err != nil {
+				LogErrorf("I/O error writing leader: %v", err)
+				fatalError = err
+				break
+			}
+			currentChunkSize += c
+			totalSize += int64(c)
+			writeLeader = false
+		}
+		// Read from incoming
+		c, err := in.Read(buf)
+		// Write any data to SHA & output
+		if c > 0 {
+			currentChunkSize += c
+			totalSize += int64(c)
+			sha.Write(buf)
+			cw, err := outf.Write(buf)
+			if err != nil || cw != c {
+				LogErrorf("I/O error writing chunk %d: %v", len(chunkFilenames), err)
+				fatalError = err
+				break
+			}
+		}
+		if err != nil {
+			if err == io.EOF {
+				// End of input
+				outf.Close()
+				break
+			} else {
+				LogErrorf("I/O error reading chunk %d: %v", len(chunkFilenames), err)
+				outf.Close()
+				fatalError = err
+				break
+			}
+		}
+		// Deal with chunk limit
+		// NB right now assumes BUFSIZE is an exact divisor of CHUNKSIZE
+		if currentChunkSize >= CHUNKLIMIT {
+			// Close this output, next iteration will create the next file
+			outf.Close()
+			outf = nil
+		}
+
+	}
+
+	if fatalError != nil {
+		// Clean up temporaries
+		for _, f := range chunkFilenames {
+			os.Remove(f)
+		}
+		return nil, fatalError
+	}
+
+	shaStr := fmt.Sprintf("%x", string(sha.Sum(nil)))
+
+	// We *may* now move the data to LOB dir
+	// We won't if it already exists & is the correct size
+	// Construct LOBInfo & write to final location
+	info := &LOBInfo{SHA: shaStr, Size: totalSize, NumChunks: len(chunkFilenames)}
+	infoBytes, err := json.Marshal(info)
+	if err != nil {
+		LogErrorf("Unable to convert LOB info to JSON: %v\n", err)
+		return nil, err
+	}
+	infoFilename := getLOBMetaFilename(shaStr)
+	if !FileExistsAndIsOfSize(infoFilename, int64(len(infoBytes))) {
+		// Since all the details are derived from the SHA the only variant is chunking or incomplete writes so
+		// we don't need to worry about needing to update the content (it must be correct)
+		ioutil.WriteFile(infoFilename, infoBytes, 0777)
+	}
+	// Check each chunk file
+	for i, f := range chunkFilenames {
+		sz := CHUNKLIMIT
+		if i+1 == len(chunkFilenames) {
+			// Last chunk, get size
+			sz = currentChunkSize
+		}
+		destFile := getLOBChunkFilename(shaStr, i)
+		if !FileExistsAndIsOfSize(destFile, int64(sz)) {
+			// delete any existing (incorrectly sized) file since will probably not be allowed to rename over it
+			// ignore any errors
+			os.Remove(destFile)
+			os.Rename(f, destFile)
+		}
+	}
+
+	return info, nil
 
 }
