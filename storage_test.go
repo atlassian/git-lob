@@ -61,6 +61,15 @@ var _ = Describe("Storage", func() {
 				}
 			})
 		})
+		Context("Invalid git repo", func() {
+			It("Fails safely outside a git repo", func() {
+				// Relies on temp dir not being a git repo, which should be valid assumption
+				os.Chdir(os.TempDir())
+				testroot, _ := GetRepoRoot()
+				Expect(testroot).To(Equal(""))
+			})
+
+		})
 
 	})
 
