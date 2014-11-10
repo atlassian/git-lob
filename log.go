@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -21,36 +22,60 @@ var (
 
 // Log error with format (no implicit newline)
 func LogErrorf(format string, v ...interface{}) {
-	errorFileLog.Printf(format, v...)
-	errorConsoleLog.Printf(format, v...)
-	// Also dump stack trace to log
-	errorFileLog.Println(debug.Stack())
+	if errorFileLog != nil && errorConsoleLog != nil {
+		errorFileLog.Printf(format, v...)
+		errorConsoleLog.Printf(format, v...)
+		// Also dump stack trace to log
+		errorFileLog.Println(debug.Stack())
+	} else {
+		fmt.Fprintf(os.Stderr, format, v...)
+	}
 }
 
 // Log debug message with format (if verbose)
 func LogDebugf(format string, v ...interface{}) {
-	debugLog.Printf(format, v...)
+	if debugLog != nil {
+		debugLog.Printf(format, v...)
+	} else {
+		fmt.Fprintf(os.Stderr, format, v...)
+	}
 }
 
 // Log output message with format (if not quiet)
 func Logf(format string, v ...interface{}) {
-	outputLog.Printf(format, v...)
+	if outputLog != nil {
+		outputLog.Printf(format, v...)
+	} else {
+		fmt.Fprintf(os.Stderr, format, v...)
+	}
 }
 
 // Log error message with newline
 func LogError(msg string) {
-	errorFileLog.Println(msg)
-	errorConsoleLog.Println(msg)
+	if errorFileLog != nil && errorConsoleLog != nil {
+		errorFileLog.Println(msg)
+		errorConsoleLog.Println(msg)
+	} else {
+		fmt.Fprintln(os.Stderr, msg)
+	}
 }
 
 // Log debug message with newline (if verbose)
 func LogDebug(msg string) {
-	debugLog.Println(msg)
+	if debugLog != nil {
+		debugLog.Println(msg)
+	} else {
+		fmt.Fprintln(os.Stderr, msg)
+	}
 }
 
 // Log output message with newline (if not quiet)
 func Log(msg string) {
-	outputLog.Println(msg)
+	if outputLog != nil {
+		outputLog.Println(msg)
+	} else {
+		fmt.Fprintln(os.Stderr, msg)
+	}
 }
 
 func getLogFileHandle() *os.File {
