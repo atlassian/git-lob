@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -149,6 +150,70 @@ var _ = Describe("Storage", func() {
 			})
 
 		})
+	})
+
+	Describe("Storing a LOB", func() {
+		// Common git repo
+		BeforeEach(func() {
+			// Set up git repo with some subfolders
+			CreateGitRepoForTest(root)
+
+			for _, f := range folders {
+				err := os.MkdirAll(f, 0777)
+				if err != nil {
+					fmt.Printf("Can't MkdirAll %v: %v", f, err)
+				}
+			}
+
+		})
+
+		AfterEach(func() {
+			// Delete repo
+			os.RemoveAll(root)
+		})
+
+		Context("Small single chunk LOB", func() {
+			testFileName := path.Join(folders[2], "small.dat")
+			// This was calculated with 'shasum' on Mac OS X with this file content
+			correctLOBInfo := LOBInfo{SHA: "772157c6ef480852edf921f5924b1ca582b0d78f", NumChunks: 1, Size: 128 * 255 * 16}
+
+			BeforeEach(func() {
+				// Create binary file
+				f, err := os.OpenFile(testFileName, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0777)
+				if err != nil {
+					Fail(fmt.Sprintf("Can't create test file %v: %v", testFileName, err))
+				}
+				for i := 0; i < 128; i++ {
+					var j byte
+					for j = 0; j < 255; j++ {
+						f.Write(bytes.Repeat([]byte{j}, 16))
+					}
+				}
+				f.Close()
+			})
+			AfterEach(func() {
+				os.Remove(testFileName)
+			})
+
+			It("correctly stores a small file", func() {
+				f, err := os.Open(testFileName)
+				if err != nil {
+					Fail(fmt.Sprintf("Can't reopen test file %v: %v", testFileName, err))
+				}
+				// Need to read leader for consistency with real usage
+				leader := make([]byte, SHALineLen)
+				c, err := f.Read(leader)
+				if err != nil {
+					Fail(fmt.Sprintf("Can't read leader of test file %v: %v", testFileName, err))
+				}
+				lobinfo, err := StoreLOB(f, leader[:c])
+				Expect(err).To(BeNil())
+				Expect(lobinfo).To(Equal(correctLOBInfo))
+
+			})
+
+		})
+
 	})
 
 })
