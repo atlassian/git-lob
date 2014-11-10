@@ -158,6 +158,7 @@ func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
 	chunkFilenames := make([]string, 0, 5)
 
 	var outf *os.File
+	var err error
 	writeLeader := true
 	buf := make([]byte, BUFSIZE)
 	var fatalError error
@@ -167,20 +168,22 @@ func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
 	for {
 		// New chunk file?
 		if outf == nil {
-			outf, err := ioutil.TempFile("", "")
+			outf, err = ioutil.TempFile("", "tempchunk")
 			if err != nil {
-				LogErrorf("Unable to create chunk %d: %v", len(chunkFilenames), err)
+				LogErrorf("Unable to create chunk %d: %v\n", len(chunkFilenames), err)
 				fatalError = err
 				break
 			}
+			LogDebugf("Creating temporary chunk file #%d: %v\n", len(chunkFilenames), outf.Name())
 			chunkFilenames = append(chunkFilenames, outf.Name())
 			currentChunkSize = 0
 		}
 		if writeLeader {
+			LogDebugf("Writing leader of size %d to %v\n", len(leader), outf.Name())
 			sha.Write(leader)
 			c, err := outf.Write(leader)
 			if err != nil {
-				LogErrorf("I/O error writing leader: %v", err)
+				LogErrorf("I/O error writing leader: %v wrote %d bytes of %d\n", err, c, len(leader))
 				fatalError = err
 				break
 			}
@@ -197,7 +200,7 @@ func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
 			sha.Write(buf)
 			cw, err := outf.Write(buf)
 			if err != nil || cw != c {
-				LogErrorf("I/O error writing chunk %d: %v", len(chunkFilenames), err)
+				LogErrorf("I/O error writing chunk %d: %v\n", len(chunkFilenames), err)
 				fatalError = err
 				break
 			}
@@ -247,7 +250,10 @@ func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
 	if !FileExistsAndIsOfSize(infoFilename, int64(len(infoBytes))) {
 		// Since all the details are derived from the SHA the only variant is chunking or incomplete writes so
 		// we don't need to worry about needing to update the content (it must be correct)
+		LogDebugf("Writing LOB metadata file: %v\n", infoFilename)
 		ioutil.WriteFile(infoFilename, infoBytes, 0777)
+	} else {
+		LogDebugf("LOB metadata file already exists & is valid: %v\n", infoFilename)
 	}
 	// Check each chunk file
 	for i, f := range chunkFilenames {
@@ -258,10 +264,13 @@ func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
 		}
 		destFile := getLOBChunkFilename(shaStr, i)
 		if !FileExistsAndIsOfSize(destFile, int64(sz)) {
+			LogDebugf("Saving final LOB metadata file: %v\n", destFile)
 			// delete any existing (incorrectly sized) file since will probably not be allowed to rename over it
 			// ignore any errors
 			os.Remove(destFile)
 			os.Rename(f, destFile)
+		} else {
+			LogDebugf("LOB chunk file already exists & is valid: %v\n", destFile)
 		}
 	}
 
