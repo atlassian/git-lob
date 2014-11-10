@@ -43,8 +43,8 @@ func GetRepoRoot() (path string, isSeparateGitDir bool) {
 	}
 }
 
-// Gets the git data folder of git repository (the .git folder, or where .git file points)
-func GetGitFolder() string {
+// Gets the git data dir of git repository (the .git dir, or where .git file points)
+func GetGitDir() string {
 	root, isSeparate := GetRepoRoot()
 	git := filepath.Join(root, ".git")
 	if isSeparate {
@@ -70,12 +70,12 @@ func GetGitFolder() string {
 
 // Gets the root directory for LOB files & creates if necessary
 func GetLOBRoot() string {
-	return filepath.Join(GetGitFolder(), "git-lob")
+	return filepath.Join(GetGitDir(), "git-lob")
 }
 
 // Gets the containing folder for a given LOB SHA & creates if necessary
 // LOBs are 'splayed' based on first 2 chars of SHA
-func GetLOBFolder(sha string) string {
+func GetLOBDir(sha string) string {
 	if len(sha) != 40 {
 		LogErrorf("Invalid SHA format: %v\n", sha)
 		return ""
@@ -89,7 +89,7 @@ func getLOBMetaFilename(lobfld string, sha string) string {
 
 // Retrieve information about an existing stored LOB
 func GetLOBInfo(sha string) (*LOBInfo, error) {
-	fld := GetLOBFolder(sha)
+	fld := GetLOBDir(sha)
 	meta := getLOBMetaFilename(fld, sha)
 	infobytes, err := ioutil.ReadFile(meta)
 

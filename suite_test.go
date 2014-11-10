@@ -22,3 +22,10 @@ func CreateGitRepoForTest(path string) {
 		Fail("Unable to create git repo: " + err.Error())
 	}
 }
+func CreateGitRepoWithSeparateGitDirForTest(path string, gitDir string) {
+	cmd := exec.Command("git", "init", "--separate-git-dir", gitDir, path)
+	err := cmd.Run()
+	if err != nil {
+		Fail("Unable to create git repo: " + err.Error())
+	}
+}
