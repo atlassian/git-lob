@@ -67,7 +67,7 @@ func CleanFilter() int {
 		}
 	}
 	// Otherwise if we got here, this is just binary data we need to hash
-	lobinfo, err := StoreLOB(os.Stdin, buf)
+	lobinfo, err := StoreLOB(os.Stdin, buf[:c])
 
 	if err != nil {
 		LogErrorf("Error storing LOB in clean filter: %v\n", err)
