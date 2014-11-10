@@ -32,7 +32,7 @@ func GetRepoRoot() (path string, isSeparateGitDir bool) {
 	for {
 		exists, isDir := FileOrDirExists(filepath.Join(curDir, ".git"))
 		if exists {
-			return curDir, isDir
+			return curDir, !isDir
 		}
 		curDir = filepath.Dir(curDir)
 		if curDir == string(filepath.Separator) || curDir == "." {
