@@ -8,12 +8,7 @@ import (
 	"os"
 )
 
-const BUFSIZE = 8192
 const NUMBUFS = 4
-
-// TODO make chunking user-configurable, default to 32MB
-// chunk limit MUST be a multiple of BUFSIZE right now
-const CHUNKLIMIT = BUFSIZE * 4086
 
 type BufferData struct {
 	BufIdx int

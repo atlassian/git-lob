@@ -11,6 +11,12 @@ import (
 	"regexp"
 )
 
+const BUFSIZE = 8192
+
+// TODO make chunking user-configurable, default to 32MB
+// chunk limit should be a multiple of BUFSIZE for max efficiency
+const CHUNKLIMIT = BUFSIZE * 4086
+
 // Information about a LOB
 type LOBInfo struct {
 	// SHA of the LOB
@@ -192,7 +198,12 @@ func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
 			writeLeader = false
 		}
 		// Read from incoming
-		c, err := in.Read(buf)
+		var bytesToRead = BUFSIZE
+		if BUFSIZE+currentChunkSize > CHUNKLIMIT {
+			// Read less than BUFSIZE so we stick to CHUNKLIMIT
+			bytesToRead = CHUNKLIMIT - currentChunkSize
+		}
+		c, err := in.Read(buf[:bytesToRead])
 		// Write any data to SHA & output
 		if c > 0 {
 			currentChunkSize += c
