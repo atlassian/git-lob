@@ -94,7 +94,13 @@ func GetLOBDir(sha string) string {
 		LogErrorf("Invalid SHA format: %v\n", sha)
 		return ""
 	}
-	return filepath.Join(GetLOBRoot(), sha[:2])
+	ret := filepath.Join(GetLOBRoot(), sha[:2])
+	err := os.MkdirAll(ret, 0777)
+	if err != nil {
+		LogErrorf("Unable to create LOB 2nd-levle folder at %v: %v", ret, err)
+		panic(err)
+	}
+	return ret
 }
 
 func getLOBMetaFilename(sha string) string {
