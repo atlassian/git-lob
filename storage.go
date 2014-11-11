@@ -215,7 +215,7 @@ func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
 			currentChunkSize += c
 			totalSize += int64(c)
 			sha.Write(buf[:c])
-			cw, err := outf.Write(buf)
+			cw, err := outf.Write(buf[:c])
 			if err != nil || cw != c {
 				LogErrorf("I/O error writing chunk %d: %v\n", len(chunkFilenames), err)
 				fatalError = err

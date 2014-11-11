@@ -200,6 +200,7 @@ var _ = Describe("Storage", func() {
 				if err != nil {
 					Fail(fmt.Sprintf("Can't reopen test file %v: %v", testFileName, err))
 				}
+				defer f.Close()
 				// Need to read leader for consistency with real usage
 				leader := make([]byte, SHALineLen)
 				c, err := f.Read(leader)
@@ -207,8 +208,11 @@ var _ = Describe("Storage", func() {
 					Fail(fmt.Sprintf("Can't read leader of test file %v: %v", testFileName, err))
 				}
 				lobinfo, err := StoreLOB(f, leader[:c])
-				Expect(err).To(BeNil())
+				Expect(err).To(BeNil(), "Shouldn't be error storing LOB")
 				Expect(lobinfo).To(Equal(correctLOBInfo))
+				fileinfo, err := os.Stat(getLOBChunkFilename(lobinfo.SHA, 0))
+				Expect(err).To(BeNil(), "Shouldn't be error opening stored LOB")
+				Expect(fileinfo.Size()).To(Equal(lobinfo.Size), "Stored LOB should be correct size")
 
 			})
 
