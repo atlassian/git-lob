@@ -217,7 +217,7 @@ var _ = Describe("Storage", func() {
 
 		})
 
-		Context("Large multiple chunk LOB (LONG)", func() {
+		Context("Large multiple chunk LOB [LONGTEST]", func() {
 
 			testFileName := path.Join(folders[2], "large.dat")
 			// This was calculated with 'shasum' on Mac OS X with this file content
