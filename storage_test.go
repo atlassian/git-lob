@@ -175,7 +175,7 @@ var _ = Describe("Storage", func() {
 		Context("Small single chunk LOB", func() {
 			testFileName := path.Join(folders[2], "small.dat")
 			// This was calculated with 'shasum' on Mac OS X with this file content
-			correctLOBInfo := LOBInfo{SHA: "772157c6ef480852edf921f5924b1ca582b0d78f", NumChunks: 1, Size: 128 * 255 * 16}
+			correctLOBInfo := &LOBInfo{SHA: "772157c6ef480852edf921f5924b1ca582b0d78f", NumChunks: 1, Size: 128 * 255 * 16}
 
 			BeforeEach(func() {
 				// Create binary file
