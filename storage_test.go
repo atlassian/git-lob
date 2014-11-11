@@ -213,7 +213,59 @@ var _ = Describe("Storage", func() {
 				fileinfo, err := os.Stat(getLOBChunkFilename(lobinfo.SHA, 0))
 				Expect(err).To(BeNil(), "Shouldn't be error opening stored LOB")
 				Expect(fileinfo.Size()).To(Equal(lobinfo.Size), "Stored LOB should be correct size")
+			})
 
+		})
+
+		Context("Large multiple chunk LOB (LONG)", func() {
+
+			testFileName := path.Join(folders[2], "large.dat")
+			// This was calculated with 'shasum' on Mac OS X with this file content
+			correctLOBInfo := &LOBInfo{SHA: "6dc61e7c7d33e87592da1e534063052a17bf8f3c", NumChunks: 4, Size: 25000 * 255 * 16}
+
+			BeforeEach(func() {
+				// Create binary file
+				f, err := os.OpenFile(testFileName, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0777)
+				if err != nil {
+					Fail(fmt.Sprintf("Can't create test file %v: %v", testFileName, err))
+				}
+				for i := 0; i < 25000; i++ {
+					var j byte
+					for j = 0; j < 255; j++ {
+						f.Write(bytes.Repeat([]byte{j}, 16))
+					}
+				}
+				f.Close()
+			})
+			AfterEach(func() {
+				//os.Remove(testFileName)
+			})
+
+			It("correctly stores a large file", func() {
+				f, err := os.Open(testFileName)
+				if err != nil {
+					Fail(fmt.Sprintf("Can't reopen test file %v: %v", testFileName, err))
+				}
+				defer f.Close()
+				// Need to read leader for consistency with real usage
+				leader := make([]byte, SHALineLen)
+				c, err := f.Read(leader)
+				if err != nil {
+					Fail(fmt.Sprintf("Can't read leader of test file %v: %v", testFileName, err))
+				}
+				lobinfo, err := StoreLOB(f, leader[:c])
+				Expect(err).To(BeNil(), "Shouldn't be error storing LOB")
+				Expect(lobinfo).To(Equal(correctLOBInfo))
+				for i := 0; i < lobinfo.NumChunks; i++ {
+					fileinfo, err := os.Stat(getLOBChunkFilename(lobinfo.SHA, i))
+					Expect(err).To(BeNil(), "Shouldn't be error opening stored LOB #%v", i)
+					if i+1 < lobinfo.NumChunks {
+						Expect(fileinfo.Size()).To(BeEquivalentTo(CHUNKLIMIT), "Stored LOB #%v should be chunk limit size", i)
+					} else {
+						Expect(fileinfo.Size()).To(BeEquivalentTo(lobinfo.Size%CHUNKLIMIT), "Stored LOB #%v should be correct size", i)
+					}
+
+				}
 			})
 
 		})
