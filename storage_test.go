@@ -5,6 +5,7 @@ import (
 	"fmt"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -172,7 +173,7 @@ var _ = Describe("Storage", func() {
 			os.RemoveAll(root)
 		})
 
-		Context("Small single chunk LOB", func() {
+		Context("Store small single chunk LOB", func() {
 			testFileName := path.Join(folders[2], "small.dat")
 			// This was calculated with 'shasum' on Mac OS X with this file content
 			correctLOBInfo := &LOBInfo{SHA: "772157c6ef480852edf921f5924b1ca582b0d78f", NumChunks: 1, Size: 128 * 255 * 16}
@@ -217,7 +218,7 @@ var _ = Describe("Storage", func() {
 
 		})
 
-		Context("Large multiple chunk LOB [LONGTEST]", func() {
+		Context("Store large multiple chunk LOB [LONGTEST]", func() {
 
 			testFileName := path.Join(folders[2], "large.dat")
 			// This was calculated with 'shasum' on Mac OS X with this file content
@@ -272,4 +273,66 @@ var _ = Describe("Storage", func() {
 
 	})
 
+	Describe("Retrieving a LOB", func() {
+		// Common git repo
+		BeforeEach(func() {
+			// Set up git repo with some subfolders
+			CreateGitRepoForTest(root)
+
+			for _, f := range folders {
+				err := os.MkdirAll(f, 0777)
+				if err != nil {
+					fmt.Printf("Can't MkdirAll %v: %v", f, err)
+				}
+			}
+
+		})
+
+		AfterEach(func() {
+			// Delete repo
+			os.RemoveAll(root)
+		})
+
+		Context("Retrieve small single chunk LOB", func() {
+			correctLOBInfo := &LOBInfo{SHA: "772157c6ef480852edf921f5924b1ca582b0d78f", NumChunks: 1, Size: 128 * 255 * 16}
+
+			BeforeEach(func() {
+				err := storeLOBInfo(correctLOBInfo)
+				Expect(err).To(BeNil(), "Shouldn't be error creating LOB meta file")
+
+				lobFile := getLOBChunkFilename(correctLOBInfo.SHA, 0)
+				f, err := os.OpenFile(lobFile, os.O_WRONLY|os.O_CREATE, 0666)
+				Expect(err).To(BeNil(), "Shouldn't be error creating LOB file %v", lobFile)
+				// Write test data
+				for i := 0; i < 128; i++ {
+					var j byte
+					for j = 0; j < 255; j++ {
+						f.Write(bytes.Repeat([]byte{j}, 16))
+					}
+				}
+				f.Close()
+			})
+
+			It("correctly retrieves small LOB file", func() {
+				// output to a temp file
+				out, err := ioutil.TempFile("", "lobsmall.dat")
+				Expect(err).To(BeNil(), "Shouldn't be error creating temp file")
+				outFilename := out.Name()
+				info, err := RetrieveLOB(correctLOBInfo.SHA, out)
+
+				Expect(err).To(BeNil(), "Shouldn't be error retrieving LOB")
+				out.Close()
+
+				Expect(info).To(Equal(correctLOBInfo), "Metadata should agree")
+				// Check output file
+				stat, err := os.Stat(outFilename)
+				Expect(err).To(BeNil(), "Shouldn't be error checking output file")
+				Expect(stat.Size()).To(Equal(info.Size), "Size on disk should agree with metadata")
+
+				os.Remove(outFilename)
+
+			})
+
+		})
+	})
 })

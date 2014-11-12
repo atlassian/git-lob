@@ -221,6 +221,24 @@ func RetrieveLOB(sha string, out io.Writer) (info *LOBInfo, err error) {
 
 }
 
+func storeLOBInfo(info *LOBInfo) error {
+	infoBytes, err := json.Marshal(info)
+	if err != nil {
+		LogErrorf("Unable to convert LOB info to JSON: %v\n", err)
+		return err
+	}
+	infoFilename := getLOBMetaFilename(info.SHA)
+	if !FileExistsAndIsOfSize(infoFilename, int64(len(infoBytes))) {
+		// Since all the details are derived from the SHA the only variant is chunking or incomplete writes so
+		// we don't need to worry about needing to update the content (it must be correct)
+		LogDebugf("Writing LOB metadata file: %v\n", infoFilename)
+		ioutil.WriteFile(infoFilename, infoBytes, 0666)
+	} else {
+		LogDebugf("LOB metadata file already exists & is valid: %v\n", infoFilename)
+	}
+	return nil
+}
+
 // Read from a stream and calculate SHA, while also writing content to chunked content
 // leader is a slice of bytes that has already been read (probe for SHA)
 func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
@@ -318,20 +336,8 @@ func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
 	// We won't if it already exists & is the correct size
 	// Construct LOBInfo & write to final location
 	info := &LOBInfo{SHA: shaStr, Size: totalSize, NumChunks: len(chunkFilenames)}
-	infoBytes, err := json.Marshal(info)
-	if err != nil {
-		LogErrorf("Unable to convert LOB info to JSON: %v\n", err)
-		return nil, err
-	}
-	infoFilename := getLOBMetaFilename(shaStr)
-	if !FileExistsAndIsOfSize(infoFilename, int64(len(infoBytes))) {
-		// Since all the details are derived from the SHA the only variant is chunking or incomplete writes so
-		// we don't need to worry about needing to update the content (it must be correct)
-		LogDebugf("Writing LOB metadata file: %v\n", infoFilename)
-		ioutil.WriteFile(infoFilename, infoBytes, 0777)
-	} else {
-		LogDebugf("LOB metadata file already exists & is valid: %v\n", infoFilename)
-	}
+	err = storeLOBInfo(info)
+
 	// Check each chunk file
 	for i, f := range chunkFilenames {
 		sz := CHUNKLIMIT
