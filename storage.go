@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/sha1"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -144,6 +145,8 @@ func RetrieveLOB(sha string, out io.Writer) (info *LOBInfo, err error) {
 			// We don't have this file yet
 			// Potentially auto-download
 			// TODO
+			LogErrorf("LOB meta not found TODO AUTODOWNLOAD %v: %v\n", sha, err)
+			return nil, err
 		} else {
 			// A problem
 			LogErrorf("Unable to retrieve LOB with SHA %v: %v\n", sha, err)
@@ -151,13 +154,70 @@ func RetrieveLOB(sha string, out io.Writer) (info *LOBInfo, err error) {
 		}
 	}
 
+	var totalBytesRead = int64(0)
+	fileSize := info.Size
+	// Pre-validate all the files BEFORE we start streaming data to out
+	// if we fail part way through we don't want to have written partial
+	// data, should be all or nothing
+	// Don't assume size of stored file chunks, maybe we want to allow chunk size
+	// to change; calculate the total size, and the chunk size so that if
+	// one differs we know it's faulty
+	lastChunkIdx := info.NumChunks - 1
+	lastChunkStat, err := os.Stat(getLOBChunkFilename(sha, lastChunkIdx))
+	lastChunkSize := lastChunkStat.Size()
+	otherChunksSize := fileSize - lastChunkSize
+	var chunkSize int64
+	if otherChunksSize > 0 && info.NumChunks > 1 {
+		chunkSize = otherChunksSize / int64(info.NumChunks-1)
+	} else {
+		chunkSize = lastChunkSize
+	}
+	// Check all files
 	for i := 0; i < info.NumChunks; i++ {
-		// Check each chunk file exists, and is correct size
-		// if not, maybe download (again)
-		// TODO
+		chunkFilename := getLOBChunkFilename(sha, i)
+		var expectedSize int64
+		if i+1 < info.NumChunks {
+			expectedSize = chunkSize
+		} else {
+			if info.NumChunks == 1 {
+				expectedSize = fileSize
+			} else {
+				expectedSize = fileSize - (chunkSize * int64(info.NumChunks-1))
+			}
+		}
+		if !FileExistsAndIsOfSize(chunkFilename, expectedSize) {
+			// TODO auto-download?
+			LogErrorf("LOB file not found or wrong size TODO AUTODOWNLOAD: %v expected to be %d bytes\n", chunkFilename, expectedSize)
+			return info, err
+		}
+	}
+	// If all was well, start reading & streaming content
+	for i := 0; i < info.NumChunks; i++ {
+		// Check each chunk file exists
+		chunkFilename := getLOBChunkFilename(info.SHA, i)
+		in, err := os.OpenFile(chunkFilename, os.O_RDONLY, 0666)
+		if err != nil {
+			LogErrorf("Error reading LOB file %v: %v\n", chunkFilename, err)
+			return info, err
+		}
+		c, err := io.Copy(out, in)
+		if err != nil {
+			LogErrorf("I/O error while copying LOB file %v, check working copy state\n", chunkFilename)
+			return info, err
+		}
+		totalBytesRead += c
 	}
 
-	return
+	// Final check
+	if totalBytesRead != fileSize {
+		err = errors.New(fmt.Sprintf("Error, file length does not match expected in LOB %v, expected %d, total size %d", sha, fileSize, totalBytesRead))
+		LogErrorf(err.Error())
+		return info, err
+	}
+
+	LogDebugf("Successfully retrieved LOB %v from %d chunks, total size ", sha, info.NumChunks, totalBytesRead)
+
+	return info, nil
 
 }
 

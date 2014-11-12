@@ -27,7 +27,8 @@ func SmudgeFilter() int {
 				LogDebugf("Retrieved LOB for %v from %v chunks\n", sha, lobinfo.NumChunks)
 				return 0
 			} else {
-				LogErrorf("Error obtaining LOB data: %v\n", err)
+				LogErrorf("Error obtaining LOB data for %v: %v\n", sha, err)
+				// fall through to below which will just write the SHA line to the working copy
 			}
 
 		}
