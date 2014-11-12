@@ -239,7 +239,7 @@ var _ = Describe("Storage", func() {
 				f.Close()
 			})
 			AfterEach(func() {
-				//os.Remove(testFileName)
+				os.Remove(testFileName)
 			})
 
 			It("correctly stores a large file", func() {
@@ -334,5 +334,67 @@ var _ = Describe("Storage", func() {
 			})
 
 		})
+		Context("Retrieve large multiple chunk LOB [LONGTEST]", func() {
+			// This was calculated with 'shasum' on Mac OS X with this file content
+			correctFileSize := int64(25000 * 255 * 16)
+			correctNumChunks := 4
+			correctChunkSize := int64(32 * 1024 * 1024)
+			correctLOBInfo := &LOBInfo{SHA: "6dc61e7c7d33e87592da1e534063052a17bf8f3c", NumChunks: correctNumChunks, Size: correctFileSize}
+
+			BeforeEach(func() {
+				err := storeLOBInfo(correctLOBInfo)
+				Expect(err).To(BeNil(), "Shouldn't be error creating LOB meta file")
+
+				// Write test data into 4 chunks
+				var outf *os.File
+				var currentChunkBytes int64
+				var chunkIdx int
+
+				for i := 0; i < 25000; i++ {
+					var j byte
+					for j = 0; j < 255; j++ {
+						// We've specifically picked it so that this will exactly hit the end of a chunk
+						if outf == nil || currentChunkBytes == correctChunkSize {
+							if outf != nil {
+								outf.Close()
+							}
+							lobFile := getLOBChunkFilename(correctLOBInfo.SHA, chunkIdx)
+							chunkIdx++
+							outf, err = os.OpenFile(lobFile, os.O_WRONLY|os.O_CREATE, 0666)
+							Expect(err).To(BeNil(), "Shouldn't be error creating LOB file %v", lobFile)
+							currentChunkBytes = 0
+						}
+
+						outf.Write(bytes.Repeat([]byte{j}, 16))
+						currentChunkBytes += 16
+					}
+				}
+				if outf != nil {
+					outf.Close()
+				}
+			})
+
+			It("correctly retrieves large LOB file", func() {
+				// output to a temp file
+				out, err := ioutil.TempFile("", "loblarge.dat")
+				Expect(err).To(BeNil(), "Shouldn't be error creating temp file")
+				outFilename := out.Name()
+				info, err := RetrieveLOB(correctLOBInfo.SHA, out)
+
+				Expect(err).To(BeNil(), "Shouldn't be error retrieving LOB")
+				out.Close()
+
+				Expect(info).To(Equal(correctLOBInfo), "Metadata should agree")
+				// Check output file
+				stat, err := os.Stat(outFilename)
+				Expect(err).To(BeNil(), "Shouldn't be error checking output file")
+				Expect(stat.Size()).To(Equal(info.Size), "Size on disk should agree with metadata")
+
+				os.Remove(outFilename)
+
+			})
+
+		})
+
 	})
 })
