@@ -175,22 +175,10 @@ var _ = Describe("Storage", func() {
 
 		Context("Store small single chunk LOB", func() {
 			testFileName := path.Join(folders[2], "small.dat")
-			// This was calculated with 'shasum' on Mac OS X with this file content
-			correctLOBInfo := &LOBInfo{SHA: "772157c6ef480852edf921f5924b1ca582b0d78f", NumChunks: 1, Size: 128 * 255 * 16}
+			var correctLOBInfo *LOBInfo
 
 			BeforeEach(func() {
-				// Create binary file
-				f, err := os.OpenFile(testFileName, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0777)
-				if err != nil {
-					Fail(fmt.Sprintf("Can't create test file %v: %v", testFileName, err))
-				}
-				for i := 0; i < 128; i++ {
-					var j byte
-					for j = 0; j < 255; j++ {
-						f.Write(bytes.Repeat([]byte{j}, 16))
-					}
-				}
-				f.Close()
+				correctLOBInfo = CreateSmallTestLOBFileForStoring(testFileName)
 			})
 			AfterEach(func() {
 				os.Remove(testFileName)
@@ -221,22 +209,10 @@ var _ = Describe("Storage", func() {
 		Context("Store large multiple chunk LOB [LONGTEST]", func() {
 
 			testFileName := path.Join(folders[2], "large.dat")
-			// This was calculated with 'shasum' on Mac OS X with this file content
-			correctLOBInfo := &LOBInfo{SHA: "6dc61e7c7d33e87592da1e534063052a17bf8f3c", NumChunks: 4, Size: 25000 * 255 * 16}
+			var correctLOBInfo *LOBInfo
 
 			BeforeEach(func() {
-				// Create binary file
-				f, err := os.OpenFile(testFileName, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0777)
-				if err != nil {
-					Fail(fmt.Sprintf("Can't create test file %v: %v", testFileName, err))
-				}
-				for i := 0; i < 25000; i++ {
-					var j byte
-					for j = 0; j < 255; j++ {
-						f.Write(bytes.Repeat([]byte{j}, 16))
-					}
-				}
-				f.Close()
+				correctLOBInfo = CreateLargeTestLOBFileForStoring(testFileName)
 			})
 			AfterEach(func() {
 				os.Remove(testFileName)
