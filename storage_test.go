@@ -164,7 +164,7 @@ var _ = Describe("Storage", func() {
 					fmt.Printf("Can't MkdirAll %v: %v", f, err)
 				}
 			}
-
+			os.Chdir(root)
 		})
 
 		AfterEach(func() {

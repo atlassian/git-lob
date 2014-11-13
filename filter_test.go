@@ -4,9 +4,24 @@ import (
 	"bytes"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"os"
+	"path"
 )
 
 var _ = Describe("Filter", func() {
+
+	root := path.Join(os.TempDir(), "StorageTest")
+	BeforeEach(func() {
+		// Set up git repo with some subfolders
+		CreateGitRepoForTest(root)
+		os.Chdir(root)
+
+	})
+
+	AfterEach(func() {
+		// Delete repo
+		os.RemoveAll(root)
+	})
 
 	Describe("Smudge filter", func() {
 
@@ -51,6 +66,10 @@ that we should absolutely not mess with`
 			Expect(res).To(Equal(0), "smudge filter should succeed")
 			Expect(outBuffer.Len()).To(BeEquivalentTo(lobinfo.Size), "extracted LOB data should be correct size")
 		})
+
+	})
+
+	Describe("Clean filter", func() {
 
 	})
 
