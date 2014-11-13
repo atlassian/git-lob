@@ -13,16 +13,20 @@ const SHAPrefix = "git-lob: "
 const SHALineLen = len(SHAPrefix) + 40
 
 func SmudgeFilter() int {
+	return SmudgeFilterWithReaderWriter(os.Stdin, os.Stdout)
+}
+
+func SmudgeFilterWithReaderWriter(in io.Reader, out io.Writer) int {
 	LogDebug("Running smudge filter")
 	shaRegex := regexp.MustCompile("^git-lob: ([0-9A-Fa-f]{40})$")
 	// read committed content from stdin
 	// write actual file content to stdout if a git-lob SHA
 	buf := make([]byte, SHALineLen)
-	c, err := os.Stdin.Read(buf)
+	c, err := in.Read(buf)
 	if c == SHALineLen {
 		if match := shaRegex.FindStringSubmatch(string(buf)); match != nil {
 			sha := match[1]
-			lobinfo, err := RetrieveLOB(sha, os.Stdout)
+			lobinfo, err := RetrieveLOB(sha, out)
 			if err == nil {
 				LogDebugf("Retrieved LOB for %v from %v chunks\n", sha, lobinfo.NumChunks)
 				return 0
@@ -34,8 +38,8 @@ func SmudgeFilter() int {
 		}
 	}
 	// Otherwise, pass through content
-	os.Stdout.Write(buf[:c])
-	_, err = io.Copy(os.Stdout, os.Stdin)
+	out.Write(buf[:c])
+	_, err = io.Copy(out, in)
 	if err == nil {
 		return 0
 	}
@@ -45,19 +49,23 @@ func SmudgeFilter() int {
 }
 
 func CleanFilter() int {
+	return CleanFilterWithReaderWriter(os.Stdin, os.Stdout)
+}
+
+func CleanFilterWithReaderWriter(in io.Reader, out io.Writer) int {
 	LogDebug("Running clean filter")
 	shaRegex := regexp.MustCompile("^git-lob: ([0-9A-Fa-f]{40})$")
 	// read working copy content from stdin
 	// First check if this is an unexpanded LOB SHA (not downloaded)
 	buf := make([]byte, SHALineLen)
-	c, err := os.Stdin.Read(buf)
+	c, err := in.Read(buf)
 	if c == SHALineLen {
 		if match := shaRegex.FindStringSubmatch(string(buf)); match != nil {
 			sha := match[1]
 			LogDebugf("Unexpanded LOB SHA in file content (%v), clean filter will not change\n", sha)
 			// Yes, unexpanded SHA, just write
-			os.Stdout.Write(buf[:c])
-			_, err = io.Copy(os.Stdout, os.Stdin)
+			out.Write(buf[:c])
+			_, err = io.Copy(out, in)
 			if err == nil {
 				return 0
 			} else {
@@ -68,7 +76,7 @@ func CleanFilter() int {
 		}
 	}
 	// Otherwise if we got here, this is just binary data we need to hash
-	lobinfo, err := StoreLOB(os.Stdin, buf[:c])
+	lobinfo, err := StoreLOB(in, buf[:c])
 
 	if err != nil {
 		LogErrorf("Error storing LOB in clean filter: %v\n", err)
