@@ -32,7 +32,8 @@ func mainImpl() int {
 	// Command line processing
 	// Don't use flag package because it doesn't support options after commands, and
 	// uses the form -option instead of --option which is non-standard for git
-	GlobalOptions, errors := parseCommandLine(os.Args)
+	var errors []string
+	GlobalOptions, errors = parseCommandLine(os.Args)
 
 	// Init logging after command line opts
 	InitLogging()
