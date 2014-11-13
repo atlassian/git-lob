@@ -91,10 +91,63 @@ func CreateLargeTestLOBFileForStoring(filename string) (correctInfo *LOBInfo) {
 
 // Manually insert small LOB file into the LOB store ready for retrieval
 func CreateSmallTestLOBDataForRetrieval() (correctInfo *LOBInfo) {
-	return nil
+	// This was calculated with 'shasum' on Mac OS X with this file content
+	correctLOBInfo := &LOBInfo{SHA: "772157c6ef480852edf921f5924b1ca582b0d78f", NumChunks: 1, Size: 128 * 255 * 16}
+	err := storeLOBInfo(correctLOBInfo)
+	Expect(err).To(BeNil(), "Shouldn't be error creating LOB meta file")
+
+	lobFile := getLOBChunkFilename(correctLOBInfo.SHA, 0)
+	f, err := os.OpenFile(lobFile, os.O_WRONLY|os.O_CREATE, 0666)
+	Expect(err).To(BeNil(), "Shouldn't be error creating LOB file %v", lobFile)
+	// Write test data
+	for i := 0; i < 128; i++ {
+		var j byte
+		for j = 0; j < 255; j++ {
+			f.Write(bytes.Repeat([]byte{j}, 16))
+		}
+	}
+	f.Close()
+	return correctLOBInfo
 }
 
 // Manually insert large multi-chunk LOB file into the LOB store ready for retrieval
 func CreateLargeTestLOBDataForRetrieval() (correctInfo *LOBInfo) {
-	return nil
+	// This was calculated with 'shasum' on Mac OS X with this file content
+	correctFileSize := int64(25000 * 255 * 16)
+	correctNumChunks := 4
+	correctChunkSize := int64(32 * 1024 * 1024)
+	correctLOBInfo := &LOBInfo{SHA: "6dc61e7c7d33e87592da1e534063052a17bf8f3c", NumChunks: correctNumChunks, Size: correctFileSize}
+
+	err := storeLOBInfo(correctLOBInfo)
+	Expect(err).To(BeNil(), "Shouldn't be error creating LOB meta file")
+
+	// Write test data into 4 chunks
+	var outf *os.File
+	var currentChunkBytes int64
+	var chunkIdx int
+
+	for i := 0; i < 25000; i++ {
+		var j byte
+		for j = 0; j < 255; j++ {
+			// We've specifically picked it so that this will exactly hit the end of a chunk
+			if outf == nil || currentChunkBytes == correctChunkSize {
+				if outf != nil {
+					outf.Close()
+				}
+				lobFile := getLOBChunkFilename(correctLOBInfo.SHA, chunkIdx)
+				chunkIdx++
+				outf, err = os.OpenFile(lobFile, os.O_WRONLY|os.O_CREATE, 0666)
+				Expect(err).To(BeNil(), "Shouldn't be error creating LOB file %v", lobFile)
+				currentChunkBytes = 0
+			}
+
+			outf.Write(bytes.Repeat([]byte{j}, 16))
+			currentChunkBytes += 16
+		}
+	}
+	if outf != nil {
+		outf.Close()
+	}
+
+	return correctLOBInfo
 }

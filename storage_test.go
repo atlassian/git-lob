@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -270,23 +269,10 @@ var _ = Describe("Storage", func() {
 		})
 
 		Context("Retrieve small single chunk LOB", func() {
-			correctLOBInfo := &LOBInfo{SHA: "772157c6ef480852edf921f5924b1ca582b0d78f", NumChunks: 1, Size: 128 * 255 * 16}
+			var correctLOBInfo *LOBInfo
 
 			BeforeEach(func() {
-				err := storeLOBInfo(correctLOBInfo)
-				Expect(err).To(BeNil(), "Shouldn't be error creating LOB meta file")
-
-				lobFile := getLOBChunkFilename(correctLOBInfo.SHA, 0)
-				f, err := os.OpenFile(lobFile, os.O_WRONLY|os.O_CREATE, 0666)
-				Expect(err).To(BeNil(), "Shouldn't be error creating LOB file %v", lobFile)
-				// Write test data
-				for i := 0; i < 128; i++ {
-					var j byte
-					for j = 0; j < 255; j++ {
-						f.Write(bytes.Repeat([]byte{j}, 16))
-					}
-				}
-				f.Close()
+				correctLOBInfo = CreateSmallTestLOBDataForRetrieval()
 			})
 
 			It("correctly retrieves small LOB file", func() {
@@ -311,43 +297,10 @@ var _ = Describe("Storage", func() {
 
 		})
 		Context("Retrieve large multiple chunk LOB [LONGTEST]", func() {
-			// This was calculated with 'shasum' on Mac OS X with this file content
-			correctFileSize := int64(25000 * 255 * 16)
-			correctNumChunks := 4
-			correctChunkSize := int64(32 * 1024 * 1024)
-			correctLOBInfo := &LOBInfo{SHA: "6dc61e7c7d33e87592da1e534063052a17bf8f3c", NumChunks: correctNumChunks, Size: correctFileSize}
+			var correctLOBInfo *LOBInfo
 
 			BeforeEach(func() {
-				err := storeLOBInfo(correctLOBInfo)
-				Expect(err).To(BeNil(), "Shouldn't be error creating LOB meta file")
-
-				// Write test data into 4 chunks
-				var outf *os.File
-				var currentChunkBytes int64
-				var chunkIdx int
-
-				for i := 0; i < 25000; i++ {
-					var j byte
-					for j = 0; j < 255; j++ {
-						// We've specifically picked it so that this will exactly hit the end of a chunk
-						if outf == nil || currentChunkBytes == correctChunkSize {
-							if outf != nil {
-								outf.Close()
-							}
-							lobFile := getLOBChunkFilename(correctLOBInfo.SHA, chunkIdx)
-							chunkIdx++
-							outf, err = os.OpenFile(lobFile, os.O_WRONLY|os.O_CREATE, 0666)
-							Expect(err).To(BeNil(), "Shouldn't be error creating LOB file %v", lobFile)
-							currentChunkBytes = 0
-						}
-
-						outf.Write(bytes.Repeat([]byte{j}, 16))
-						currentChunkBytes += 16
-					}
-				}
-				if outf != nil {
-					outf.Close()
-				}
+				correctLOBInfo = CreateLargeTestLOBDataForRetrieval()
 			})
 
 			It("correctly retrieves large LOB file", func() {
