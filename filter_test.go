@@ -32,6 +32,26 @@ that we should absolutely not mess with`
 			Expect(outBuffer.String()).To(BeEquivalentTo(lobString), "non existent LOB should not be modified by smudge")
 		})
 
+		It("writes real LOB data for small file", func() {
+			lobinfo := CreateSmallTestLOBDataForRetrieval()
+			lobString := SHAPrefix + lobinfo.SHA
+			inBuffer := bytes.NewBufferString(lobString)
+			var outBuffer bytes.Buffer
+			res := SmudgeFilterWithReaderWriter(inBuffer, &outBuffer)
+			Expect(res).To(Equal(0), "smudge filter should succeed")
+			Expect(outBuffer.Len()).To(BeEquivalentTo(lobinfo.Size), "extracted LOB data should be correct size")
+		})
+
+		It("writes real LOB data for large file [LONGTEST]", func() {
+			lobinfo := CreateLargeTestLOBDataForRetrieval()
+			lobString := SHAPrefix + lobinfo.SHA
+			inBuffer := bytes.NewBufferString(lobString)
+			var outBuffer bytes.Buffer
+			res := SmudgeFilterWithReaderWriter(inBuffer, &outBuffer)
+			Expect(res).To(Equal(0), "smudge filter should succeed")
+			Expect(outBuffer.Len()).To(BeEquivalentTo(lobinfo.Size), "extracted LOB data should be correct size")
+		})
+
 	})
 
 })
