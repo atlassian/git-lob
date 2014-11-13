@@ -83,6 +83,14 @@ func CleanFilterWithReaderWriter(in io.Reader, out io.Writer) int {
 		return 4
 	}
 
+	// Write SHA code to output
+	shaLine := SHAPrefix + lobinfo.SHA
+	_, err = io.WriteString(out, shaLine)
+	if err != nil {
+		LogErrorf("Error writing LOB SHA to index in clean filter: %v\n", err)
+		return 5
+	}
+
 	LogDebugf("Successfully stored/checked LOB data for SHA %v, %d chunks, total size %v\n", lobinfo.SHA, lobinfo.NumChunks, lobinfo.Size)
 
 	return 0
