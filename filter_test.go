@@ -71,6 +71,31 @@ that we should absolutely not mess with`
 
 	Describe("Clean filter", func() {
 
+		It("doesn't change unexpanded LOB content", func() {
+			// This is where a git-lob reference didn't find the binary in the store so just wrote the
+			// committed LOB reference to the working copy
+			lobString := SHAPrefix + "0123456789abcdef0123456789abcdef01234567"
+			inBuffer := bytes.NewBufferString(lobString)
+			var outBuffer bytes.Buffer
+			res := CleanFilterWithReaderWriter(inBuffer, &outBuffer)
+			Expect(res).To(Equal(0), "clean filter should succeed")
+			Expect(outBuffer.String()).To(BeEquivalentTo(lobString), "unexpanded LOB should not be modified by clean")
+
+		})
+
+		It("writes LOB data to store and outputs reference", func() {
+			testFileName := path.Join(root, "small.dat")
+			info := CreateSmallTestLOBFileForStoring(testFileName)
+			in, _ := os.OpenFile(testFileName, os.O_RDONLY, 0666)
+			var outBuffer bytes.Buffer
+			res := CleanFilterWithReaderWriter(in, &outBuffer)
+			Expect(res).To(Equal(0), "clean filter should succeed")
+			Expect(outBuffer.String()).To(BeEquivalentTo(SHAPrefix+info.SHA), "clean filter should output SHA reference")
+			readinfo, _ := GetLOBInfo(info.SHA)
+			Expect(readinfo).To(Equal(info))
+
+		})
+
 	})
 
 })
