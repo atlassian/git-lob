@@ -20,8 +20,8 @@ func TestAll(t *testing.T) {
 	loggingOff := true
 	//loggingOff = false
 	if loggingOff {
-		errorFileLog = log.New(ioutil.Discard, "", 0)
-		errorConsoleLog = log.New(ioutil.Discard, "", 0)
+		consoleOut = ioutil.Discard
+		errorLog = log.New(ioutil.Discard, "", 0)
 		debugLog = log.New(ioutil.Discard, "", 0)
 		outputLog = log.New(ioutil.Discard, "", 0)
 	}

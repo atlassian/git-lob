@@ -7,7 +7,7 @@ import (
 
 var _ = Describe("Args", func() {
 	var args []string
-	var opts *CommandLineOptions
+	var opts *Options
 	var errors []string
 
 	Describe("Checking command", func() {

@@ -5,32 +5,12 @@ import (
 	"regexp"
 )
 
-// Options to the command
-type CommandLineOptions struct {
-	// Output verbosely
-	Verbose bool
-	// Output quietly
-	Quiet bool
-	// Never prompt for user input, rely on command line options only
-	NonInteractive bool
-	// The command to run
-	Command string
-	// Other value options not converted
-	StringOpts map[string]string
-	// Other arguments to the command
-	Args []string
-	// Force option (not used for all commands)
-	Force bool
-}
-
 // Parse incoming arguments and convert to useful structure, with validation
 // Args should be exactly as provided by os.Args, ie first entry is the executable name
-func parseCommandLine(args []string) (opts *CommandLineOptions, errors []string) {
+func parseCommandLine(args []string) (opts *Options, errors []string) {
 
 	errors = make([]string, 0, 1)
-	opts = &CommandLineOptions{
-		StringOpts: make(map[string]string),
-		Args:       make([]string, 0, 5)}
+	opts = NewOptions()
 	valueRegex := regexp.MustCompile(`^--(\w+)=(\w+)$`)
 	boolRegex := regexp.MustCompile(`^--(\w+)$`)
 	shortBoolRegex := regexp.MustCompile(`^-(\w)$`)

@@ -3,78 +3,88 @@ package main
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/user"
 	"path/filepath"
 	"runtime/debug"
-	"strings"
 )
 
 var (
-	debugLog        *log.Logger
-	errorFileLog    *log.Logger
-	errorConsoleLog *log.Logger
-	outputLog       *log.Logger
-	logFile         *os.File
+	// Console output (can be disabled by changing)
+	consoleOut io.Writer = os.Stderr
+	// Loggers for file output
+	debugLog  *log.Logger
+	errorLog  *log.Logger
+	outputLog *log.Logger
+	logFile   *os.File
 )
 
 // Log error with format (no implicit newline)
 func LogErrorf(format string, v ...interface{}) {
-	if errorFileLog != nil && errorConsoleLog != nil {
-		errorFileLog.Printf(format, v...)
-		errorConsoleLog.Printf(format, v...)
+	fmt.Fprintf(consoleOut, format, v...)
+
+	if errorLog != nil {
+		errorLog.Printf(format, v...)
 		// Also dump stack trace to log
-		errorFileLog.Println(debug.Stack())
-	} else {
-		fmt.Fprintf(os.Stderr, format, v...)
+		errorLog.Println(debug.Stack())
 	}
 }
 
 // Log debug message with format (if verbose)
 func LogDebugf(format string, v ...interface{}) {
-	if debugLog != nil {
-		debugLog.Printf(format, v...)
-	} else {
-		fmt.Fprintf(os.Stderr, format, v...)
+	if GlobalOptions.Verbose {
+		fmt.Fprintf(consoleOut, format, v...)
+
+		if debugLog != nil {
+			debugLog.Printf(format, v...)
+		}
 	}
+
 }
 
 // Log output message with format (if not quiet)
 func Logf(format string, v ...interface{}) {
-	if outputLog != nil {
-		outputLog.Printf(format, v...)
-	} else {
-		fmt.Fprintf(os.Stderr, format, v...)
+	if !GlobalOptions.Quiet {
+		fmt.Fprintf(consoleOut, format, v...)
+
+		if outputLog != nil {
+			outputLog.Printf(format, v...)
+		}
 	}
 }
 
 // Log error message with newline
 func LogError(msg string) {
-	if errorFileLog != nil && errorConsoleLog != nil {
-		errorFileLog.Println(msg)
-		errorConsoleLog.Println(msg)
-	} else {
-		fmt.Fprintln(os.Stderr, msg)
+	fmt.Fprintln(consoleOut, msg)
+
+	if errorLog != nil {
+		errorLog.Println(msg)
+		// Also dump stack trace to log
+		errorLog.Println(debug.Stack())
 	}
+
 }
 
 // Log debug message with newline (if verbose)
 func LogDebug(msg string) {
-	if debugLog != nil {
-		debugLog.Println(msg)
-	} else {
-		fmt.Fprintln(os.Stderr, msg)
+	if GlobalOptions.Verbose {
+		fmt.Fprintln(consoleOut, msg)
+
+		if debugLog != nil {
+			debugLog.Println(msg)
+		}
 	}
 }
 
 // Log output message with newline (if not quiet)
 func Log(msg string) {
-	if outputLog != nil {
-		outputLog.Println(msg)
-	} else {
-		fmt.Fprintln(os.Stderr, msg)
+	if !GlobalOptions.Quiet {
+		fmt.Fprintln(consoleOut, msg)
+
+		if outputLog != nil {
+			outputLog.Println(msg)
+		}
 	}
 }
 
@@ -96,43 +106,13 @@ func getLogFileHandle() *os.File {
 // Initialise logging, make sure GlobalOptions is initialised
 func InitLogging() {
 
-	var outputW, debugW io.Writer
-	var flags int
-	const logFlags = log.Ldate | log.Ltime | log.Lshortfile
-	const consoleFlags = 0
-	// Must call this after initialising GlobalOptions
-	if GlobalOptions.Quiet {
-		outputW = ioutil.Discard
-	} else {
-		// Filters can't use stdout
-		if strings.HasPrefix(GlobalOptions.Command, "filter-") {
-			outputW = getLogFileHandle()
-			flags = logFlags
-		} else {
-			outputW = os.Stdout
-			flags = consoleFlags
-		}
+	if GlobalOptions.EnableLogFile {
+		const logFlags = log.Ldate | log.Ltime | log.Lshortfile
+		f := getLogFileHandle()
+		outputLog = log.New(f, "", logFlags)
+		errorLog = log.New(f, "ERROR: ", logFlags)
+		debugLog = log.New(f, "", logFlags)
 	}
-	outputLog = log.New(outputW, "", flags)
-
-	if GlobalOptions.Verbose {
-		// Filters can't use stdout
-		if strings.HasPrefix(GlobalOptions.Command, "filter-") {
-			debugW = getLogFileHandle()
-			flags = logFlags
-		} else {
-			debugW = os.Stdout
-			flags = consoleFlags
-		}
-	} else {
-		debugW = ioutil.Discard
-	}
-	debugLog = log.New(debugW, "DEBUG: ", flags)
-
-	// Always log errors to both the log file and stderr, but with different prefixes
-	errorFileLog = log.New(getLogFileHandle(), "ERROR: ", logFlags)
-	errorConsoleLog = log.New(os.Stderr, "", consoleFlags)
-
 }
 func ShutDownLogging() {
 	if logFile != nil {

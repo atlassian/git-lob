@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	GlobalOptions *CommandLineOptions
+	GlobalOptions *Options = NewOptions()
 )
 
 func main() {
@@ -72,7 +72,11 @@ Commands:
   .. More TODO
 
 Options:
+  --quiet, -q          Print less output
+  --verbose, -v        Print more output
+  --noninteractive, -n Never prompt for user input
+  --force, -f          Force action, break rules
 
-  -help               Print this message
+  --help               Print this message
 
 `
