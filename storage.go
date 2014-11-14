@@ -16,7 +16,7 @@ const BUFSIZE = 8192
 
 // TODO make chunking user-configurable, default to 32MB
 // chunk limit should be a multiple of BUFSIZE for max efficiency
-const CHUNKLIMIT = BUFSIZE * 4086
+const CHUNKLIMIT = BUFSIZE * 4096
 
 // Information about a LOB
 type LOBInfo struct {
