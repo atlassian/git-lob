@@ -108,13 +108,13 @@ func ReadConfigFile(filepath string) (map[string]string, error) {
 	}
 	defer f.Close()
 
-	return ReadConfigStream(f)
+	// Need the directory for relative path includes
+	dir := path.Dir(filepath)
+	return ReadConfigStream(f, dir)
 
 }
-func ReadConfigStream(in io.Reader) (map[string]string, error) {
+func ReadConfigStream(in io.Reader, dir string) (map[string]string, error) {
 	ret := make(map[string]string, 10)
-	includes := make([]string, 0, 3)
-	includeRegex := regexp.MustCompile(`^\%include\s+(.*)$"`)
 	sectionRegex := regexp.MustCompile(`^\[(.*)\]$`)                    // simple section regex ie [section]
 	namedSectionRegex := regexp.MustCompile(`^\[(.*)\s+\"(.*)\"\s*\]$`) // named section regex ie [section "name"]
 
@@ -137,12 +137,6 @@ func ReadConfigStream(in io.Reader) (map[string]string, error) {
 					continue
 				}
 			}
-		}
-
-		// Look for includes
-		if match := includeRegex.FindStringSubmatch(line); match != nil {
-			includes = append(includes, match[1])
-			continue
 		}
 
 		// Check for sections
@@ -175,7 +169,23 @@ func ReadConfigStream(in io.Reader) (map[string]string, error) {
 			}
 			// convert key to lower case for easier matching
 			name = strings.ToLower(name)
-			ret[name] = value
+
+			// Check for includes and expand immediately
+			if name == "include.path" {
+				// if this is a relative, prepend containing dir context
+				includeFile := value
+				if !path.IsAbs(includeFile) {
+					includeFile = path.Join(dir, includeFile)
+				}
+				includemap, err := ReadConfigFile(includeFile)
+				if err == nil {
+					for key, value := range includemap {
+						ret[key] = value
+					}
+				}
+			} else {
+				ret[name] = value
+			}
 		}
 
 	}
