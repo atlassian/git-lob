@@ -28,8 +28,14 @@ these to a remote repo is wasteful, unless the file ends up being re-added
 later, and will potentially 'pollute' all other clients with an unreferenced
 binary file if they are also using the 'complete' sync mode.
 
-For this reason, the 'complete' sync mode is not recommended and should 
-probably only be used for the most basic reference case.
+The sync itself is likely to happen separately from pull/checkout and therefore
+we need a way to then propagate the downloaded binary store to the current 
+checkout, which will involve scanning the working tree looking for unexpanded
+content.
+
+Because of the problem with pushing uncommitted content, the 'complete' sync 
+mode is not recommended and should probably only be used for the most basic 
+reference case.
 
 Partial sync
 ------------
@@ -37,5 +43,55 @@ Partial sync
 In this mode we try to identify which binary resources are required and 
 only transfer those. Not all files will be transferred. This is mostly 
 only useful in 'pull' mode since they assumption is you always want to 
-push all
+push all.
+
+Partial sync 1: checkout time
+-----------------------------
+
+As files are checked out & discovered to be large files, and aren't already 
+present in the local binary store, download from the master store.
+This is done as part of the smudge filter.
+TODO: what if this is interrupted? Is checkout cancelled?
+TODO: should this be an option? Allow to pass through git-lob ref instead?
+
+Partial sync 2: prefetching
+---------------------------
+
+Fetch the most likely resources that you might need but aren't referenced
+in the current checkout. For example, files on other branches, or recent
+previous versions. This is directly related to the same decision made
+by the purge algorithm (see purge.txt), except that instead of deleting
+files which are not in the requested window, it downloads files which 
+are. The window may be different, wider for purge than sync.
+
+This could be done separately and even in the background. E.g. checkout
+sync could happen inline before the checkout is finished but a background
+prefetch of other useful versions could also be kicked off. If so we need
+locking on this state.
+
+Partial sync 3: fixup current checkout
+--------------------------------------
+
+On the assumption that we could have local files which are not in sync
+because the checkout download was interrupted or the auto-download option
+was not set, we must be able to correct this situation later. 
+We could simply scan the local files looking for git-lob unexpanded content
+or we could use ls-tree similarly to purge and simply make sure all
+binary references are there. If the latter must be careful not to overwrite
+any modified binaries.
+
+Partial sync 4: sync committed
+------------------------------
+
+Upload and binary files referenced by commits. Note this doesn't necessarily
+equate to references that have been pushed to the remote, so there may be
+extra binaries uploaded than you strictly need. There is no post-push
+hook; to do this would require a wrapped 'git push' command which we
+may do but it will never be 100% covered. Syncing committed files just
+makes sure we don't upload binaries that were added but then reset.
+
+The smart sync protocol may be able to decide more intelligently which
+binaries are required on a remote based on the commits it has received
+but this is beyond the basic protocol, which must make the decision without
+any additional calls to the remote.
 
