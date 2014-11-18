@@ -9,6 +9,10 @@ import (
 
 var (
 	GlobalOptions *Options = NewOptions()
+	VersionMajor           = 0
+	VersionMinor           = 1
+	VersionPatch           = 0
+	VersionString          = fmt.Sprintf("%d.%d.%d", VersionMajor, VersionMinor, VersionPatch)
 )
 
 func main() {
@@ -29,11 +33,14 @@ func mainImpl() int {
 
 	}()
 
+	// Load up configuration from gitconfig
+	LoadConfig(GlobalOptions)
+
 	// Command line processing
 	// Don't use flag package because it doesn't support options after commands, and
 	// uses the form -option instead of --option which is non-standard for git
 	var errors []string
-	GlobalOptions, errors = parseCommandLine(os.Args)
+	errors = parseCommandLine(GlobalOptions, os.Args)
 
 	// Init logging after command line opts
 	InitLogging()
@@ -60,8 +67,14 @@ func mainImpl() int {
 func printUsage() {
 	fmt.Fprintf(os.Stderr, usageTxt)
 }
+func printHelp() {
+	fmt.Fprintf(os.Stderr, helpTxt)
+}
 
 const usageTxt = `Usage: git-lob [command] [options] [file...]
+`
+
+const helpTxt = `Usage: git-lob [command] [options] [file...]
 
   git-lob improves handling of large objects (including binary files) in git
 
@@ -78,5 +91,16 @@ Options:
   --force, -f          Force action, break rules
 
   --help               Print this message
+
+Config files:
+  ~/.gitconfig and $REPO/.git/config can be used to modify default behaviour.
+  All settings are in the [git-lob] section
+
+  git-lob.verbose    Same as --verbose on command line
+  git-lob.quiet      Same as --quiet on the command line
+  git-lob.logenabled Enable logging of messages to a file
+  git-lob.logfile    Log file to write if logenabled (default: ~/git-lob.log)
+  git-lob.logverbose Verbose logging in log file
+                     (separate to console)
 
 `

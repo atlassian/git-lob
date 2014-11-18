@@ -2,15 +2,16 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"regexp"
 )
 
 // Parse incoming arguments and convert to useful structure, with validation
-// Args should be exactly as provided by os.Args, ie first entry is the executable name
-func parseCommandLine(args []string) (opts *Options, errors []string) {
+// opts should be the options structure to update
+// args should be exactly as provided by os.Args, ie first entry is the executable name
+func parseCommandLine(opts *Options, args []string) (errors []string) {
 
 	errors = make([]string, 0, 1)
-	opts = NewOptions()
 	valueRegex := regexp.MustCompile(`^--(\w+)=(\w+)$`)
 	boolRegex := regexp.MustCompile(`^--(\w+)$`)
 	shortBoolRegex := regexp.MustCompile(`^-(\w)$`)
@@ -28,6 +29,13 @@ func parseCommandLine(args []string) (opts *Options, errors []string) {
 
 			stropt := match[1]
 			switch stropt {
+			case "version":
+				// Just write version and exit
+				fmt.Fprintf(os.Stdout, "git-lob version %v\n", VersionString)
+				os.Exit(0)
+			case "help":
+				printHelp()
+				os.Exit(0)
 			case "verbose":
 				opts.Verbose = true
 			case "quiet":

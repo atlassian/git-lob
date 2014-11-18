@@ -35,7 +35,9 @@ func LogErrorf(format string, v ...interface{}) {
 func LogDebugf(format string, v ...interface{}) {
 	if GlobalOptions.Verbose {
 		fmt.Fprintf(consoleOut, format, v...)
+	}
 
+	if GlobalOptions.Verbose || GlobalOptions.VerboseLog {
 		if debugLog != nil {
 			debugLog.Printf(format, v...)
 		}
@@ -70,7 +72,9 @@ func LogError(msg string) {
 func LogDebug(msg string) {
 	if GlobalOptions.Verbose {
 		fmt.Fprintln(consoleOut, msg)
+	}
 
+	if GlobalOptions.Verbose || GlobalOptions.VerboseLog {
 		if debugLog != nil {
 			debugLog.Println(msg)
 		}
@@ -89,16 +93,20 @@ func Log(msg string) {
 }
 
 func getLogFileHandle() *os.File {
-	if logFile == nil {
+	var logFileName string
+	if GlobalOptions.LogFile != "" {
+		logFileName = GlobalOptions.LogFile
+	} else {
 		usr, err := user.Current()
 		if err != nil {
 			log.Fatal(err)
 		}
-		logFileName := filepath.Join(usr.HomeDir, "git-lob.log")
-		logFile, err = os.OpenFile(logFileName, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0666)
-		if err != nil {
-			log.Fatal(err)
-		}
+		logFileName = filepath.Join(usr.HomeDir, "git-lob.log")
+	}
+	var err error
+	logFile, err = os.OpenFile(logFileName, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0666)
+	if err != nil {
+		log.Fatal(err)
 	}
 	return logFile
 }
@@ -106,7 +114,7 @@ func getLogFileHandle() *os.File {
 // Initialise logging, make sure GlobalOptions is initialised
 func InitLogging() {
 
-	if GlobalOptions.EnableLogFile {
+	if GlobalOptions.LogEnabled {
 		const logFlags = log.Ldate | log.Ltime | log.Lshortfile
 		f := getLogFileHandle()
 		outputLog = log.New(f, "", logFlags)

@@ -28,7 +28,7 @@ type Options struct {
 	// Force option (not used for all commands)
 	Force bool
 	// Whether to write output to a log
-	EnableLogFile bool
+	LogEnabled bool
 	// Log file (optional, defaults to ~/git-lob.log if not specified)
 	LogFile string
 	// Log verbosely even if main Verbose option is disabled for console
@@ -43,11 +43,35 @@ func NewOptions() *Options {
 		Args:       make([]string, 0, 5)}
 }
 
+// Load config from gitconfig and populate opts
+func LoadConfig(opts *Options) {
+	configmap := ReadConfig()
+	opts.GitConfig = configmap
+
+	// Translate our settings to config
+	if strings.ToLower(configmap["git-lob.verbose"]) == "true" {
+		opts.Verbose = true
+	}
+	if strings.ToLower(configmap["git-lob.quiet"]) == "true" {
+		opts.Quiet = true
+	}
+	if strings.ToLower(configmap["git-lob.logenabled"]) == "true" {
+		opts.LogEnabled = true
+	}
+	logfile := configmap["git-lob.logfile"]
+	if logfile != "" {
+		opts.LogFile = logfile
+	}
+	if strings.ToLower(configmap["git-lob.logverbose"]) == "true" {
+		opts.VerboseLog = true
+	}
+}
+
 // Read .gitconfig / .git/config for specific options to override
 // Returns a map of setting=value, where group levels are indicated by dot-notation
 // e.g. git-lob.logfile=blah
 // all keys are converted to lower case for easier matching
-func LoadConfig() map[string]string {
+func ReadConfig() map[string]string {
 	// Don't call out to 'git config' to read file, that's slower and forces a dependency on git
 	// which we may not want to have (e.g. support for libgit clients)
 	// Read files directly, it's a simple format anyway
@@ -64,7 +88,7 @@ func LoadConfig() map[string]string {
 	} else {
 		userConfigFile := path.Join(usr.HomeDir, ".gitconfig")
 		userConfig, err := ReadConfigFile(userConfigFile)
-		if err != nil {
+		if err == nil {
 			if ret == nil {
 				ret = userConfig
 			} else {
@@ -79,7 +103,7 @@ func LoadConfig() map[string]string {
 	gitDir := GetGitDir()
 	repoConfigFile := path.Join(gitDir, "config")
 	repoConfig, err := ReadConfigFile(repoConfigFile)
-	if err != nil {
+	if err == nil {
 		if ret == nil {
 			ret = repoConfig
 		} else {
