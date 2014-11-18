@@ -1,0 +1,46 @@
+Excessive use of 'clean' filter:
+
+From http://git.661346.n2.nabble.com/gitattributes-clean-filter-invoked-on-pull-td6260637.html
+----
+The invocation is only needed when files are marked as "racily clean", 
+because in this case git has to check whether the worktree contents are 
+what is recorded in the index or not. This can happen a lot when you have 
+a fast machine where many worktree files and the index itself can be 
+written within the same (wall clock) second. You example is so short that 
+it triggers this case almost reliably. 
+
+When git pull merges the fetched commit, it has to determine whether there 
+are no changes in any of the files that are to be updated by the merge. If 
+one such file is marked as racily clean, the worktree contents must be 
+inspected, which in turn means that the clean filter has to be used.
+----
+
+----
+No, it is not a bug. Git may invoke the clean filter when a file is not 
+changed to make sure that the file is not changed. It is necessary to 
+prevent a race when a file is changed so quickly that its timestamp does 
+not change. So, what git does is compare timestamp of your file and the 
+index file. Because the index file is written after all files, its 
+timestamp should be later than any file in the repository. However, if 
+the timestamp resolution is not sufficient (i.e. timestamp is the same), 
+git may re-read recently checkout file to make sure that there were no 
+changes to it. During this reading, the clean filter will be invoked. 
+
+So, clean filter may be invoked extra time, but smudge filter should not. 
+----
+
+However I can reliably make 'git diff --cached' call the clean filter all the time for a single file staged, 
+which has a time stamp of several years ago yet the index is just updated. Makes no sense?
+
+Maybe it's actually because they're NOT modified from when originally added, and git is therefore double-checking?
+See: https://www.kernel.org/pub/software/scm/git/docs/technical/racy-git.txt
+
+This suggests that the problem really only occurs on initial 'git add' of new files. Check this.
+
+---
+Nope, this occurs for all files, even modified files. Clean filter is always being called on 'git diff --cached'
+even though there are no further changes. Even if we engineer it so that .git/index has a later timestamp (eg
+stage something else) and call 'git update-index <file>' to ensure the index has the latest information, 
+'git diff --cached <file>' still calls the clean filter for no goddamn reason I can understand.
+The only way I can stop it is to use 'git update-index --assume-unchanged <file>' which sucks, because it
+disables all detection of file status changes in git status.

@@ -1,0 +1,41 @@
+Basic synchronisation protocol
+==============================
+
+The basic synchronisation protocol assumes that we are trying to replicate the
+contents of a git-lob store either parially or completely between repositories
+
+The structure of the stores will be identical, thus we're just transferring
+files. 
+
+Complete sync
+-------------
+
+In this mode we simply transfer the full contents of the binary store between
+repositories. We do not make any attempt to determine which are the more
+'important' ones for either end. The sync can be bi-directional or 
+unidirectional. 
+
+Where both ends support it, rsync is the simplest implementation of this 
+approach. The transfer can be bi-directional or unidirectional (akin to
+pull or push). 
+
+Problems with complete sync
+---------------------------
+
+Binary files which were added but later not committed will still be present
+in the binary store since the clean filter will have created them. Transferring
+these to a remote repo is wasteful, unless the file ends up being re-added
+later, and will potentially 'pollute' all other clients with an unreferenced
+binary file if they are also using the 'complete' sync mode.
+
+For this reason, the 'complete' sync mode is not recommended and should 
+probably only be used for the most basic reference case.
+
+Partial sync
+------------
+
+In this mode we try to identify which binary resources are required and 
+only transfer those. Not all files will be transferred. This is mostly 
+only useful in 'pull' mode since they assumption is you always want to 
+push all
+

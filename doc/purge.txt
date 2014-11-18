@@ -1,0 +1,42 @@
+
+Problem 1: binary file added with git add but never committed
+----------
+
+This leaves a dangling binary file in git-lob which is never referenced by any
+commit, so should be removed locally but also should not be pushed elsewhere
+since that's really wasteful. 
+
+Simplest implementation of cleaning up:
+
+- Iterate over all SHAs in .git/git-lob
+- Run git log -S"git-lob: <SHA>"" to find whether the SHA is referenced in any commit
+- If not, delete
+
+This could get expensive over time though. So instead:
+
+- Run 'git log --oneline -p -G"^git-lob: [A-Fa-f0-9]{40}$"'
+- This gives us a dump of all git-lob SHAs (search for "+git-lob" and pull SHA)
+- Any file with a SHA not on this list can be deleted
+
+Problem 2: delete older LOBs
+----------
+
+To optimise storage we really want to be able to get rid of old files we're not
+likely to need any more. The files we do want to keep are:
+
+- Files referenced in the latest checkout
+- Files at the HEAD of other recent branches
+- Other recent versions on each recent branches
+
+The definition of 'recent' should be user-specified.
+
+Possible implementation:
+- Determine all the SHAs referenced by the current HEAD (HOW?)
+   - MAYBE: 
+        1. git ls-tree HEAD
+        2. output is "<mode> blob <object SHA>  <filename>"
+        3. collect object SHA for all matching file patterns
+        4. git cat-file --batch < <file of object SHAs>
+        5. Pull 'git-lob: SHA' contents from output
+- git diff-tree -p HEAD <otherbranch> to determine what SHAs are new on other branches
+- git diff-tree -p <branchhead> <oldercommit> to determine SHAs in older commits BUT HOW TO NOT SKIP CHANGES?
