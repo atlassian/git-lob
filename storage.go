@@ -89,13 +89,15 @@ func GetLOBRoot() string {
 }
 
 // Gets the containing folder for a given LOB SHA & creates if necessary
-// LOBs are 'splayed' based on first 2 chars of SHA
+// LOBs are 'splayed' 2-levels deep based on first 6 chars of SHA (3 for each dir)
+// We splay by 2 levels and by 3 each (4096 dirs) because we don't pack like git
+// so need to ensure directory contents remain practical at high numbers of files
 func GetLOBDir(sha string) string {
 	if len(sha) != 40 {
 		LogErrorf("Invalid SHA format: %v\n", sha)
 		return ""
 	}
-	ret := filepath.Join(GetLOBRoot(), sha[:2])
+	ret := filepath.Join(GetLOBRoot(), sha[:3], sha[3:6])
 	err := os.MkdirAll(ret, 0777)
 	if err != nil {
 		LogErrorf("Unable to create LOB 2nd-levle folder at %v: %v", ret, err)
