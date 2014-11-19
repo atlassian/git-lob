@@ -44,7 +44,7 @@ func GetRepoRoot() (path string, isSeparateGitDir bool) {
 			return curDir, !isDir
 		}
 		curDir = filepath.Dir(curDir)
-		if curDir == string(filepath.Separator) || curDir == "." {
+		if len(curDir) == 0 || curDir[len(curDir)-1] == filepath.Separator || curDir == "." {
 			// Not a repo
 			LogError("Couldn't find repo root, not a git folder")
 			return "", false
