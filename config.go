@@ -219,8 +219,6 @@ func ReadConfigStream(in io.Reader, dir string) (map[string]string, error) {
 		return ret, scanner.Err()
 	}
 
-	// TODO includes
-
 	return ret, nil
 
 }
