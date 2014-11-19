@@ -69,7 +69,8 @@ func GetGitDir() string {
 			LogErrorf("Unexpected contents of .git file %v: %v\n", git, filestr)
 			return ""
 		}
-		return match[1]
+		// The text in the git dir will use cygwin-style separators, so normalise
+		return filepath.Clean(match[1])
 	} else {
 		// Regular git dir
 		return git
