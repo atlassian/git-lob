@@ -1,0 +1,19 @@
+Setting up Go environment
+-------------------------
+
+1. Install Go tools from https://golang.org/doc/install
+   If you need to cross-compile to other platforms, install from source. 
+   Otherwise the binary install is fine
+2. If you don't have a GOPATH already:
+   a. Create a folder somewhere in your user area, e.g. ~/Go
+   b. Create subfolders 'src', 'bin' and 'pkg'
+   c. Create an environment variable GOPATH pointing at the root dir e.g. ~/Go
+      On Windows, open Control Panel > System > Advanced > Environment variables
+      On Mac/Linux, edit ~/.profile or ~/.bash_profile and export GOPATH=blah
+   d. If you wish, add $GOPATH/bin to your PATH the same way
+3. If you want to cross-compile, install Gox (https://github.com/mitchellh/gox)
+    go get github.com/mitchellh/gox
+4. Install Ginkgo for testing: http://onsi.github.io/ginkgo/
+    go get github.com/onsi/ginkgo/ginkgo
+    go get github.com/onsi/gomega
+5. Make sure you cloned git-lob into $GOPATH/src/bitbucket.org/sinbad/git-lob 
