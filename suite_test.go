@@ -2,13 +2,16 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha1"
 	"fmt"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"os"
 	"os/exec"
+	"strconv"
 	"testing"
 )
 
@@ -150,4 +153,18 @@ func CreateLargeTestLOBDataForRetrieval() (correctInfo *LOBInfo) {
 	}
 
 	return correctLOBInfo
+}
+
+// generate a random list of SHAs for testing purposes
+// these SHAs are random and don't correspond to any valid data
+func GetListOfRandomSHAsForTest(num int) []string {
+	ret := make([]string, 0, num)
+	sha := sha1.New()
+	for n := 0; n < num; n++ {
+		randStr := strconv.Itoa(rand.Int())
+		sha.Write([]byte(randStr))
+		shaStr := fmt.Sprintf("%x", string(sha.Sum(nil)))
+		ret = append(ret, shaStr)
+	}
+	return ret
 }

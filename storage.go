@@ -363,3 +363,25 @@ func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
 	return info, nil
 
 }
+
+// Delete all files associated with a given LOB SHA
+func DeleteLOB(sha string) error {
+	dir := GetLOBDir(sha)
+
+	names, err := filepath.Glob(filepath.Join(dir, fmt.Sprintf("%v*", sha)))
+	if err != nil {
+		LogErrorf("Unable to glob files for %v: %v\n", sha, err)
+		return err
+	}
+	for _, n := range names {
+		err = os.Remove(n)
+		if err != nil {
+			LogErrorf("Unable to delete file %v: %v\n", n, err)
+			return err
+		}
+		LogDebugf("Deleted %v\n", n)
+	}
+
+	return nil
+
+}

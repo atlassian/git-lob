@@ -10,7 +10,8 @@ import (
 // Use this prefix rather than just the SHA in case by accident a file's content
 // actually is a 40-char pattern
 const SHAPrefix = "git-lob: "
-const SHALineLen = len(SHAPrefix) + 40
+const SHALen = 40
+const SHALineLen = len(SHAPrefix) + SHALen
 
 func SmudgeFilter() int {
 	return SmudgeFilterWithReaderWriter(os.Stdin, os.Stdout)

@@ -16,4 +16,6 @@ Setting up Go environment
 4. Install Ginkgo for testing: http://onsi.github.io/ginkgo/
     go get github.com/onsi/ginkgo/ginkgo
     go get github.com/onsi/gomega
-5. Make sure you cloned git-lob into $GOPATH/src/bitbucket.org/sinbad/git-lob 
+5. Install gen for generics: http://clipperhouse.github.io/gen/
+    go get github.com/clipperhouse/gen
+6. Make sure you cloned git-lob into $GOPATH/src/bitbucket.org/sinbad/git-lob 

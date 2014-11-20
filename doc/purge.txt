@@ -14,7 +14,7 @@ Simplest implementation of cleaning up:
 
 This could get expensive over time though. So instead:
 
-- Run 'git log --oneline -p -G"^git-lob: [A-Fa-f0-9]{40}$"'
+- Run 'git log --all --oneline -p -G"^git-lob: [A-Fa-f0-9]{40}$"'
 - This gives us a dump of all git-lob SHAs (search for "+git-lob" and pull SHA)
 - Any file with a SHA not on this list can be deleted
 
@@ -39,4 +39,6 @@ Possible implementation:
         4. git cat-file --batch < <file of object SHAs>
         5. Pull 'git-lob: SHA' contents from output
 - git diff-tree -p HEAD <otherbranch> to determine what SHAs are new on other branches
-- git diff-tree -p <branchhead> <oldercommit> to determine SHAs in older commits BUT HOW TO NOT SKIP CHANGES?
+- git log -p -G"^git-lob: [A-Fa-f0-9]{40}$" <otherhead>..<oldercommitonotherhead> to determine SHAs in older commits
+
+Maybe use dates rather than commits in last log call.
