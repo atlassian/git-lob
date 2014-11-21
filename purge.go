@@ -12,15 +12,20 @@ import (
 
 var (
 	diffLOBReferenceRegex *regexp.Regexp
+	lobFilenameRegex      *regexp.Regexp
 )
 
 // Retrieve the full set of SHAs that currently have files locally (complete or not)
 // returned as map[string]bool for fast lookup
 func getAllLocalLOBSHAs() (StringSet, error) {
 	// os.File.Readdirnames is the most efficient
-	// os.File.Readdir retrieves extra info we don't need
+	// os.File.Readdir retrieves extra info we don't usually need but in case other unexpected files
+	// end up in there (e.g. .DS_Store), we use it to identify directories
 	// ioutil.ReadDir and filepath.Walk do sorting which is unnecessary & inefficient
 
+	if lobFilenameRegex == nil {
+		lobFilenameRegex = regexp.MustCompile(`^([A-Za-z0-9]{40})_(meta|\d+)$`)
+	}
 	set := NewStringSet()
 
 	// We only need to support a 2-folder structure here & know that all files are at the bottom level
@@ -30,39 +35,47 @@ func getAllLocalLOBSHAs() (StringSet, error) {
 		LogErrorf("Unable to open LOB root: %v\n", err)
 		return set, err
 	}
-	dir1names, err := rootf.Readdirnames(0)
+	dir1, err := rootf.Readdir(0)
 	if err != nil {
 		LogErrorf("Unable to read first level LOB dir: %v\n", err)
 		return set, err
 	}
-	for _, dir1name := range dir1names {
-		dir1path := filepath.Join(lobroot, dir1name)
-		dir1f, err := os.Open(dir1path)
-		if err != nil {
-			LogErrorf("Unable to open LOB dir: %v\n", err)
-			return set, err
-		}
-		dir2names, err := dir1f.Readdirnames(0)
-		if err != nil {
-			LogErrorf("Unable to read second level LOB dir: %v\n", err)
-			return set, err
-		}
-		for _, dir2name := range dir2names {
-			dir2path := filepath.Join(dir1path, dir2name)
-			dir2f, err := os.Open(dir2path)
+	for _, dir1fi := range dir1 {
+		if dir1fi.IsDir() {
+			dir1path := filepath.Join(lobroot, dir1fi.Name())
+			dir1f, err := os.Open(dir1path)
 			if err != nil {
 				LogErrorf("Unable to open LOB dir: %v\n", err)
 				return set, err
 			}
-			lobnames, err := dir2f.Readdirnames(0)
+			dir2, err := dir1f.Readdir(0)
 			if err != nil {
-				LogErrorf("Unable to read innermost LOB dir: %v\n", err)
+				LogErrorf("Unable to read second level LOB dir: %v\n", err)
 				return set, err
 			}
-			for _, lobname := range lobnames {
-				// Use the first 40 characters of the name as SHA
-				sha := lobname[:SHALen]
-				set.Add(sha)
+			for _, dir2fi := range dir2 {
+				if dir2fi.IsDir() {
+					dir2path := filepath.Join(dir1path, dir2fi.Name())
+					dir2f, err := os.Open(dir2path)
+					if err != nil {
+						LogErrorf("Unable to open LOB dir: %v\n", err)
+						return set, err
+					}
+					lobnames, err := dir2f.Readdirnames(0)
+					if err != nil {
+						LogErrorf("Unable to read innermost LOB dir: %v\n", err)
+						return set, err
+					}
+					for _, lobname := range lobnames {
+						// Make sure it's really a LOB file
+						if match := lobFilenameRegex.FindStringSubmatch(lobname); match != nil {
+							// Regex pulls out the SHA
+							sha := match[1]
+							set.Add(sha)
+						}
+					}
+
+				}
 			}
 		}
 
