@@ -12,8 +12,8 @@ import (
 func parseCommandLine(opts *Options, args []string) (errors []string) {
 
 	errors = make([]string, 0, 1)
-	valueRegex := regexp.MustCompile(`^--(\w+)=(\w+)$`)
-	boolRegex := regexp.MustCompile(`^--(\w+)$`)
+	valueRegex := regexp.MustCompile(`^--([\w-]+)=(\w+)$`)
+	boolRegex := regexp.MustCompile(`^--([\w-]+)$`)
 	shortBoolRegex := regexp.MustCompile(`^-(\w)$`)
 	foundCommand := false
 	for _, arg := range args[1:] {
