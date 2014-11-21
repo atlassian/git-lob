@@ -27,7 +27,7 @@ func LogErrorf(format string, v ...interface{}) {
 	if errorLog != nil {
 		errorLog.Printf(format, v...)
 		// Also dump stack trace to log
-		errorLog.Println(debug.Stack())
+		errorLog.Println(string(debug.Stack()))
 	}
 }
 
