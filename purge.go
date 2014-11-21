@@ -2,14 +2,16 @@ package main
 
 import (
 	"bufio"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
+	"regexp"
 )
 
-// +gen containers:"Set"
-type SHA string
+var (
+	diffLOBReferenceRegex *regexp.Regexp
+)
 
 // Retrieve the full set of SHAs that currently have files locally (complete or not)
 // returned as map[string]bool for fast lookup
@@ -69,43 +71,61 @@ func getAllLocalLOBSHAs() (StringSet, error) {
 
 }
 
+// Determine if a line from git diff output is referencing a LOB (returns "" if not)
+func lobReferenceFromDiffLine(line string) string {
+	// Because this is a diff, it will start with +/-
+	// We only care about +, since - is stopping referencing a SHA
+	// important when it comes to purging old files
+	if diffLOBReferenceRegex == nil {
+		diffLOBReferenceRegex = regexp.MustCompile(`^\+git-lob: ([A-Za-z0-9]{40})$`)
+	}
+
+	if match := diffLOBReferenceRegex.FindStringSubmatch(line); match != nil {
+		return match[1]
+	}
+	return ""
+}
+
 // Delete unreferenced binary files from local store
 // For a file to be deleted it needs to not be referenced by any (reachable) commit
 // Returns a list of SHAs that were deleted (unless dryRun = true)
 func PurgeUnreferenced(dryRun bool) []string {
 	// Purging requires full git on the command line, no way around this really
-	cmd := exec.Command("git", "log", "--all", "--no-color", "--oneline", "-p", "-G\"^git-lob: [A-Fa-f0-9]{40}$\"")
+	cmd := exec.Command("git", "log", "--all", "--no-color", "--oneline", "-p", "-G", "^git-lob: [A-Fa-f0-9]{40}$")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		LogErrorf("Purge: unable to query git log for binary references: " + err.Error())
 		return make([]string, 0)
 	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		LogErrorf("Purge: unable to query git log for binary references: " + err.Error())
+		return make([]string, 0)
+	}
+	multi := io.MultiReader(stdout, stderr)
+	scanner := bufio.NewScanner(multi)
 	cmd.Start()
-	scanner := bufio.NewScanner(stdout)
-
 	referencedSHAs := NewStringSet()
 	for scanner.Scan() {
 		line := scanner.Text()
-		if len(line) == SHALineLen && strings.HasPrefix(line, SHAPrefix) {
-			sha := line[len(line)-SHALen:]
+		if sha := lobReferenceFromDiffLine(line); sha != "" {
 			referencedSHAs.Add(sha)
 		}
 	}
 	cmd.Wait()
 
 	// Must also not purge anything that's added but uncommitted
-	cmd = exec.Command("git", "diff", "--cached", "--no-color", "-G\"^git-lob: [A-Fa-f0-9]{40}$\"")
+	cmd = exec.Command("git", "diff", "--cached", "--no-color", "-G", "^git-lob: [A-Fa-f0-9]{40}$")
 	stdout, err = cmd.StdoutPipe()
 	if err != nil {
 		LogErrorf("Purge: unable to query git index for binary references: " + err.Error())
 		return make([]string, 0)
 	}
-	cmd.Start()
 	scanner = bufio.NewScanner(stdout)
+	cmd.Start()
 	for scanner.Scan() {
 		line := scanner.Text()
-		if len(line) == SHALineLen && strings.HasPrefix(line, SHAPrefix) {
-			sha := line[len(line)-SHALen:]
+		if sha := lobReferenceFromDiffLine(line); sha != "" {
 			referencedSHAs.Add(sha)
 		}
 	}

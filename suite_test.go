@@ -11,7 +11,9 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -167,4 +169,39 @@ func GetListOfRandomSHAsForTest(num int) []string {
 		ret = append(ret, shaStr)
 	}
 	return ret
+}
+
+// Create a single initial commit (no LOB references) to give us a base
+func CreateInitialCommitForTest(path string) string {
+	testfile := "test.txt"
+	testfilepath := filepath.Join(path, testfile)
+	ioutil.WriteFile(testfilepath, []byte("This is a test"), 0666)
+	cmd := exec.Command("git", "add", testfile)
+	cmd.Run()
+	cmd = exec.Command("git", "commit", "-a", "-m \"Initial commit\"")
+	outp, err := cmd.CombinedOutput()
+	if err != nil {
+		Fail("Unable to create initial commit: " + string(outp))
+	}
+	cmd = exec.Command("git", "rev-parse", "HEAD")
+	sha, err := cmd.Output()
+	if err != nil {
+		Fail("Unable to read initial commit SHA: " + err.Error())
+	}
+	return strings.TrimSpace(string(sha))
+
+}
+
+func CreateCommitReferencingLOBsForTest(path string, filenamesBySha map[string]string) {
+	for sha, filename := range filenamesBySha {
+		testfilepath := filepath.Join(path, filename)
+		ioutil.WriteFile(testfilepath, []byte(fmt.Sprintf("git-lob: %v", sha)), 0666)
+		cmd := exec.Command("git", "add", filename)
+		cmd.Run()
+	}
+	cmd := exec.Command("git", "commit", "-a", "-m \"Test commit\"")
+	outp, err := cmd.CombinedOutput()
+	if err != nil {
+		Fail("Unable to create commit: " + string(outp))
+	}
 }
