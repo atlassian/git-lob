@@ -33,7 +33,8 @@ var _ = Describe("Purge", func() {
 
 		Context("No files", func() {
 			It("does nothing when no files present", func() {
-				shasToDelete := PurgeUnreferenced(false)
+				shasToDelete, err := PurgeUnreferenced(false)
+				Expect(err).To(BeNil(), "PurgeUnreferenced should succeed")
 				Expect(shasToDelete).To(BeEmpty(), "Should report no files to purge")
 			})
 		})
@@ -70,7 +71,8 @@ var _ = Describe("Purge", func() {
 			Context("purges all files when no references", func() {
 				// Because we've created no commits, all LOBs should be eligible for deletion
 				It("lists files but doesn't act on it in dry run mode", func() {
-					shasToDelete := PurgeUnreferenced(true)
+					shasToDelete, err := PurgeUnreferenced(true)
+					Expect(err).To(BeNil(), "PurgeUnreferenced should succeed")
 					// Use sets to compare so ordering doesn't matter
 					actualset := NewStringSetFromSlice(shasToDelete)
 					Expect(actualset).To(Equal(lobshaset), "Should want to delete all files")
@@ -82,7 +84,8 @@ var _ = Describe("Purge", func() {
 
 				})
 				It("deletes files when not in dry run mode", func() {
-					shasToDelete := PurgeUnreferenced(false)
+					shasToDelete, err := PurgeUnreferenced(false)
+					Expect(err).To(BeNil(), "PurgeUnreferenced should succeed")
 					// Use sets to compare so ordering doesn't matter
 					actualset := NewStringSetFromSlice(shasToDelete)
 					Expect(actualset).To(Equal(lobshaset), "Should want to delete all files")
@@ -139,7 +142,9 @@ var _ = Describe("Purge", func() {
 					//shasShouldKeep := NewStringSetFromSlice(lobshas[0:14])
 					shasShouldDelete := NewStringSetFromSlice(lobshas[14:])
 
-					shasDidDelete := NewStringSetFromSlice(PurgeUnreferenced(false))
+					deletedSlice, err := PurgeUnreferenced(false)
+					Expect(err).To(BeNil(), "PurgeUnreferenced should succeed")
+					shasDidDelete := NewStringSetFromSlice(deletedSlice)
 
 					Expect(shasDidDelete).To(Equal(shasShouldDelete), "Should delete the correct LOBs")
 				})

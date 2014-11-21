@@ -53,6 +53,8 @@ func mainImpl() int {
 	}
 
 	switch GlobalOptions.Command {
+	case "cleanup":
+		return Cleanup()
 	case "filter-smudge":
 		return SmudgeFilter()
 	case "filter-clean":
@@ -79,12 +81,13 @@ const helpTxt = `Usage: git-lob [command] [options] [file...]
   git-lob improves handling of large objects (including binary files) in git
 
 Commands:
+  cleanup             Remove binaries unreferenced by any commit or the index
+
   filter-smudge       Execute the git smudge filter
   filter-clean        Execute the git clean filter
 
-  .. More TODO
+ 
 
-Options:
 Global Options:
   --quiet, -q          Print less output
   --verbose, -v        Print more output
@@ -104,5 +107,7 @@ Config files:
   git-lob.logfile    Log file to write if logenabled (default: ~/git-lob.log)
   git-lob.logverbose Verbose logging in log file
                      (separate to console)
+  git-lob.retention  Number of days before latest commit that other revisions
+                     of files will be kept for
 
 `

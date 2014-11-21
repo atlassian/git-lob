@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"io"
 	"os"
 	"os/exec"
@@ -89,18 +90,16 @@ func lobReferenceFromDiffLine(line string) string {
 // Delete unreferenced binary files from local store
 // For a file to be deleted it needs to not be referenced by any (reachable) commit
 // Returns a list of SHAs that were deleted (unless dryRun = true)
-func PurgeUnreferenced(dryRun bool) []string {
+func PurgeUnreferenced(dryRun bool) ([]string, error) {
 	// Purging requires full git on the command line, no way around this really
 	cmd := exec.Command("git", "log", "--all", "--no-color", "--oneline", "-p", "-G", "^git-lob: [A-Fa-f0-9]{40}$")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		LogErrorf("Purge: unable to query git log for binary references: " + err.Error())
-		return make([]string, 0)
+		return make([]string, 0), errors.New("Unable to query git log for binary references: " + err.Error())
 	}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		LogErrorf("Purge: unable to query git log for binary references: " + err.Error())
-		return make([]string, 0)
+		return make([]string, 0), errors.New("Unable to open pipe: " + err.Error())
 	}
 	multi := io.MultiReader(stdout, stderr)
 	scanner := bufio.NewScanner(multi)
@@ -118,8 +117,7 @@ func PurgeUnreferenced(dryRun bool) []string {
 	cmd = exec.Command("git", "diff", "--cached", "--no-color", "-G", "^git-lob: [A-Fa-f0-9]{40}$")
 	stdout, err = cmd.StdoutPipe()
 	if err != nil {
-		LogErrorf("Purge: unable to query git index for binary references: " + err.Error())
-		return make([]string, 0)
+		return make([]string, 0), errors.New("Unable to query git index for binary references: " + err.Error())
 	}
 	scanner = bufio.NewScanner(stdout)
 	cmd.Start()
@@ -139,13 +137,12 @@ func PurgeUnreferenced(dryRun bool) []string {
 		for sha := range toDelete.Iter() {
 			ret = append(ret, string(sha))
 			if !dryRun {
-				LogDebugf("Purging LOB %v", sha)
 				DeleteLOB(string(sha))
 			}
 		}
-		return ret
+		return ret, nil
+	} else {
+		return make([]string, 0), errors.New("Unable to get list of binary files: " + err.Error())
 	}
-
-	return make([]string, 0)
 
 }
