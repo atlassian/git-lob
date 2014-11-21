@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 )
 
@@ -12,8 +13,8 @@ func Cleanup() int {
 		return 3
 	}
 	if GlobalOptions.DryRun {
-		LogDebug("LOBs which would have been deleted:")
-		LogDebug(strings.Join(files, "\n"))
+		fmt.Println("LOBs which would have been deleted:")
+		fmt.Println(strings.Join(files, "\n"))
 	} else {
 		LogDebug("Deleted LOBs:")
 		LogDebug(strings.Join(files, "\n"))
