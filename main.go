@@ -85,8 +85,10 @@ Commands:
   .. More TODO
 
 Options:
+Global Options:
   --quiet, -q          Print less output
   --verbose, -v        Print more output
+  --dry-run            Don't perform actions, just report
   --noninteractive, -n Never prompt for user input
   --force, -f          Force action, break rules
 

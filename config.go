@@ -17,6 +17,8 @@ type Options struct {
 	Verbose bool
 	// Output quietly (to console)
 	Quiet bool
+	// Don't actually perform any tasks
+	DryRun bool
 	// Never prompt for user input, rely on command line options only
 	NonInteractive bool
 	// The command to run

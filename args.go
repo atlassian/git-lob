@@ -40,6 +40,8 @@ func parseCommandLine(opts *Options, args []string) (errors []string) {
 				opts.Verbose = true
 			case "quiet":
 				opts.Quiet = true
+			case "dry-run":
+				opts.DryRun = true
 			case "noninteractive":
 				opts.NonInteractive = true
 			case "force":
