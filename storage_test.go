@@ -236,9 +236,9 @@ var _ = Describe("Storage", func() {
 					fileinfo, err := os.Stat(getLOBChunkFilename(lobinfo.SHA, i))
 					Expect(err).To(BeNil(), "Shouldn't be error opening stored LOB #%v", i)
 					if i+1 < lobinfo.NumChunks {
-						Expect(fileinfo.Size()).To(BeEquivalentTo(CHUNKLIMIT), "Stored LOB #%v should be chunk limit size", i)
+						Expect(fileinfo.Size()).To(BeEquivalentTo(GlobalOptions.ChunkSize), "Stored LOB #%v should be chunk limit size", i)
 					} else {
-						Expect(fileinfo.Size()).To(BeEquivalentTo(lobinfo.Size%CHUNKLIMIT), "Stored LOB #%v should be correct size", i)
+						Expect(fileinfo.Size()).To(BeEquivalentTo(lobinfo.Size%GlobalOptions.ChunkSize), "Stored LOB #%v should be correct size", i)
 					}
 
 				}

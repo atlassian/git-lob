@@ -107,6 +107,7 @@ Config files:
   git-lob.logfile    Log file to write if logenabled (default: ~/git-lob.log)
   git-lob.logverbose Verbose logging in log file
                      (separate to console)
+  git-lob.chunksize  The size chunks to split binary files into in binary store
   git-lob.retention  Number of days before latest commit that other revisions
                      of files will be kept for
 

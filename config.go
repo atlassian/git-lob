@@ -35,6 +35,8 @@ type Options struct {
 	LogFile string
 	// Log verbosely even if main Verbose option is disabled for console
 	VerboseLog bool
+	// The size we should split binary files into for storage
+	ChunkSize int64
 	// Combination of root .gitconfig and repository config as map
 	GitConfig map[string]string
 }
@@ -42,7 +44,8 @@ type Options struct {
 func NewOptions() *Options {
 	return &Options{
 		StringOpts: make(map[string]string),
-		Args:       make([]string, 0, 5)}
+		Args:       make([]string, 0, 5),
+		ChunkSize:  32 * 1024 * 1024}
 }
 
 // Load config from gitconfig and populate opts
@@ -66,6 +69,14 @@ func LoadConfig(opts *Options) {
 	}
 	if strings.ToLower(configmap["git-lob.logverbose"]) == "true" {
 		opts.VerboseLog = true
+	}
+	if chunkSizeStr := configmap["git-lob.chunksize"]; chunkSizeStr != "" {
+		val, err := ParseSize(chunkSizeStr)
+		if err != nil {
+			LogErrorf("Invalid size for git-lob.chunksize: %v\n", chunkSizeStr)
+		} else {
+			opts.ChunkSize = val
+		}
 	}
 }
 

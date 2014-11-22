@@ -14,10 +14,6 @@ import (
 
 const BUFSIZE = 8192
 
-// TODO make chunking user-configurable, default to 32MB
-// chunk limit should be a multiple of BUFSIZE for max efficiency
-const CHUNKLIMIT = BUFSIZE * 4096
-
 // Information about a LOB
 type LOBInfo struct {
 	// SHA of the LOB
@@ -255,7 +251,7 @@ func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
 	writeLeader := true
 	buf := make([]byte, BUFSIZE)
 	var fatalError error
-	currentChunkSize := 0
+	var currentChunkSize int64 = 0
 	var totalSize int64 = 0
 
 	for {
@@ -280,20 +276,20 @@ func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
 				fatalError = err
 				break
 			}
-			currentChunkSize += c
+			currentChunkSize += int64(c)
 			totalSize += int64(c)
 			writeLeader = false
 		}
 		// Read from incoming
-		var bytesToRead = BUFSIZE
-		if BUFSIZE+currentChunkSize > CHUNKLIMIT {
+		var bytesToRead int64 = BUFSIZE
+		if BUFSIZE+currentChunkSize > GlobalOptions.ChunkSize {
 			// Read less than BUFSIZE so we stick to CHUNKLIMIT
-			bytesToRead = CHUNKLIMIT - currentChunkSize
+			bytesToRead = GlobalOptions.ChunkSize - currentChunkSize
 		}
 		c, err := in.Read(buf[:bytesToRead])
 		// Write any data to SHA & output
 		if c > 0 {
-			currentChunkSize += c
+			currentChunkSize += int64(c)
 			totalSize += int64(c)
 			sha.Write(buf[:c])
 			cw, err := outf.Write(buf[:c])
@@ -316,8 +312,7 @@ func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
 			}
 		}
 		// Deal with chunk limit
-		// NB right now assumes BUFSIZE is an exact divisor of CHUNKSIZE
-		if currentChunkSize >= CHUNKLIMIT {
+		if currentChunkSize >= GlobalOptions.ChunkSize {
 			// Close this output, next iteration will create the next file
 			outf.Close()
 			outf = nil
@@ -343,7 +338,7 @@ func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
 
 	// Check each chunk file
 	for i, f := range chunkFilenames {
-		sz := CHUNKLIMIT
+		sz := GlobalOptions.ChunkSize
 		if i+1 == len(chunkFilenames) {
 			// Last chunk, get size
 			sz = currentChunkSize
