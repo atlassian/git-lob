@@ -15,9 +15,17 @@ import (
 func CreateHardLink(target, link string) error {
 	kern32 := syscall.NewLazyDLL("kernel32.dll")
 	proc := kern32.NewProc("CreateHardLinkW")
+	link16, err := syscall.UTF16PtrFromString(link)
+	if err != nil {
+		return err
+	}
+	target16, err := syscall.UTF16PtrFromString(target)
+	if err != nil {
+		return err
+	}
 	ret, _, err := proc.Call(
-		uintptr(unsafe.Pointer(syscall.UTF16PtrFromString(link))),
-		uintptr(unsafe.Pointer(syscall.UTF16PtrFromString(target))),
+		uintptr(unsafe.Pointer(link16)),
+		uintptr(unsafe.Pointer(target16)),
 		0)
 
 	if ret == 0 {
@@ -41,10 +49,10 @@ func GetHardLinkCount(target string) (linkCount int, err error) {
 	defer file.Close()
 
 	var d syscall.ByHandleFileInformation
-	err = syscall.GetFileInformationByHandle(syscall.Handle(file.fd), &d)
+	err = syscall.GetFileInformationByHandle(syscall.Handle(file.Fd()), &d)
 	if err != nil {
 		return 0, err
 	}
 
-	return d.NumberOfLinks, nil
+	return int(d.NumberOfLinks), nil
 }
