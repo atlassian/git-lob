@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/user"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -37,6 +38,8 @@ type Options struct {
 	VerboseLog bool
 	// The size we should split binary files into for storage
 	ChunkSize int64
+	// Shared folder in which to store binary files for all repos
+	SharedStore string
 	// Combination of root .gitconfig and repository config as map
 	GitConfig map[string]string
 }
@@ -76,6 +79,27 @@ func LoadConfig(opts *Options) {
 			LogErrorf("Invalid size for git-lob.chunksize: %v\n", chunkSizeStr)
 		} else {
 			opts.ChunkSize = val
+		}
+	}
+	if sharedStore := configmap["git-lob.sharedstore"]; sharedStore != "" {
+		sharedStore = filepath.Clean(sharedStore)
+		exists, isDir := FileOrDirExists(sharedStore)
+		if exists && !isDir {
+			LogErrorf("Invalid path for git-lob.sharedstore: %v\n", sharedStore)
+		} else {
+			if !exists {
+				err := os.MkdirAll(sharedStore, 0755)
+				if err != nil {
+					LogErrorf("Unable to create path for git-lob.sharedstore: %v\n", sharedStore)
+				} else {
+					exists = true
+					isDir = true
+				}
+			}
+
+			if exists && isDir {
+				opts.SharedStore = sharedStore
+			}
 		}
 	}
 }

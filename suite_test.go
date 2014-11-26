@@ -101,7 +101,7 @@ func CreateSmallTestLOBDataForRetrieval() (correctInfo *LOBInfo) {
 	err := storeLOBInfo(correctLOBInfo)
 	Expect(err).To(BeNil(), "Shouldn't be error creating LOB meta file")
 
-	lobFile := getLOBChunkFilename(correctLOBInfo.SHA, 0)
+	lobFile := getLocalLOBChunkFilename(correctLOBInfo.SHA, 0)
 	f, err := os.OpenFile(lobFile, os.O_WRONLY|os.O_CREATE, 0644)
 	Expect(err).To(BeNil(), "Shouldn't be error creating LOB file %v", lobFile)
 	// Write test data
@@ -139,7 +139,7 @@ func CreateLargeTestLOBDataForRetrieval() (correctInfo *LOBInfo) {
 				if outf != nil {
 					outf.Close()
 				}
-				lobFile := getLOBChunkFilename(correctLOBInfo.SHA, chunkIdx)
+				lobFile := getLocalLOBChunkFilename(correctLOBInfo.SHA, chunkIdx)
 				chunkIdx++
 				outf, err = os.OpenFile(lobFile, os.O_WRONLY|os.O_CREATE, 0644)
 				Expect(err).To(BeNil(), "Shouldn't be error creating LOB file %v", lobFile)

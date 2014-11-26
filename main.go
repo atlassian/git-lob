@@ -55,6 +55,8 @@ func mainImpl() int {
 	switch GlobalOptions.Command {
 	case "cleanup":
 		return Cleanup()
+	case "cleanup-shared":
+		return CleanupShared()
 	case "filter-smudge":
 		return SmudgeFilter()
 	case "filter-clean":
@@ -82,6 +84,10 @@ const helpTxt = `Usage: git-lob [command] [options] [file...]
 
 Commands:
   cleanup             Remove binaries unreferenced by any commit or the index
+  					  from the local repo binary store (and shared if no other
+  					  usage)
+  cleanup-shared      Delete any binaries in the shared store which have become
+                      unreferenced because repos were manually deleted
 
   filter-smudge       Execute the git smudge filter
   filter-clean        Execute the git clean filter
@@ -108,6 +114,17 @@ Config files:
   git-lob.logverbose Verbose logging in log file
                      (separate to console)
   git-lob.chunksize  The size chunks to split binary files into in binary store
+  git-lob.sharedstore
+                     A shared folder in which to store binary content rather
+                     than storing it inside each repo. This minimises storage
+                     when you have multiple clones.
+                     Files will be hard linked into your repo so that
+                     they actually appear there as usual but storage is only
+                     used once if the same SHA appears in multiple repos.
+                     When the number of hard links on a file in the shared
+                     area reaches 1 during purge, the shared file is deleted.
+                     NOTE: requires a file system capable of hard links
+                     e.g. ext3, HFS, NTFS
   git-lob.retention  Number of days before latest commit that other revisions
                      of files will be kept for
 

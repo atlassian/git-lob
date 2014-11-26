@@ -74,8 +74,8 @@ func GetGitDir() string {
 
 }
 
-// Gets the root directory for LOB files & creates if necessary
-func GetLOBRoot() string {
+// Gets the root directory for local LOB files & creates if necessary
+func GetLocalLOBRoot() string {
 	ret := filepath.Join(GetGitDir(), "git-lob")
 	err := os.MkdirAll(ret, 0755)
 	if err != nil {
@@ -85,36 +85,67 @@ func GetLOBRoot() string {
 	return ret
 }
 
-// Gets the containing folder for a given LOB SHA & creates if necessary
+// Gets the root directory for shared LOB files & creates if necessary
+func GetSharedLOBRoot() string {
+	// We create shared store when loading config if specified
+	return GlobalOptions.SharedStore
+}
+
+func getLOBSubDir(base, sha string) string {
+	ret := filepath.Join(base, sha[:3], sha[3:6])
+	err := os.MkdirAll(ret, 0755)
+	if err != nil {
+		LogErrorf("Unable to create LOB 2nd-level folder at %v: %v", ret, err)
+		panic(err)
+	}
+	return ret
+
+}
+
+// Gets the containing local folder for a given LOB SHA & creates if necessary
 // LOBs are 'splayed' 2-levels deep based on first 6 chars of SHA (3 for each dir)
 // We splay by 2 levels and by 3 each (4096 dirs) because we don't pack like git
 // so need to ensure directory contents remain practical at high numbers of files
-func GetLOBDir(sha string) string {
+func GetLocalLOBDir(sha string) string {
 	if len(sha) != 40 {
 		LogErrorf("Invalid SHA format: %v\n", sha)
 		return ""
 	}
-	ret := filepath.Join(GetLOBRoot(), sha[:3], sha[3:6])
-	err := os.MkdirAll(ret, 0755)
-	if err != nil {
-		LogErrorf("Unable to create LOB 2nd-levle folder at %v: %v", ret, err)
-		panic(err)
-	}
-	return ret
+	return getLOBSubDir(GetLocalLOBRoot(), sha)
 }
 
-func getLOBMetaFilename(sha string) string {
-	fld := GetLOBDir(sha)
+// Gets the containing shared folder for a given LOB SHA & creates if necessary
+// LOBs are 'splayed' 2-levels deep based on first 6 chars of SHA (3 for each dir)
+// We splay by 2 levels and by 3 each (4096 dirs) because we don't pack like git
+// so need to ensure directory contents remain practical at high numbers of files
+func GetSharedLOBDir(sha string) string {
+	if len(sha) != 40 {
+		LogErrorf("Invalid SHA format: %v\n", sha)
+		return ""
+	}
+	return getLOBSubDir(GetSharedLOBRoot(), sha)
+}
+
+func getLocalLOBMetaFilename(sha string) string {
+	fld := GetLocalLOBDir(sha)
 	return filepath.Join(fld, sha+"_meta")
 }
-func getLOBChunkFilename(sha string, chunkIdx int) string {
-	fld := GetLOBDir(sha)
+func getLocalLOBChunkFilename(sha string, chunkIdx int) string {
+	fld := GetLocalLOBDir(sha)
+	return filepath.Join(fld, fmt.Sprintf("%v_%d", sha, chunkIdx))
+}
+func getSharedLOBMetaFilename(sha string) string {
+	fld := GetSharedLOBDir(sha)
+	return filepath.Join(fld, sha+"_meta")
+}
+func getSharedLOBChunkFilename(sha string, chunkIdx int) string {
+	fld := GetSharedLOBDir(sha)
 	return filepath.Join(fld, fmt.Sprintf("%v_%d", sha, chunkIdx))
 }
 
 // Retrieve information about an existing stored LOB
 func GetLOBInfo(sha string) (*LOBInfo, error) {
-	meta := getLOBMetaFilename(sha)
+	meta := getLocalLOBMetaFilename(sha)
 	infobytes, err := ioutil.ReadFile(meta)
 
 	if err != nil {
@@ -162,7 +193,7 @@ func RetrieveLOB(sha string, out io.Writer) (info *LOBInfo, err error) {
 	// to change; calculate the total size, and the chunk size so that if
 	// one differs we know it's faulty
 	lastChunkIdx := info.NumChunks - 1
-	lastChunkStat, err := os.Stat(getLOBChunkFilename(sha, lastChunkIdx))
+	lastChunkStat, err := os.Stat(getLocalLOBChunkFilename(sha, lastChunkIdx))
 	lastChunkSize := lastChunkStat.Size()
 	otherChunksSize := fileSize - lastChunkSize
 	var chunkSize int64
@@ -173,7 +204,7 @@ func RetrieveLOB(sha string, out io.Writer) (info *LOBInfo, err error) {
 	}
 	// Check all files
 	for i := 0; i < info.NumChunks; i++ {
-		chunkFilename := getLOBChunkFilename(sha, i)
+		chunkFilename := getLocalLOBChunkFilename(sha, i)
 		var expectedSize int64
 		if i+1 < info.NumChunks {
 			expectedSize = chunkSize
@@ -193,7 +224,7 @@ func RetrieveLOB(sha string, out io.Writer) (info *LOBInfo, err error) {
 	// If all was well, start reading & streaming content
 	for i := 0; i < info.NumChunks; i++ {
 		// Check each chunk file exists
-		chunkFilename := getLOBChunkFilename(info.SHA, i)
+		chunkFilename := getLocalLOBChunkFilename(info.SHA, i)
 		in, err := os.OpenFile(chunkFilename, os.O_RDONLY, 0644)
 		if err != nil {
 			LogErrorf("Error reading LOB file %v: %v\n", chunkFilename, err)
@@ -220,22 +251,100 @@ func RetrieveLOB(sha string, out io.Writer) (info *LOBInfo, err error) {
 
 }
 
+// Link a file from shared storage into the local repo
+// The hard link means we only ever have one copy of the data
+// but it appears under each repo's git-lob folder
+// destFile should be a full path
+func linkSharedLOBFilename(destFile string) error {
+	// Get path relative to shared store root, then translate it to local path
+	relPath, err := filepath.Rel(GlobalOptions.SharedStore, destFile)
+	if err != nil {
+		return err
+	}
+	linkPath := filepath.Join(GetLocalLOBRoot(), relPath)
+
+	os.Remove(linkPath)
+	err = CreateHardLink(destFile, linkPath)
+	if err != nil {
+		return err
+	}
+	return nil
+
+}
+
+// Store the metadata for a given sha
+// If it already exists and is of the right size, will do nothing
 func storeLOBInfo(info *LOBInfo) error {
 	infoBytes, err := json.Marshal(info)
 	if err != nil {
 		LogErrorf("Unable to convert LOB info to JSON: %v\n", err)
 		return err
 	}
-	infoFilename := getLOBMetaFilename(info.SHA)
+	var infoFilename string
+	if isUsingSharedStorage() {
+		infoFilename = getSharedLOBMetaFilename(info.SHA)
+	} else {
+		infoFilename = getLocalLOBMetaFilename(info.SHA)
+	}
 	if !FileExistsAndIsOfSize(infoFilename, int64(len(infoBytes))) {
 		// Since all the details are derived from the SHA the only variant is chunking or incomplete writes so
 		// we don't need to worry about needing to update the content (it must be correct)
 		LogDebugf("Writing LOB metadata file: %v\n", infoFilename)
-		ioutil.WriteFile(infoFilename, infoBytes, 0644)
+		err = ioutil.WriteFile(infoFilename, infoBytes, 0644)
+		if err != nil {
+			return err
+		}
 	} else {
 		LogDebugf("LOB metadata file already exists & is valid: %v\n", infoFilename)
 	}
+
+	// This may have stored in shared storage, so link if required
+	if isUsingSharedStorage() {
+		return linkSharedLOBFilename(infoFilename)
+	} else {
+		return nil
+	}
+
+}
+
+func isUsingSharedStorage() bool {
+	if GlobalOptions.SharedStore != "" {
+		exists, isDir := FileOrDirExists(GlobalOptions.SharedStore)
+		// We create the folder on loading config
+		return exists && isDir
+	}
+	return false
+}
+
+// Write the contents of fromFile to final storage with sha, checking the size
+// If file already exists and is of the right size, will do nothing
+func storeLOBChunk(sha string, chunkNo int, fromChunkFile string, sz int64) error {
+	var destFile string
+
+	if isUsingSharedStorage() {
+		destFile = getSharedLOBChunkFilename(sha, chunkNo)
+	} else {
+		destFile = getLocalLOBChunkFilename(sha, chunkNo)
+	}
+	if !FileExistsAndIsOfSize(destFile, int64(sz)) {
+		LogDebugf("Saving final LOB metadata file: %v\n", destFile)
+		// delete any existing (incorrectly sized) file since will probably not be allowed to rename over it
+		// ignore any errors
+		os.Remove(destFile)
+		err := os.Rename(fromChunkFile, destFile)
+		if err != nil {
+			return err
+		}
+	} else {
+		LogDebugf("LOB chunk file already exists & is valid: %v\n", destFile)
+	}
+
+	// This may have stored in shared storage, so link if required
+	if isUsingSharedStorage() {
+		return linkSharedLOBFilename(destFile)
+	}
 	return nil
+
 }
 
 // Read from a stream and calculate SHA, while also writing content to chunked content
@@ -343,16 +452,7 @@ func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
 			// Last chunk, get size
 			sz = currentChunkSize
 		}
-		destFile := getLOBChunkFilename(shaStr, i)
-		if !FileExistsAndIsOfSize(destFile, int64(sz)) {
-			LogDebugf("Saving final LOB metadata file: %v\n", destFile)
-			// delete any existing (incorrectly sized) file since will probably not be allowed to rename over it
-			// ignore any errors
-			os.Remove(destFile)
-			os.Rename(f, destFile)
-		} else {
-			LogDebugf("LOB chunk file already exists & is valid: %v\n", destFile)
-		}
+		storeLOBChunk(shaStr, i, f, sz)
 	}
 
 	return info, nil
@@ -361,11 +461,12 @@ func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
 
 // Delete all files associated with a given LOB SHA
 func DeleteLOB(sha string) error {
-	dir := GetLOBDir(sha)
+	// Delete from local always (either only copy, or hard link)
+	localdir := GetLocalLOBDir(sha)
 
-	names, err := filepath.Glob(filepath.Join(dir, fmt.Sprintf("%v*", sha)))
+	names, err := filepath.Glob(filepath.Join(localdir, fmt.Sprintf("%v*", sha)))
 	if err != nil {
-		LogErrorf("Unable to glob files for %v: %v\n", sha, err)
+		LogErrorf("Unable to glob local files for %v: %v\n", sha, err)
 		return err
 	}
 	for _, n := range names {
@@ -375,6 +476,33 @@ func DeleteLOB(sha string) error {
 			return err
 		}
 		LogDebugf("Deleted %v\n", n)
+	}
+
+	if isUsingSharedStorage() {
+		// If we're using shared storage, then also check the number of links in
+		// shared storage for this SHA. See PurgeSharedStore for a more general
+		// sweep for files that don't go through DeleteLOB (e.g. repo deleted manually)
+		shareddir := GetSharedLOBDir(sha)
+		names, err := filepath.Glob(filepath.Join(shareddir, fmt.Sprintf("%v*", sha)))
+		if err != nil {
+			LogErrorf("Unable to glob shared files for %v: %v\n", sha, err)
+			return err
+		}
+		for _, n := range names {
+			links, err := GetHardLinkCount(n)
+			if err == nil && links == 1 {
+				// only 1 hard link means no other repo refers to this shared LOB
+				// so it's safe to delete it
+				err = os.Remove(n)
+				if err != nil {
+					LogErrorf("Unable to delete file %v: %v\n", n, err)
+					return err
+				}
+				LogDebugf("Deleted shared file %v\n", n)
+			}
+
+		}
+
 	}
 
 	return nil

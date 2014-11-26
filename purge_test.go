@@ -51,12 +51,12 @@ var _ = Describe("Purge", func() {
 				lobshas = GetListOfRandomSHAsForTest(20)
 				lobshaset = NewStringSetFromSlice(lobshas)
 				for _, s := range lobshas {
-					metafile := getLOBMetaFilename(s)
+					metafile := getLocalLOBMetaFilename(s)
 					ioutil.WriteFile(metafile, []byte("meta something"), 0644)
 					lobfiles = append(lobfiles, metafile)
 					numChunks := rand.Intn(3) + 1
 					for c := 0; c < numChunks; c++ {
-						chunkfile := getLOBChunkFilename(s, c)
+						chunkfile := getLocalLOBChunkFilename(s, c)
 						lobfiles = append(lobfiles, chunkfile)
 						ioutil.WriteFile(chunkfile, []byte("data something"), 0644)
 					}

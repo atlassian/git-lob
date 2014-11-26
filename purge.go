@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -18,6 +19,17 @@ var (
 // Retrieve the full set of SHAs that currently have files locally (complete or not)
 // returned as map[string]bool for fast lookup
 func getAllLocalLOBSHAs() (StringSet, error) {
+	return getAllLOBSHAsInDir(GetLocalLOBRoot())
+}
+
+// Retrieve the full set of SHAs that currently have files in the shared store (complete or not)
+// returned as map[string]bool for fast lookup
+func getAllSharedLOBSHAs() (StringSet, error) {
+	return getAllLOBSHAsInDir(GetSharedLOBRoot())
+}
+
+func getAllLOBSHAsInDir(lobroot string) (StringSet, error) {
+
 	// os.File.Readdirnames is the most efficient
 	// os.File.Readdir retrieves extra info we don't usually need but in case other unexpected files
 	// end up in there (e.g. .DS_Store), we use it to identify directories
@@ -29,7 +41,7 @@ func getAllLocalLOBSHAs() (StringSet, error) {
 	set := NewStringSet()
 
 	// We only need to support a 2-folder structure here & know that all files are at the bottom level
-	lobroot := GetLOBRoot()
+	// We always work on the local LOB folder (either only copy or hard link)
 	rootf, err := os.Open(lobroot)
 	if err != nil {
 		LogErrorf("Unable to open LOB root: %v\n", err)
@@ -156,6 +168,48 @@ func PurgeUnreferenced(dryRun bool) ([]string, error) {
 		return ret, nil
 	} else {
 		return make([]string, 0), errors.New("Unable to get list of binary files: " + err.Error())
+	}
+
+}
+
+// Purge the shared store of all LOBs with only 1 hard link (itself)
+// DeleteLOB will do this for individual LOBs we purge, but if the user
+// manually deletes a repo then unreferenced shared LOBs may never be cleaned up
+func PurgeSharedStore(dryRun bool) ([]string, error) {
+	fileSHAs, err := getAllSharedLOBSHAs()
+	if err == nil {
+		ret := make([]string, 0, 10)
+		for sha := range fileSHAs.Iter() {
+			shareddir := GetSharedLOBDir(sha)
+			names, err := filepath.Glob(filepath.Join(shareddir, fmt.Sprintf("%v*", sha)))
+			if err != nil {
+				LogErrorf("Unable to glob shared files for %v: %v\n", sha, err)
+				return make([]string, 0), err
+			}
+			var deleted bool = false
+			for _, n := range names {
+				links, err := GetHardLinkCount(n)
+				if err == nil && links == 1 {
+					// only 1 hard link means no other repo refers to this shared LOB
+					// so it's safe to delete it
+					deleted = true
+					if !dryRun {
+						err = os.Remove(n)
+						if err != nil {
+							LogErrorf("Unable to delete file %v: %v\n", n, err)
+						}
+						LogDebugf("Deleted shared file %v\n", n)
+					}
+				}
+
+			}
+			if deleted {
+				ret = append(ret, string(sha))
+			}
+		}
+		return ret, nil
+	} else {
+		return make([]string, 0), err
 	}
 
 }

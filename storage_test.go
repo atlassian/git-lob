@@ -198,7 +198,7 @@ var _ = Describe("Storage", func() {
 				lobinfo, err := StoreLOB(f, leader[:c])
 				Expect(err).To(BeNil(), "Shouldn't be error storing LOB")
 				Expect(lobinfo).To(Equal(correctLOBInfo))
-				fileinfo, err := os.Stat(getLOBChunkFilename(lobinfo.SHA, 0))
+				fileinfo, err := os.Stat(getLocalLOBChunkFilename(lobinfo.SHA, 0))
 				Expect(err).To(BeNil(), "Shouldn't be error opening stored LOB")
 				Expect(fileinfo.Size()).To(Equal(lobinfo.Size), "Stored LOB should be correct size")
 			})
@@ -233,7 +233,7 @@ var _ = Describe("Storage", func() {
 				Expect(err).To(BeNil(), "Shouldn't be error storing LOB")
 				Expect(lobinfo).To(Equal(correctLOBInfo))
 				for i := 0; i < lobinfo.NumChunks; i++ {
-					fileinfo, err := os.Stat(getLOBChunkFilename(lobinfo.SHA, i))
+					fileinfo, err := os.Stat(getLocalLOBChunkFilename(lobinfo.SHA, i))
 					Expect(err).To(BeNil(), "Shouldn't be error opening stored LOB #%v", i)
 					if i+1 < lobinfo.NumChunks {
 						Expect(fileinfo.Size()).To(BeEquivalentTo(GlobalOptions.ChunkSize), "Stored LOB #%v should be chunk limit size", i)
