@@ -104,7 +104,7 @@ func getLogFileHandle() *os.File {
 		logFileName = filepath.Join(usr.HomeDir, "git-lob.log")
 	}
 	var err error
-	logFile, err = os.OpenFile(logFileName, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0666)
+	logFile, err = os.OpenFile(logFileName, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
 	if err != nil {
 		log.Fatal(err)
 	}

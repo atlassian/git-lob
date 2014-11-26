@@ -31,7 +31,7 @@ var _ = Describe("Storage", func() {
 				CreateGitRepoForTest(root)
 
 				for _, f := range folders {
-					err := os.MkdirAll(f, 0777)
+					err := os.MkdirAll(f, 0755)
 					if err != nil {
 						fmt.Printf("Can't MkdirAll %v: %v", f, err)
 					}
@@ -81,7 +81,7 @@ var _ = Describe("Storage", func() {
 				CreateGitRepoForTest(root)
 
 				for _, f := range folders {
-					err := os.MkdirAll(f, 0777)
+					err := os.MkdirAll(f, 0755)
 					if err != nil {
 						fmt.Printf("Can't MkdirAll %v: %v", f, err)
 					}
@@ -119,7 +119,7 @@ var _ = Describe("Storage", func() {
 				CreateGitRepoWithSeparateGitDirForTest(root, separateGitDir)
 
 				for _, f := range folders {
-					err := os.MkdirAll(f, 0777)
+					err := os.MkdirAll(f, 0755)
 					if err != nil {
 						fmt.Printf("Can't MkdirAll %v: %v", f, err)
 					}
@@ -159,7 +159,7 @@ var _ = Describe("Storage", func() {
 			CreateGitRepoForTest(root)
 
 			for _, f := range folders {
-				err := os.MkdirAll(f, 0777)
+				err := os.MkdirAll(f, 0755)
 				if err != nil {
 					fmt.Printf("Can't MkdirAll %v: %v", f, err)
 				}
@@ -255,7 +255,7 @@ var _ = Describe("Storage", func() {
 			CreateGitRepoForTest(root)
 
 			for _, f := range folders {
-				err := os.MkdirAll(f, 0777)
+				err := os.MkdirAll(f, 0755)
 				if err != nil {
 					fmt.Printf("Can't MkdirAll %v: %v", f, err)
 				}

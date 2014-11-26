@@ -86,7 +86,7 @@ that we should absolutely not mess with`
 		It("writes LOB data to store and outputs reference", func() {
 			testFileName := path.Join(root, "small.dat")
 			info := CreateSmallTestLOBFileForStoring(testFileName)
-			in, _ := os.OpenFile(testFileName, os.O_RDONLY, 0666)
+			in, _ := os.OpenFile(testFileName, os.O_RDONLY, 0644)
 			var outBuffer bytes.Buffer
 			res := CleanFilterWithReaderWriter(in, &outBuffer)
 			Expect(res).To(Equal(0), "clean filter should succeed")

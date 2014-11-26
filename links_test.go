@@ -21,7 +21,7 @@ var _ = Describe("Links", func() {
 		links = append(links, filepath.Join(tmp, "link4.txt"))
 		links = append(links, filepath.Join(tmp, "link5.txt"))
 
-		ioutil.WriteFile(target, []byte("Something something"), 0666)
+		ioutil.WriteFile(target, []byte("Something something"), 0644)
 	})
 
 	AfterEach(func() {

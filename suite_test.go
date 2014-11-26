@@ -59,7 +59,7 @@ func CreateSmallTestLOBFileForStoring(filename string) (correctInfo *LOBInfo) {
 	correctLOBInfo := &LOBInfo{SHA: "772157c6ef480852edf921f5924b1ca582b0d78f", NumChunks: 1, Size: 128 * 255 * 16}
 
 	// Create binary file
-	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0777)
+	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0755)
 	if err != nil {
 		Fail(fmt.Sprintf("Can't create test file %v: %v", filename, err))
 	}
@@ -80,7 +80,7 @@ func CreateLargeTestLOBFileForStoring(filename string) (correctInfo *LOBInfo) {
 	correctLOBInfo := &LOBInfo{SHA: "6dc61e7c7d33e87592da1e534063052a17bf8f3c", NumChunks: 4, Size: 25000 * 255 * 16}
 
 	// Create binary file
-	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0777)
+	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0755)
 	if err != nil {
 		Fail(fmt.Sprintf("Can't create test file %v: %v", filename, err))
 	}
@@ -102,7 +102,7 @@ func CreateSmallTestLOBDataForRetrieval() (correctInfo *LOBInfo) {
 	Expect(err).To(BeNil(), "Shouldn't be error creating LOB meta file")
 
 	lobFile := getLOBChunkFilename(correctLOBInfo.SHA, 0)
-	f, err := os.OpenFile(lobFile, os.O_WRONLY|os.O_CREATE, 0666)
+	f, err := os.OpenFile(lobFile, os.O_WRONLY|os.O_CREATE, 0644)
 	Expect(err).To(BeNil(), "Shouldn't be error creating LOB file %v", lobFile)
 	// Write test data
 	for i := 0; i < 128; i++ {
@@ -141,7 +141,7 @@ func CreateLargeTestLOBDataForRetrieval() (correctInfo *LOBInfo) {
 				}
 				lobFile := getLOBChunkFilename(correctLOBInfo.SHA, chunkIdx)
 				chunkIdx++
-				outf, err = os.OpenFile(lobFile, os.O_WRONLY|os.O_CREATE, 0666)
+				outf, err = os.OpenFile(lobFile, os.O_WRONLY|os.O_CREATE, 0644)
 				Expect(err).To(BeNil(), "Shouldn't be error creating LOB file %v", lobFile)
 				currentChunkBytes = 0
 			}
@@ -175,7 +175,7 @@ func GetListOfRandomSHAsForTest(num int) []string {
 func CreateInitialCommitForTest(path string) string {
 	testfile := "test.txt"
 	testfilepath := filepath.Join(path, testfile)
-	ioutil.WriteFile(testfilepath, []byte("This is a test"), 0666)
+	ioutil.WriteFile(testfilepath, []byte("This is a test"), 0644)
 	cmd := exec.Command("git", "add", testfile)
 	cmd.Run()
 	cmd = exec.Command("git", "commit", "-a", "-m \"Initial commit\"")
@@ -195,7 +195,7 @@ func CreateInitialCommitForTest(path string) string {
 func CreateCommitReferencingLOBsForTest(path string, filenamesBySha map[string]string) {
 	for sha, filename := range filenamesBySha {
 		testfilepath := filepath.Join(path, filename)
-		ioutil.WriteFile(testfilepath, []byte(fmt.Sprintf("git-lob: %v", sha)), 0666)
+		ioutil.WriteFile(testfilepath, []byte(fmt.Sprintf("git-lob: %v", sha)), 0644)
 		cmd := exec.Command("git", "add", filename)
 		cmd.Run()
 	}

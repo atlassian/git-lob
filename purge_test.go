@@ -52,13 +52,13 @@ var _ = Describe("Purge", func() {
 				lobshaset = NewStringSetFromSlice(lobshas)
 				for _, s := range lobshas {
 					metafile := getLOBMetaFilename(s)
-					ioutil.WriteFile(metafile, []byte("meta something"), 0666)
+					ioutil.WriteFile(metafile, []byte("meta something"), 0644)
 					lobfiles = append(lobfiles, metafile)
 					numChunks := rand.Intn(3) + 1
 					for c := 0; c < numChunks; c++ {
 						chunkfile := getLOBChunkFilename(s, c)
 						lobfiles = append(lobfiles, chunkfile)
-						ioutil.WriteFile(chunkfile, []byte("data something"), 0666)
+						ioutil.WriteFile(chunkfile, []byte("data something"), 0644)
 					}
 				}
 
@@ -134,8 +134,8 @@ var _ = Describe("Purge", func() {
 
 					exec.Command("git", "checkout", "master").Run()
 					// Last one, reference 12 & 13 in index, not committed.
-					ioutil.WriteFile(filepath.Join(root, "test3.png"), []byte(fmt.Sprintf("git-lob: %v", lobshas[12])), 0666)
-					ioutil.WriteFile(filepath.Join(root, "test20.png"), []byte(fmt.Sprintf("git-lob: %v", lobshas[13])), 0666)
+					ioutil.WriteFile(filepath.Join(root, "test3.png"), []byte(fmt.Sprintf("git-lob: %v", lobshas[12])), 0644)
+					ioutil.WriteFile(filepath.Join(root, "test20.png"), []byte(fmt.Sprintf("git-lob: %v", lobshas[13])), 0644)
 					exec.Command("git", "add", "test3.png", "test20.png").Run()
 
 					// At this point we should be deleting SHAs 14-19 but not the others

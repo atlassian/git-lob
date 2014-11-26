@@ -77,7 +77,7 @@ func GetGitDir() string {
 // Gets the root directory for LOB files & creates if necessary
 func GetLOBRoot() string {
 	ret := filepath.Join(GetGitDir(), "git-lob")
-	err := os.MkdirAll(ret, 0777)
+	err := os.MkdirAll(ret, 0755)
 	if err != nil {
 		LogErrorf("Unable to create LOB root folder at %v: %v", ret, err)
 		panic(err)
@@ -95,7 +95,7 @@ func GetLOBDir(sha string) string {
 		return ""
 	}
 	ret := filepath.Join(GetLOBRoot(), sha[:3], sha[3:6])
-	err := os.MkdirAll(ret, 0777)
+	err := os.MkdirAll(ret, 0755)
 	if err != nil {
 		LogErrorf("Unable to create LOB 2nd-levle folder at %v: %v", ret, err)
 		panic(err)
@@ -194,7 +194,7 @@ func RetrieveLOB(sha string, out io.Writer) (info *LOBInfo, err error) {
 	for i := 0; i < info.NumChunks; i++ {
 		// Check each chunk file exists
 		chunkFilename := getLOBChunkFilename(info.SHA, i)
-		in, err := os.OpenFile(chunkFilename, os.O_RDONLY, 0666)
+		in, err := os.OpenFile(chunkFilename, os.O_RDONLY, 0644)
 		if err != nil {
 			LogErrorf("Error reading LOB file %v: %v\n", chunkFilename, err)
 			return info, err
@@ -231,7 +231,7 @@ func storeLOBInfo(info *LOBInfo) error {
 		// Since all the details are derived from the SHA the only variant is chunking or incomplete writes so
 		// we don't need to worry about needing to update the content (it must be correct)
 		LogDebugf("Writing LOB metadata file: %v\n", infoFilename)
-		ioutil.WriteFile(infoFilename, infoBytes, 0666)
+		ioutil.WriteFile(infoFilename, infoBytes, 0644)
 	} else {
 		LogDebugf("LOB metadata file already exists & is valid: %v\n", infoFilename)
 	}

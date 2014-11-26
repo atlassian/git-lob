@@ -42,7 +42,7 @@ func GetHardLinkCount(target string) (linkCount int, err error) {
 	// GetFileInformationByHandle, it just doesn't expose the number of links right
 	// now, since they don't support hard links on Windows
 	// For this reason we can use Go's file open commands & pass the fd to the Win API
-	file, err := os.OpenFile(target, os.O_RDONLY, 0666)
+	file, err := os.OpenFile(target, os.O_RDONLY, 0644)
 	if err != nil {
 		return 0, err
 	}

@@ -139,7 +139,7 @@ func ReadConfig() map[string]string {
 // e.g. git-lob.logfile=blah
 // all keys are converted to lower case for easier matching
 func ReadConfigFile(filepath string) (map[string]string, error) {
-	f, err := os.OpenFile(filepath, os.O_RDONLY, 0666)
+	f, err := os.OpenFile(filepath, os.O_RDONLY, 0644)
 	if err != nil {
 		return make(map[string]string), err
 	}
