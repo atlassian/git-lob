@@ -264,7 +264,7 @@ func linkSharedLOBFilename(destFile string) error {
 	linkPath := filepath.Join(GetLocalLOBRoot(), relPath)
 
 	// Make sure path exists since we're not using utility method to link
-	os.MkdirAll(filepath.Dir(linkPath), 755)
+	os.MkdirAll(filepath.Dir(linkPath), 0755)
 
 	os.Remove(linkPath)
 	err = CreateHardLink(destFile, linkPath)
