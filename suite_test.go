@@ -40,14 +40,14 @@ func CreateGitRepoForTest(path string) {
 	cmd := exec.Command("git", "init", path)
 	err := cmd.Run()
 	if err != nil {
-		Fail("Unable to create git repo: " + err.Error())
+		Fail("Unable to create git repo at " + path + ": " + err.Error())
 	}
 }
 func CreateGitRepoWithSeparateGitDirForTest(path string, gitDir string) {
 	cmd := exec.Command("git", "init", "--separate-git-dir", gitDir, path)
 	err := cmd.Run()
 	if err != nil {
-		Fail("Unable to create git repo: " + err.Error())
+		Fail("Unable to create git repo at " + path + ": " + err.Error())
 	}
 }
 
@@ -101,7 +101,12 @@ func CreateSmallTestLOBDataForRetrieval() (correctInfo *LOBInfo) {
 	err := storeLOBInfo(correctLOBInfo)
 	Expect(err).To(BeNil(), "Shouldn't be error creating LOB meta file")
 
-	lobFile := getLocalLOBChunkFilename(correctLOBInfo.SHA, 0)
+	var lobFile string
+	if isUsingSharedStorage() {
+		lobFile = getSharedLOBChunkFilename(correctLOBInfo.SHA, 0)
+	} else {
+		lobFile = getLocalLOBChunkFilename(correctLOBInfo.SHA, 0)
+	}
 	f, err := os.OpenFile(lobFile, os.O_WRONLY|os.O_CREATE, 0644)
 	Expect(err).To(BeNil(), "Shouldn't be error creating LOB file %v", lobFile)
 	// Write test data
@@ -112,6 +117,10 @@ func CreateSmallTestLOBDataForRetrieval() (correctInfo *LOBInfo) {
 		}
 	}
 	f.Close()
+	if isUsingSharedStorage() {
+		link := getLocalLOBChunkFilename(correctLOBInfo.SHA, 0)
+		CreateHardLink(lobFile, link)
+	}
 	return correctLOBInfo
 }
 
@@ -137,9 +146,19 @@ func CreateLargeTestLOBDataForRetrieval() (correctInfo *LOBInfo) {
 			// We've specifically picked it so that this will exactly hit the end of a chunk
 			if outf == nil || currentChunkBytes == correctChunkSize {
 				if outf != nil {
+					dest := outf.Name()
 					outf.Close()
+					if isUsingSharedStorage() {
+						link := getLocalLOBChunkFilename(correctLOBInfo.SHA, chunkIdx-1)
+						CreateHardLink(dest, link)
+					}
 				}
-				lobFile := getLocalLOBChunkFilename(correctLOBInfo.SHA, chunkIdx)
+				var lobFile string
+				if isUsingSharedStorage() {
+					lobFile = getSharedLOBChunkFilename(correctLOBInfo.SHA, chunkIdx)
+				} else {
+					lobFile = getLocalLOBChunkFilename(correctLOBInfo.SHA, chunkIdx)
+				}
 				chunkIdx++
 				outf, err = os.OpenFile(lobFile, os.O_WRONLY|os.O_CREATE, 0644)
 				Expect(err).To(BeNil(), "Shouldn't be error creating LOB file %v", lobFile)
@@ -151,7 +170,12 @@ func CreateLargeTestLOBDataForRetrieval() (correctInfo *LOBInfo) {
 		}
 	}
 	if outf != nil {
+		dest := outf.Name()
 		outf.Close()
+		if isUsingSharedStorage() {
+			link := getLocalLOBChunkFilename(correctLOBInfo.SHA, chunkIdx-1)
+			CreateHardLink(dest, link)
+		}
 	}
 
 	return correctLOBInfo

@@ -14,6 +14,7 @@ var _ = Describe("Storage", func() {
 
 	root := path.Join(os.TempDir(), "StorageTest")
 	separateGitDir := path.Join(os.TempDir(), "StorageTestGitDir")
+	sharedStore := path.Join(os.TempDir(), "StorageTest_SharedStore")
 	folders := []string{
 		path.Join(root, "folder1"),
 		path.Join(root, "folder2"),
@@ -304,6 +305,224 @@ var _ = Describe("Storage", func() {
 			})
 
 			It("correctly retrieves large LOB file", func() {
+				// output to a temp file
+				out, err := ioutil.TempFile("", "loblarge.dat")
+				Expect(err).To(BeNil(), "Shouldn't be error creating temp file")
+				outFilename := out.Name()
+				info, err := RetrieveLOB(correctLOBInfo.SHA, out)
+
+				Expect(err).To(BeNil(), "Shouldn't be error retrieving LOB")
+				out.Close()
+
+				Expect(info).To(Equal(correctLOBInfo), "Metadata should agree")
+				// Check output file
+				stat, err := os.Stat(outFilename)
+				Expect(err).To(BeNil(), "Shouldn't be error checking output file")
+				Expect(stat.Size()).To(Equal(info.Size), "Size on disk should agree with metadata")
+
+				os.Remove(outFilename)
+
+			})
+
+		})
+
+	})
+
+	// --- Shared tests
+	Describe("Storing a LOB (shared store)", func() {
+		// Common git repo
+		BeforeEach(func() {
+			os.MkdirAll(sharedStore, 0755)
+			GlobalOptions.SharedStore = sharedStore
+			// Set up git repo with some subfolders
+			CreateGitRepoForTest(root)
+
+			for _, f := range folders {
+				err := os.MkdirAll(f, 0755)
+				if err != nil {
+					fmt.Printf("Can't MkdirAll %v: %v", f, err)
+				}
+			}
+			os.Chdir(root)
+		})
+
+		AfterEach(func() {
+			// Delete repo
+			os.RemoveAll(root)
+			os.RemoveAll(sharedStore)
+			GlobalOptions.SharedStore = ""
+		})
+
+		Context("Store small single chunk LOB (shared store)", func() {
+			testFileName := path.Join(folders[2], "small.dat")
+			var correctLOBInfo *LOBInfo
+
+			BeforeEach(func() {
+				correctLOBInfo = CreateSmallTestLOBFileForStoring(testFileName)
+			})
+			AfterEach(func() {
+				os.Remove(testFileName)
+			})
+
+			It("correctly stores a small file (shared store)", func() {
+				f, err := os.Open(testFileName)
+				if err != nil {
+					Fail(fmt.Sprintf("Can't reopen test file %v: %v", testFileName, err))
+				}
+				defer f.Close()
+				// Need to read leader for consistency with real usage
+				leader := make([]byte, SHALineLen)
+				c, err := f.Read(leader)
+				if err != nil {
+					Fail(fmt.Sprintf("Can't read leader of test file %v: %v", testFileName, err))
+				}
+				lobinfo, err := StoreLOB(f, leader[:c])
+				Expect(err).To(BeNil(), "Shouldn't be error storing LOB")
+				Expect(lobinfo).To(Equal(correctLOBInfo))
+
+				lobinfo, err = GetLOBInfo(correctLOBInfo.SHA)
+				Expect(err).To(BeNil(), "Shouldn't be error retrieving LOB info")
+				Expect(lobinfo).To(Equal(correctLOBInfo))
+
+				fileinfo, err := os.Stat(getLocalLOBChunkFilename(lobinfo.SHA, 0))
+				Expect(err).To(BeNil(), "Shouldn't be error opening stored LOB (local)")
+				Expect(fileinfo.Size()).To(Equal(lobinfo.Size), "Stored LOB should be correct size (local)")
+				// Also test shared
+				fileinfo, err = os.Stat(getSharedLOBChunkFilename(lobinfo.SHA, 0))
+				Expect(err).To(BeNil(), "Shouldn't be error opening stored LOB (shared)")
+				Expect(fileinfo.Size()).To(Equal(lobinfo.Size), "Stored LOB should be correct size (shared)")
+
+				links, err := GetHardLinkCount(getLocalLOBChunkFilename(lobinfo.SHA, 0))
+				Expect(err).To(BeNil(), "Shouldn't be error getting local LOB hard link info")
+				Expect(links).To(Equal(2), "Should be the right number of hard links (shared)")
+				links, err = GetHardLinkCount(getSharedLOBChunkFilename(lobinfo.SHA, 0))
+				Expect(err).To(BeNil(), "Shouldn't be error getting shared LOB hard link info")
+				Expect(links).To(Equal(2), "Should be the right number of hard links (local)")
+			})
+
+		})
+
+		Context("Store large multiple chunk LOB (shared store) [LONGTEST]", func() {
+
+			testFileName := path.Join(folders[2], "large.dat")
+			var correctLOBInfo *LOBInfo
+
+			BeforeEach(func() {
+				correctLOBInfo = CreateLargeTestLOBFileForStoring(testFileName)
+			})
+			AfterEach(func() {
+				os.Remove(testFileName)
+			})
+
+			It("correctly stores a large file (shared store)", func() {
+				f, err := os.Open(testFileName)
+				if err != nil {
+					Fail(fmt.Sprintf("Can't reopen test file %v: %v", testFileName, err))
+				}
+				defer f.Close()
+				// Need to read leader for consistency with real usage
+				leader := make([]byte, SHALineLen)
+				c, err := f.Read(leader)
+				if err != nil {
+					Fail(fmt.Sprintf("Can't read leader of test file %v: %v", testFileName, err))
+				}
+				lobinfo, err := StoreLOB(f, leader[:c])
+				Expect(err).To(BeNil(), "Shouldn't be error storing LOB")
+				Expect(lobinfo).To(Equal(correctLOBInfo))
+				lobinfo, err = GetLOBInfo(correctLOBInfo.SHA)
+				Expect(err).To(BeNil(), "Shouldn't be error retrieving LOB info")
+				Expect(lobinfo).To(Equal(correctLOBInfo))
+
+				for i := 0; i < lobinfo.NumChunks; i++ {
+					fileinfo, err := os.Stat(getLocalLOBChunkFilename(lobinfo.SHA, i))
+					Expect(err).To(BeNil(), "Shouldn't be error opening stored LOB #%v", i)
+					if i+1 < lobinfo.NumChunks {
+						Expect(fileinfo.Size()).To(BeEquivalentTo(GlobalOptions.ChunkSize), "Stored LOB #%v should be chunk limit size", i)
+					} else {
+						Expect(fileinfo.Size()).To(BeEquivalentTo(lobinfo.Size%GlobalOptions.ChunkSize), "Stored LOB #%v should be correct size", i)
+					}
+					// Also check shared
+					fileinfo, err = os.Stat(getSharedLOBChunkFilename(lobinfo.SHA, i))
+					Expect(err).To(BeNil(), "Shouldn't be error opening stored LOB #%v", i)
+					if i+1 < lobinfo.NumChunks {
+						Expect(fileinfo.Size()).To(BeEquivalentTo(GlobalOptions.ChunkSize), "Stored LOB #%v should be chunk limit size", i)
+					} else {
+						Expect(fileinfo.Size()).To(BeEquivalentTo(lobinfo.Size%GlobalOptions.ChunkSize), "Stored LOB #%v should be correct size", i)
+					}
+					links, err := GetHardLinkCount(getLocalLOBChunkFilename(lobinfo.SHA, i))
+					Expect(err).To(BeNil(), "Shouldn't be error getting local LOB hard link info")
+					Expect(links).To(Equal(2), "Should be the right number of hard links (shared)")
+					links, err = GetHardLinkCount(getSharedLOBChunkFilename(lobinfo.SHA, i))
+					Expect(err).To(BeNil(), "Shouldn't be error getting shared LOB hard link info")
+					Expect(links).To(Equal(2), "Should be the right number of hard links (local)")
+
+				}
+			})
+
+		})
+
+	})
+
+	Describe("Retrieving a LOB (shared store)", func() {
+		// Common git repo
+		BeforeEach(func() {
+			os.MkdirAll(sharedStore, 0755)
+			GlobalOptions.SharedStore = sharedStore
+			// Set up git repo with some subfolders
+			CreateGitRepoForTest(root)
+
+			for _, f := range folders {
+				err := os.MkdirAll(f, 0755)
+				if err != nil {
+					fmt.Printf("Can't MkdirAll %v: %v", f, err)
+				}
+			}
+
+		})
+
+		AfterEach(func() {
+			// Delete repo
+			os.RemoveAll(root)
+			os.RemoveAll(sharedStore)
+			GlobalOptions.SharedStore = ""
+		})
+
+		Context("Retrieve small single chunk LOB (shared store)", func() {
+			var correctLOBInfo *LOBInfo
+
+			BeforeEach(func() {
+				correctLOBInfo = CreateSmallTestLOBDataForRetrieval()
+			})
+
+			It("correctly retrieves small LOB file (shared store)", func() {
+				// output to a temp file
+				out, err := ioutil.TempFile("", "lobsmall.dat")
+				Expect(err).To(BeNil(), "Shouldn't be error creating temp file")
+				outFilename := out.Name()
+				info, err := RetrieveLOB(correctLOBInfo.SHA, out)
+
+				Expect(err).To(BeNil(), "Shouldn't be error retrieving LOB")
+				out.Close()
+
+				Expect(info).To(Equal(correctLOBInfo), "Metadata should agree")
+				// Check output file
+				stat, err := os.Stat(outFilename)
+				Expect(err).To(BeNil(), "Shouldn't be error checking output file")
+				Expect(stat.Size()).To(Equal(info.Size), "Size on disk should agree with metadata")
+
+				os.Remove(outFilename)
+
+			})
+
+		})
+		Context("Retrieve large multiple chunk LOB (shared store) [LONGTEST]", func() {
+			var correctLOBInfo *LOBInfo
+
+			BeforeEach(func() {
+				correctLOBInfo = CreateLargeTestLOBDataForRetrieval()
+			})
+
+			It("correctly retrieves large LOB file (shared store)", func() {
 				// output to a temp file
 				out, err := ioutil.TempFile("", "loblarge.dat")
 				Expect(err).To(BeNil(), "Shouldn't be error creating temp file")
