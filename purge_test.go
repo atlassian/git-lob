@@ -159,7 +159,7 @@ var _ = Describe("Purge", func() {
 			})
 
 		})
-		Context("Shared storage", func() {
+		Context("Shared storage - deleting at same time as local", func() {
 			var lobshaset StringSet
 			var lobshas []string
 			var lobfiles []string
@@ -299,6 +299,114 @@ var _ = Describe("Purge", func() {
 			})
 		})
 
+		Context("Shared storage - cleaning up", func() {
+			var lobshaset StringSet
+			var lobshas []string
+			var sharedlobfiles []string
+			sharedStore := filepath.Join(os.TempDir(), "PurgeTest_SharedStore")
+
+			BeforeEach(func() {
+				os.MkdirAll(sharedStore, 0755)
+				GlobalOptions.SharedStore = sharedStore
+				// Manually create a bunch of files, no need to really store things
+				// since we just want to see what gets deleted
+				sharedlobfiles = make([]string, 0, 20)
+				// Create a bunch of files, 20 SHAs, in shared area
+				lobshas = GetListOfRandomSHAsForTest(20)
+				lobshaset = NewStringSetFromSlice(lobshas)
+				for _, s := range lobshas {
+					metafile := getSharedLOBMetaFilename(s)
+					ioutil.WriteFile(metafile, []byte("meta something"), 0644)
+					sharedlobfiles = append(sharedlobfiles, metafile)
+					numChunks := rand.Intn(3) + 1
+					for c := 0; c < numChunks; c++ {
+						chunkfile := getSharedLOBChunkFilename(s, c)
+						sharedlobfiles = append(sharedlobfiles, chunkfile)
+						ioutil.WriteFile(chunkfile, []byte("data something"), 0644)
+					}
+				}
+
+			})
+			AfterEach(func() {
+				os.RemoveAll(sharedStore)
+				GlobalOptions.SharedStore = ""
+			})
+			Context("purges all files when no references", func() {
+				// Because we've created no commits, all LOBs should be eligible for deletion
+				It("lists files but doesn't act on it in dry run mode", func() {
+					shasToDelete, err := PurgeUnreferenced(true)
+					Expect(err).To(BeNil(), "PurgeUnreferenced should succeed")
+					// Use sets to compare so ordering doesn't matter
+					actualset := NewStringSetFromSlice(shasToDelete)
+					Expect(actualset).To(Equal(lobshaset), "Should want to delete all files")
+
+					// This includes both local links and shared files
+					for _, file := range sharedlobfiles {
+						exists, _ := FileOrDirExists(file)
+						Expect(exists).To(Equal(true), "File %v should still exist", file)
+					}
+
+				})
+				It("deletes files when not in dry run mode", func() {
+					shasToDelete, err := PurgeUnreferenced(false)
+					Expect(err).To(BeNil(), "PurgeUnreferenced should succeed")
+					// Use sets to compare so ordering doesn't matter
+					actualset := NewStringSetFromSlice(shasToDelete)
+					Expect(actualset).To(Equal(lobshaset), "Should want to delete all files")
+
+					// This includes both local links and shared files
+					for _, file := range sharedlobfiles {
+						exists, _ := FileOrDirExists(file)
+						Expect(exists).To(Equal(false), "File %v should have been deleted", file)
+					}
+
+				})
+			})
+			Context("some files referenced", func() {
+				var locallobfiles []string
+				const referenceUpTo = 10
+				BeforeEach(func() {
+					locallobfiles = make([]string, 0, 10)
+					for i, sharedfile := range sharedlobfiles {
+						// Just link into temp dir, doesn't matter where the link is
+						localfile := filepath.Join(os.TempDir(), filepath.Base(sharedfile))
+						CreateHardLink(sharedfile, localfile)
+						locallobfiles = append(locallobfiles, localfile)
+
+						// Only reference some
+						if i >= referenceUpTo {
+							break
+						}
+
+					}
+				})
+				AfterEach(func() {
+					for _, l := range locallobfiles {
+						os.Remove(l)
+					}
+				})
+
+				It("does nothing in dry run mode", func() {
+					PurgeSharedStore(true)
+					for _, sharedfile := range sharedlobfiles {
+						exists, _ := FileOrDirExists(sharedfile)
+						Expect(exists).To(BeTrue(), "Should not have deleted %v", sharedfile)
+					}
+				})
+				It("correctly identifies referenced and unreferenced shared files", func() {
+					PurgeSharedStore(false)
+					for i, sharedfile := range sharedlobfiles {
+						exists, _ := FileOrDirExists(sharedfile)
+						if i <= referenceUpTo {
+							Expect(exists).To(BeTrue(), "Should not have deleted %v", sharedfile)
+						} else {
+							Expect(exists).To(BeFalse(), "Should have deleted %v", sharedfile)
+						}
+					}
+				})
+
+			})
+		})
 	})
 
 })
