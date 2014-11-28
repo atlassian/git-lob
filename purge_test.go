@@ -332,10 +332,10 @@ var _ = Describe("Purge", func() {
 				GlobalOptions.SharedStore = ""
 			})
 			Context("purges all files when no references", func() {
-				// Because we've created no commits, all LOBs should be eligible for deletion
+				// Because we've created no hard links to the shared store, everything should be available for deletion
 				It("lists files but doesn't act on it in dry run mode", func() {
-					shasToDelete, err := PurgeUnreferenced(true)
-					Expect(err).To(BeNil(), "PurgeUnreferenced should succeed")
+					shasToDelete, err := PurgeSharedStore(true)
+					Expect(err).To(BeNil(), "PurgeSharedStore should succeed")
 					// Use sets to compare so ordering doesn't matter
 					actualset := NewStringSetFromSlice(shasToDelete)
 					Expect(actualset).To(Equal(lobshaset), "Should want to delete all files")
@@ -348,8 +348,8 @@ var _ = Describe("Purge", func() {
 
 				})
 				It("deletes files when not in dry run mode", func() {
-					shasToDelete, err := PurgeUnreferenced(false)
-					Expect(err).To(BeNil(), "PurgeUnreferenced should succeed")
+					shasToDelete, err := PurgeSharedStore(false)
+					Expect(err).To(BeNil(), "PurgeSharedStore should succeed")
 					// Use sets to compare so ordering doesn't matter
 					actualset := NewStringSetFromSlice(shasToDelete)
 					Expect(actualset).To(Equal(lobshaset), "Should want to delete all files")
