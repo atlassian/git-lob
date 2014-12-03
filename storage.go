@@ -76,7 +76,7 @@ func GetGitDir() string {
 
 // Gets the root directory for local LOB files & creates if necessary
 func GetLocalLOBRoot() string {
-	ret := filepath.Join(GetGitDir(), "git-lob")
+	ret := filepath.Join(GetGitDir(), "git-lob", "content")
 	err := os.MkdirAll(ret, 0755)
 	if err != nil {
 		LogErrorf("Unable to create LOB root folder at %v: %v", ret, err)
