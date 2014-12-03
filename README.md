@@ -42,3 +42,55 @@ So why pick Go as the language for git-lob? I have experience in a lot of langua
 3. It's mature & stable (compared to, say, Rust; at time of writing)
 4. It's fairly easy to learn & contribute (compared to, say, Haskell or even C)
 
+## Installation ##
+### Install from source ###
+
+If you want to build from source, make sure you have a Go environment already set up, with $GOPATH/bin already on your $PATH (on Windows, %GOPATH%\bin on your %PATH%). Then run the following in a console:
+```bash
+> go get bitbucket.org/sinbad/git-lob
+> go install bitbucket.org/sinbad/git-lob
+```
+
+Now edit your main .gitconfig file in your user directory and add a new filter definition. 
+
+On Mac/Linux:
+```ini
+[filter "lob"]
+  clean = "$GOPATH/bin/git-lob filter-clean"
+  smudge = "$GOPATH/bin/git-lob filter-smudge"
+```
+
+On Windows:
+```ini
+[filter "lob"]
+  clean = "%GOPATH%/bin/git-lob.exe filter-clean"
+  smudge = "%GOPATH%/bin/git-lob.exe filter-smudge"
+```
+
+You can expand $GOTPATH/%GOPATH% inline if you need to support usage where GOPATH is not defined. Again on Windows, always use forward slashes, for example c:/path/to/git-lob.exe
+
+### Install From binary distribution ###
+If you downloaded a precompiled version for your platform, just extract git-lob[.exe] to a location of your choice.
+
+Now edit your main .gitconfig file in your user directory and add a new filter definition as shown in the 'Install from source' section but set the path to git-lob[.exe] to be wherever you extracted it
+
+## Repository Configuration ##
+To start putting binary files into git-lob you need to create or modify a .gitattributes file in the root of your repository:
+```ini
+*.png filter=lob -crlf
+*.jpg filter=lob -crlf
+*.zip filter=lob -crlf
+*.tiff filter=lob -crlf
+*.tga filter=lob -crlf
+*.dds filter=lob -crlf
+*.bmp filter=lob -crlf
+*.mov filter=lob -crlf
+```
+Include a line for all file types you want to be handled by git-lob. After saving this file, every time you 'git add' on a matching file, its content will be excluded from Git and put in the separate binary store, referenced by SHA in the commit.
+
+## Configuring remote storage ##
+
+Coming soon.
+
+## Other options ##
+git-lob supports a number of command-line parameters, and configuration parameters in your .gitconfig (user or repository level). Please call 'git-lob --help' for full details.
