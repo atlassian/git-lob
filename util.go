@@ -87,3 +87,24 @@ func FormatSize(sz int64) string {
 		return fmt.Sprintf("%d", sz)
 	}
 }
+
+// Search a sorted slice of strings for a specific string
+// Returns boolean for if found, and either location or insertion point
+func StringBinarySearch(sortedSlice []string, searchTerm string) (bool, int) {
+	low := 0
+	high := len(sortedSlice) - 1
+	for low <= high {
+		middle := int((high + low) / 2)
+		v := sortedSlice[middle]
+		switch {
+		case v == searchTerm:
+			return true, middle
+		case v < searchTerm:
+			low = middle + 1
+		default:
+			high = middle - 1
+		}
+	}
+
+	return false, low
+}
