@@ -124,7 +124,9 @@ Config files:
                      When the number of hard links on a file in the shared
                      area reaches 1 during cleanup, the shared file is deleted.
                      NOTE: requires a file system capable of hard links
-                     e.g. ext3, HFS, NTFS
+                     e.g. ext3, HFS, NTFS, and the shared store and the repos
+                     using it must be on the same filesystem (drive on Windows)
+
   git-lob.retention  Number of days before latest commit that other revisions
                      of files will be kept for
 
