@@ -72,4 +72,97 @@ var _ = Describe("Util", func() {
 
 	})
 
+	Describe("StringBinarySearch", func() {
+		// Note capitalised ordering
+		sortedSlice := []string{"Cheetah", "Frog", "aardvark", "bear", "cheetah", "dog", "elephant", "zebra"}
+
+		It("behaves correctly on empty lists", func() {
+
+			list := make([]string, 0)
+			found, insertAt := StringBinarySearch(list, "test")
+			Expect(found).To(BeFalse(), "Should not find in empty list")
+			Expect(insertAt).To(BeEquivalentTo(0), "Empty list insertion should be zero")
+
+		})
+		It("behaves correctly on empty search term", func() {
+
+			found, insertAt := StringBinarySearch(sortedSlice, "")
+			Expect(found).To(BeFalse(), "Should not find empty string")
+			Expect(insertAt).To(BeEquivalentTo(0), "Should insert empty string at start")
+
+		})
+		It("inserts at start", func() {
+
+			found, insertAt := StringBinarySearch(sortedSlice, "Aardvark")
+			Expect(found).To(BeFalse(), "Should not find string")
+			Expect(insertAt).To(BeEquivalentTo(0), "Should insert string at start")
+
+		})
+		It("inserts at end", func() {
+
+			found, insertAt := StringBinarySearch(sortedSlice, "zoltan")
+			Expect(found).To(BeFalse(), "Should not find string")
+			Expect(insertAt).To(BeEquivalentTo(len(sortedSlice)), "Should insert string at end")
+
+		})
+		It("inserts in middle", func() {
+
+			found, insertAt := StringBinarySearch(sortedSlice, "Dingo")
+			Expect(found).To(BeFalse(), "Should not find string")
+			Expect(insertAt).To(BeEquivalentTo(1), "Should insert at correct point")
+
+			found, insertAt = StringBinarySearch(sortedSlice, "anteater")
+			Expect(found).To(BeFalse(), "Should not find string")
+			Expect(insertAt).To(BeEquivalentTo(3), "Should insert at correct point")
+
+			found, insertAt = StringBinarySearch(sortedSlice, "chaffinch")
+			Expect(found).To(BeFalse(), "Should not find string")
+			Expect(insertAt).To(BeEquivalentTo(4), "Should insert at correct point")
+
+			found, insertAt = StringBinarySearch(sortedSlice, "fox")
+			Expect(found).To(BeFalse(), "Should not find string")
+			Expect(insertAt).To(BeEquivalentTo(7), "Should insert at correct point")
+
+		})
+		It("is case sensitive", func() {
+
+			found, insertAt := StringBinarySearch(sortedSlice, "Dog")
+			Expect(found).To(BeFalse(), "Should not find string")
+			Expect(insertAt).To(BeEquivalentTo(1), "Should insert at correct point")
+
+			found, insertAt = StringBinarySearch(sortedSlice, "frog")
+			Expect(found).To(BeFalse(), "Should not find string")
+			Expect(insertAt).To(BeEquivalentTo(7), "Should insert at correct point")
+
+		})
+		It("finds existing", func() {
+			// Note not using loop and sortedSlice[i] to test for equality not identity
+			found, at := StringBinarySearch(sortedSlice, "Cheetah")
+			Expect(found).To(BeTrue(), "Should find string")
+			Expect(at).To(BeEquivalentTo(0), "Should insert at correct point")
+			found, at = StringBinarySearch(sortedSlice, "Frog")
+			Expect(found).To(BeTrue(), "Should find string")
+			Expect(at).To(BeEquivalentTo(1), "Should insert at correct point")
+			found, at = StringBinarySearch(sortedSlice, "aardvark")
+			Expect(found).To(BeTrue(), "Should find string")
+			Expect(at).To(BeEquivalentTo(2), "Should insert at correct point")
+			found, at = StringBinarySearch(sortedSlice, "bear")
+			Expect(found).To(BeTrue(), "Should find string")
+			Expect(at).To(BeEquivalentTo(3), "Should insert at correct point")
+			found, at = StringBinarySearch(sortedSlice, "cheetah")
+			Expect(found).To(BeTrue(), "Should find string")
+			Expect(at).To(BeEquivalentTo(4), "Should insert at correct point")
+			found, at = StringBinarySearch(sortedSlice, "dog")
+			Expect(found).To(BeTrue(), "Should find string")
+			Expect(at).To(BeEquivalentTo(5), "Should insert at correct point")
+			found, at = StringBinarySearch(sortedSlice, "elephant")
+			Expect(found).To(BeTrue(), "Should find string")
+			Expect(at).To(BeEquivalentTo(6), "Should insert at correct point")
+			found, at = StringBinarySearch(sortedSlice, "zebra")
+			Expect(found).To(BeTrue(), "Should find string")
+			Expect(at).To(BeEquivalentTo(7), "Should insert at correct point")
+		})
+
+	})
+
 })
