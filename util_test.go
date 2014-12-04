@@ -78,7 +78,7 @@ var _ = Describe("Util", func() {
 
 		It("behaves correctly on empty lists", func() {
 
-			list := make([]string, 0)
+			var list []string
 			found, insertAt := StringBinarySearch(list, "test")
 			Expect(found).To(BeFalse(), "Should not find in empty list")
 			Expect(insertAt).To(BeEquivalentTo(0), "Empty list insertion should be zero")

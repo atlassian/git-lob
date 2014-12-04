@@ -54,7 +54,7 @@ func ShouldPushBinariesForCommit(remoteName, commitSHA string) bool {
 		lines = append(lines, scanner.Text())
 	}
 	found, _ := StringBinarySearch(lines, commitSHA)
-	return found
+	return !found
 }
 
 // Update local cache to say that we believe we've updated the named remote at this commit
@@ -64,7 +64,8 @@ func recordRemoteBinariesUpToDateAtCommit(remoteName, commitSHA string) error {
 	if err != nil {
 		// File did not exist, just write single line
 		// For consistency in sizing, always include \n
-		ioutil.WriteFile(filename, []byte(commitSHA+"\n"), 0644)
+		LogDebugf("Created new remote state cache file %v to mark %v as pushed", filename, commitSHA)
+		return ioutil.WriteFile(filename, []byte(commitSHA+"\n"), 0644)
 	} else {
 		defer f.Close()
 
@@ -96,15 +97,23 @@ func recordRemoteBinariesUpToDateAtCommit(remoteName, commitSHA string) error {
 				// Have to re-insert the line break
 				f.WriteString(shas[i] + "\n")
 			}
+			LogDebugf("Updated remote state cache file %v to mark %v as pushed", filename, commitSHA)
 		}
 
+		return nil
 	}
-	return nil
 }
 
 // Say that we've successfully pushed binaries for a remote at a commit (and all ancestors)
 func SuccessfullyPushedBinariesForCommit(remoteName, commitSHA string) error {
+	// TODO - should we check that this is set for all ancestors too?
 	return recordRemoteBinariesUpToDateAtCommit(remoteName, commitSHA)
+}
+
+// Reset the cached information about which binaries we have cached for a given remote
+// Warning: this will make the next push expensive while it recalculates
+func ResetPushedBinaryState(remoteName string) error {
+	return os.RemoveAll(getRemoteStateCacheRoot(remoteName))
 }
 
 // Find the most recent ancestor of commitSHA (or itself) at which we believe we've
