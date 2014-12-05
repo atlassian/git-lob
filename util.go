@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -107,4 +109,53 @@ func StringBinarySearch(sortedSlice []string, searchTerm string) (bool, int) {
 	}
 
 	return false, low
+}
+
+// Walk first parents starting from startSHA and call callback
+// First call will be startSHA & its parent
+// Parent will be blank string if there are no more parents & walk will stop after
+// Optimises internally to call Git only for batches of 50
+func WalkGitHistory(startSHA string, callback func(currentSHA, parentSHA string) (quit bool, err error)) error {
+
+	quit := false
+	currentLogHEAD := startSHA
+	var callbackError error
+	for !quit {
+		// get 50 parents
+		// format as <SHA> <PARENT> so we can detect the end of history
+		cmd := exec.Command("git", "log", "--first-parent", "--topo-order",
+			"-n", "50", "--format=%H %P", currentLogHEAD)
+
+		outp, err := cmd.StdoutPipe()
+		if err != nil {
+			LogErrorf("Unable to list commits from %v: %v", currentLogHEAD, err.Error())
+			return err
+		}
+		cmd.Start()
+		scanner := bufio.NewScanner(outp)
+		var currentLine string
+		var parentSHA string
+		for scanner.Scan() {
+			currentLine = scanner.Text()
+			currentSHA := currentLine[:40]
+			// If we got here, we still haven't found an ancestor that was already marked
+			// check next batch, provided there's a parent on the last one
+			// 81 chars long, 2x40 SHAs + space
+			if len(currentLine) >= 81 {
+				parentSHA = strings.TrimSpace(currentLine[41:81])
+			}
+			quit, callbackError = callback(currentSHA, parentSHA)
+			if quit {
+				break
+			}
+		}
+		cmd.Wait()
+		// End of history
+		if parentSHA == "" {
+			break
+		} else {
+			currentLogHEAD = parentSHA
+		}
+	}
+	return callbackError
 }

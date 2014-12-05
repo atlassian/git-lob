@@ -4,9 +4,7 @@ import (
 	"bufio"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 )
 
 // Gets the root directory of the remote state cache for a given remote
@@ -124,49 +122,19 @@ func SuccessfullyPushedBinariesForCommit(remoteName, commitSHA string) error {
 	const historyLimit = 500
 
 	// Start with first parent
-	currentSHA := commitSHA + "^"
+	parent := commitSHA + "^"
 	ancestorCount := 0
-	for !alreadyMarked && ancestorCount < historyLimit {
-		// get 50 parents
-		// format as <SHA> <PARENT> so we can detect the end of history
-		cmd := exec.Command("git", "log", "--first-parent", "--topo-order",
-			"-n", "50", "--format=%H %P", currentSHA)
-		ancestorCount += 50
-
-		outp, err := cmd.StdoutPipe()
+	err = WalkGitHistory(parent, func(currentSHA, parentSHA string) (bool, error) {
+		alreadyMarked, err = recordRemoteBinariesUpToDateAtCommit(remoteName, currentSHA)
 		if err != nil {
-			LogErrorf("Unable to list commits: " + err.Error())
-			return err
+			// quit
+			return true, err
 		}
-		cmd.Start()
-		scanner := bufio.NewScanner(outp)
-		var currentLine string
-		for scanner.Scan() {
-			currentLine = scanner.Text()
-			currentSHA := currentLine[:40]
-			alreadyMarked, err = recordRemoteBinariesUpToDateAtCommit(remoteName, currentSHA)
-			if err != nil {
-				return err
-			}
-			if alreadyMarked {
-				break
-			}
-		}
-		cmd.Wait()
-		// If we got here, we still haven't found an ancestor that was already marked
-		// check next batch, provided there's a parent on the last one
-		// 81 chars long, 2x40 SHAs + space
-		if len(currentLine) >= 81 {
-			currentSHA = strings.TrimSpace(currentLine[41:81])
-			if currentSHA == "" {
-				break
-			}
-		} else {
-			break
-		}
-
-	}
-	return nil
+		ancestorCount++
+		// stop if we've hit a marked SHA or history limit
+		return alreadyMarked || ancestorCount >= historyLimit, nil
+	})
+	return err
 }
 
 // Reset the cached information about which binaries we have cached for a given remote
@@ -179,41 +147,21 @@ func ResetPushedBinaryState(remoteName string) error {
 // already pushed all binaries. Returns a blanks string if none have been pushed.
 func FindLatestAncestorWhereBinariesPushed(remoteName, commitSHA string) (string, error) {
 
-	// Use git log to list 50 at a time
-	// Only follow first parent and always in topo order
-	currentHEAD := commitSHA
-	for {
-		cmd := exec.Command("git", "log", "--first-parent", "--topo-order",
-			"-n", "50", "--format=%H %P", currentHEAD)
-		outp, err := cmd.StdoutPipe()
-		if err != nil {
-			LogErrorf("Unable to list commits: " + err.Error())
-			return "", err
-		}
-		cmd.Start()
-		scanner := bufio.NewScanner(outp)
-		var currentLine string
-		for scanner.Scan() {
-			currentLine = scanner.Text()
-			currentSHA := currentLine[:40]
-			if !ShouldPushBinariesForCommit(remoteName, currentSHA) {
-				return currentSHA, nil
-			}
-		}
-		cmd.Wait()
-		// If we got here, none of this batch succeeded
-		// check next batch, provided there's a parent on the last one
-		// 81 chars long, 2x40 SHAs + space
-		if len(currentLine) >= 81 {
-			currentHEAD = strings.TrimSpace(currentLine[41:81])
-			if currentHEAD == "" {
-				break
-			}
-		} else {
-			break
-		}
-
+	// Check self first (avoid git log call if up to date)
+	if !ShouldPushBinariesForCommit(remoteName, commitSHA) {
+		return commitSHA, nil
 	}
-	// No match
-	return "", nil
+
+	// Now check ancestors
+	parent := commitSHA + "^"
+	var foundSHA string
+	err := WalkGitHistory(parent, func(currentSHA, parentSHA string) (bool, error) {
+
+		if !ShouldPushBinariesForCommit(remoteName, currentSHA) {
+			foundSHA = currentSHA
+			return true, nil
+		}
+		return false, nil
+	})
+	return foundSHA, err
 }
