@@ -152,8 +152,16 @@ var _ = Describe("Remote", func() {
 				}
 			}
 			remote := "origin"
+			// Get SHA of HEAD
+			cmd := exec.Command("git", "rev-parse", "HEAD")
+			outp, err := cmd.Output()
+			if err != nil {
+				Fail(err.Error())
+			}
+			headSHA := strings.TrimSpace(string(outp))
+
 			// Check that no-match case works & terminates correctly
-			sha, err := FindLatestAncestorWhereBinariesPushed(remote, "HEAD")
+			sha, err := FindLatestAncestorWhereBinariesPushed(remote, headSHA)
 			Expect(err).To(BeNil())
 			Expect(sha).To(Equal(""), "Should be no pushed binaries at start")
 
@@ -161,7 +169,7 @@ var _ = Describe("Remote", func() {
 				// Say we've pushed at this point, then test from HEAD
 				SuccessfullyPushedBinariesForCommit(remote, pushedCommit)
 
-				sha, err := FindLatestAncestorWhereBinariesPushed(remote, "HEAD")
+				sha, err := FindLatestAncestorWhereBinariesPushed(remote, headSHA)
 				Expect(err).To(BeNil())
 				Expect(sha).To(Equal(pushedCommit), "Should detect %v as pushed commit (iteration %d)", pushedCommit, i)
 			}
