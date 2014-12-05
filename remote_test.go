@@ -5,7 +5,9 @@ import (
 	. "github.com/onsi/gomega"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 var _ = Describe("Remote", func() {
@@ -118,6 +120,50 @@ var _ = Describe("Remote", func() {
 			for _, s := range shas {
 				push := ShouldPushBinariesForCommit(remote1Name, s)
 				Expect(push).To(BeTrue(), "Should want to push %v", s)
+			}
+
+		})
+
+		It("finds pushed ancestor", func() {
+			// Create a bunch of empty commits, doesn't matter so long as message is different each time
+			// so commit SHA is unique
+			// Just use random SHAs to generate different messages
+			// We need > 100 to test 2 batches of commit probes
+			msgs := GetListOfRandomSHAsForTest(100)
+			var commitPoints []string
+			for i, msg := range msgs {
+				cmd := exec.Command("git", "commit", "--allow-empty", "-m", msg)
+				if err := cmd.Run(); err != nil {
+					Fail(err.Error())
+				}
+
+				// Record push points at useful test intervals
+				// start & end, in middle & near boundaries
+				if i == 0 || i == 16 || i == 50 || i == 90 || i == 99 {
+					// Get HEAD
+					cmd := exec.Command("git", "rev-parse", "HEAD")
+					outp, err := cmd.Output()
+					if err != nil {
+						Fail(err.Error())
+					}
+
+					commitPoints = append(commitPoints, strings.TrimSpace(string(outp)))
+
+				}
+			}
+			remote := "origin"
+			// Check that no-match case works & terminates correctly
+			sha, err := FindLatestAncestorWhereBinariesPushed(remote, "HEAD")
+			Expect(err).To(BeNil())
+			Expect(sha).To(Equal(""), "Should be no pushed binaries at start")
+
+			for i, pushedCommit := range commitPoints {
+				// Say we've pushed at this point, then test from HEAD
+				SuccessfullyPushedBinariesForCommit(remote, pushedCommit)
+
+				sha, err := FindLatestAncestorWhereBinariesPushed(remote, "HEAD")
+				Expect(err).To(BeNil())
+				Expect(sha).To(Equal(pushedCommit), "Should detect %v as pushed commit (iteration %d)", pushedCommit, i)
 			}
 
 		})

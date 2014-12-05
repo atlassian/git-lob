@@ -4,7 +4,9 @@ import (
 	"bufio"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 // Gets the root directory of the remote state cache for a given remote
@@ -118,7 +120,43 @@ func ResetPushedBinaryState(remoteName string) error {
 
 // Find the most recent ancestor of commitSHA (or itself) at which we believe we've
 // already pushed all binaries. Returns a blanks string if none have been pushed.
-func FindLatestAncestorWhereBinariesPushed(remoteName, commitSHA string) string {
-	// TODO
-	return ""
+func FindLatestAncestorWhereBinariesPushed(remoteName, commitSHA string) (string, error) {
+
+	// Use git log to list 50 at a time
+	// Only follow first parent and always in topo order
+	currentHEAD := commitSHA
+	for {
+		cmd := exec.Command("git", "log", "--first-parent", "--topo-order",
+			"-n", "50", "--format=%H %P", currentHEAD)
+		outp, err := cmd.StdoutPipe()
+		if err != nil {
+			LogErrorf("Unable to list commits: " + err.Error())
+			return "", err
+		}
+		cmd.Start()
+		scanner := bufio.NewScanner(outp)
+		var currentLine string
+		for scanner.Scan() {
+			currentLine = scanner.Text()
+			currentSHA := currentLine[:40]
+			if !ShouldPushBinariesForCommit(remoteName, currentSHA) {
+				return currentSHA, nil
+			}
+		}
+		cmd.Wait()
+		// If we got here, none of this batch succeeded
+		// check next batch, provided there's a parent on the last one
+		// 81 chars long, 2x40 SHAs + space
+		if len(currentLine) >= 81 {
+			currentHEAD = strings.TrimSpace(currentLine[41:81])
+			if currentHEAD == "" {
+				break
+			}
+		} else {
+			break
+		}
+
+	}
+	// No match
+	return "", nil
 }
