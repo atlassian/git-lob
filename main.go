@@ -77,6 +77,12 @@ func mainImpl() int {
 			return 0
 		}
 		return CleanFilter()
+	case "push":
+		if GlobalOptions.HelpRequested {
+			printPushHelp()
+			return 0
+		}
+		return Push()
 	default:
 		if GlobalOptions.HelpRequested {
 			printHelp()
@@ -110,11 +116,10 @@ Commands:
   					  usage)
   cleanup-shared      Delete any binaries in the shared store which have become
                       unreferenced because repos were manually deleted
+  push                Upload local binaries to a remote.
 
-  filter-smudge       Execute the git smudge filter
-  filter-clean        Execute the git clean filter
-
- 
+  filter-smudge       Execute the git smudge filter (gitconfig only)
+  filter-clean        Execute the git clean filter (gitconfig only)
 
 Global Options:
   --quiet, -q          Print less output
