@@ -54,14 +54,34 @@ func mainImpl() int {
 
 	switch GlobalOptions.Command {
 	case "cleanup":
+		if GlobalOptions.HelpRequested {
+			printCleanupHelp()
+			return 0
+		}
 		return Cleanup()
 	case "cleanup-shared":
+		if GlobalOptions.HelpRequested {
+			printCleanupSharedHelp()
+			return 0
+		}
 		return CleanupShared()
 	case "filter-smudge":
+		if GlobalOptions.HelpRequested {
+			printSmudgeFilterHelp()
+			return 0
+		}
 		return SmudgeFilter()
 	case "filter-clean":
+		if GlobalOptions.HelpRequested {
+			printCleanFilterHelp()
+			return 0
+		}
 		return CleanFilter()
 	default:
+		if GlobalOptions.HelpRequested {
+			printHelp()
+			return 0
+		}
 		fmt.Fprintf(os.Stderr, "git-lob: unknown command '%v'\n", GlobalOptions.Command)
 		return 1
 	}
@@ -82,6 +102,8 @@ const helpTxt = `Usage: git-lob [command] [options] [file...]
 
   git-lob improves handling of large objects (including binary files) in git
 
+  Use 'git-lob <command> --help' for more details
+
 Commands:
   cleanup             Remove binaries unreferenced by any commit or the index
   					  from the local repo binary store (and shared if no other
@@ -99,7 +121,6 @@ Global Options:
   --verbose, -v        Print more output
   --dry-run            Don't perform actions, just report
   --noninteractive, -n Never prompt for user input
-  --force, -f          Force action, break rules
 
   --help               Print this message
 

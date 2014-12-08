@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"regexp"
@@ -95,4 +96,38 @@ func CleanFilterWithReaderWriter(in io.Reader, out io.Writer) int {
 	LogDebugf("Successfully stored/checked LOB data for SHA %v, %d chunks, total size %v\n", lobinfo.SHA, lobinfo.NumChunks, lobinfo.Size)
 
 	return 0
+}
+
+func printSmudgeFilterHelp() {
+	fmt.Println(`Usage: git-lob filter-smudge [options]
+
+  The smudge filter converts a file stored in git to a file in the working
+  directory. In this case we look for files containing the git-lob marker
+  and replace the content with real binary data from the binary store.
+
+  Not intended to be called directly, see README.md for how to configure
+  the filter for your repository.
+
+Options:
+  --quiet, -q          Print less output
+  --verbose, -v        Print more output
+  --dry-run            Don't actually delete anything, just report
+`)
+}
+func printCleanFilterHelp() {
+	fmt.Println(`Usage: git-lob filter-clean [options]
+
+  The clean filter converts a file in the working directory to a form which
+  will be stored in git. In this case we calculate the SHA-1 of the binary
+  content and write this to git, while storing the real data in the separate
+  binary store.
+
+  Not intended to be called directly, see README.md for how to configure
+  the filter for your repository.
+
+Options:
+  --quiet, -q          Print less output
+  --verbose, -v        Print more output
+  --dry-run            Don't actually delete anything, just report
+`)
 }

@@ -14,6 +14,8 @@ import (
 
 // Options (command line or config file TODO)
 type Options struct {
+	// Help option was requested
+	HelpRequested bool
 	// Output verbosely (to console & log)
 	Verbose bool
 	// Output quietly (to console)

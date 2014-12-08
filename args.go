@@ -34,8 +34,7 @@ func parseCommandLine(opts *Options, args []string) (errors []string) {
 				fmt.Fprintf(os.Stdout, "git-lob version %v\n", VersionString)
 				os.Exit(0)
 			case "help":
-				printHelp()
-				os.Exit(0)
+				opts.HelpRequested = true
 			case "verbose":
 				opts.Verbose = true
 			case "quiet":
@@ -75,7 +74,7 @@ func parseCommandLine(opts *Options, args []string) (errors []string) {
 		}
 	}
 
-	if opts.Command == "" {
+	if opts.Command == "" && !GlobalOptions.HelpRequested {
 		errors = append(errors, "git-lob: command required")
 	}
 
