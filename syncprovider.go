@@ -8,6 +8,15 @@ import (
 type SyncProvider interface {
 	// Return the type identifier for this provider
 	TypeID() string
+
+	// Return this provider's help text summary for inclusion in the response to
+	// 'git-lob providers' (where all are listed)
+	HelpTextSummary() string
+
+	// Return this provider's full help text, including all details of configuration
+	// parameters in gitconfig, for use as a response to
+	// 'git-lob provider <TypeID>'
+	HelpTextDetail() string
 }
 
 // Providers implementing this interface provide basic sync capabilities
