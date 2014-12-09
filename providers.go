@@ -31,10 +31,8 @@ type BasicSyncProvider interface {
 	// relative paths inside its own storage
 	// For each file, if the remote already has this file and it's the same size, skip.
 	// Must only return nil if remote is considered fully up to date with these files
-	Upload(remoteName string, filenames []string, fromDir string) error
-	// As Upload, except always upload even if already present and override any conditions
-	// Must only return nil if all files were successfully uploaded
-	UploadForce(remoteName string, filenames []string, fromDir string) error
+	// If force = true, files should be uploaded even if they're already there & the correct size
+	Upload(remoteName string, filenames []string, fromDir string, force bool) error
 	// Download the list of files (binary storage). The paths are relative and files should
 	// be placed relative to toDir. Ideally in-progress downloads should go to other locations
 	// and be moved to the final location on success, although git-lob will detect files
@@ -82,7 +80,7 @@ func RegisterSyncProvider(p SyncProvider) error {
 func GetSyncProvider(typeID string) (SyncProvider, error) {
 	p, ok := syncProviders[typeID]
 	if !ok {
-		return nil, errors.New(fmt.Sprintf("Requested unknown SyncProvider: ", typeID))
+		return nil, errors.New(fmt.Sprintf("Requested unknown SyncProvider: %v", typeID))
 	}
 	return p, nil
 }
