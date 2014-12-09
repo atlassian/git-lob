@@ -44,7 +44,7 @@ func parseCommandLine(opts *Options, args []string) (errors []string) {
 			case "noninteractive":
 				opts.NonInteractive = true
 			default:
-				errors = append(errors, fmt.Sprintf("git-lob: invalid option: %v", arg))
+				opts.BoolOpts.Add(stropt)
 			}
 
 		} else if match := shortBoolRegex.FindStringSubmatch(arg); match != nil {
@@ -57,7 +57,7 @@ func parseCommandLine(opts *Options, args []string) (errors []string) {
 			case "n":
 				opts.NonInteractive = true
 			default:
-				errors = append(errors, fmt.Sprintf("git-lob: invalid option: %v", arg))
+				opts.BoolOpts.Add(stropt)
 			}
 		} else {
 			if !foundCommand {
@@ -76,4 +76,36 @@ func parseCommandLine(opts *Options, args []string) (errors []string) {
 
 	return
 
+}
+
+// Having already called parseCommandLine, perform context-specific validation
+// only to accept certain options. Errors will be returned for any options present that are
+// not in validValueOpts / validBoolOpts
+func validateCustomOptions(opts *Options, validValueOpts, validBoolOpts []string) (errors []string) {
+	validValueSet := NewStringSetFromSlice(validValueOpts)
+	validBoolSet := NewStringSetFromSlice(validBoolOpts)
+
+	for k, v := range opts.StringOpts {
+		if !validValueSet.Contains(k) {
+			if validBoolSet.Contains(k) {
+				errors = append(errors, fmt.Sprintf("git-lob: option --%v should not include a value (boolean option)", k))
+			} else {
+				errors = append(errors, fmt.Sprintf("git-lob: invalid option --%v=%v", k, v))
+			}
+		}
+	}
+	for k := range opts.BoolOpts.Iter() {
+		if !validBoolSet.Contains(k) {
+			if validValueSet.Contains(k) {
+				errors = append(errors, fmt.Sprintf("git-lob: option --%v requires a value", k))
+			} else {
+				if len(k) > 1 {
+					errors = append(errors, fmt.Sprintf("git-lob: invalid option --%v", k))
+				} else {
+					errors = append(errors, fmt.Sprintf("git-lob: invalid option -%v", k))
+				}
+			}
+		}
+	}
+	return
 }

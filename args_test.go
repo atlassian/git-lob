@@ -36,6 +36,11 @@ var _ = Describe("Args", func() {
 			Expect(opts.Args).To(Equal([]string{}))
 			Expect(opts.StringOpts).To(Equal(map[string]string{}))
 		})
+	})
+	Describe("Option handling", func() {
+		BeforeEach(func() {
+			opts = NewOptions()
+		})
 		It("detects short options", func() {
 			args = []string{"git-lob", "lock", "-q", "-v", "-f", "-n"}
 			errors = parseCommandLine(opts, args)
@@ -84,15 +89,37 @@ var _ = Describe("Args", func() {
 			Expect(opts.Args).To(Equal([]string{"file/one/test.jpg", "file/two/another.png"}))
 			Expect(opts.StringOpts).To(Equal(map[string]string{}))
 		})
-		It("fails with invalid short option", func() {
+		It("accepts custom boolean short options", func() {
 			args = []string{"git-lob", "lock", "-x"}
 			errors = parseCommandLine(opts, args)
-			Expect(errors).ToNot(BeEmpty())
+			Expect(errors).To(BeEmpty())
+			Expect(opts.Command).To(Equal("lock"))
+			Expect(opts.BoolOpts).To(HaveKey("x"))
 		})
-		It("fails with invalid long option", func() {
-			args = []string{"git-lob", "lock", "--invalidoption"}
+		It("accepts custom boolean long options", func() {
+			args = []string{"git-lob", "lock", "--customoption"}
 			errors = parseCommandLine(opts, args)
-			Expect(errors).ToNot(BeEmpty())
+			Expect(errors).To(BeEmpty())
+			Expect(opts.Command).To(Equal("lock"))
+			Expect(opts.BoolOpts).To(HaveKey("customoption"))
+		})
+		It("validates custom options", func() {
+			args = []string{"git-lob", "lock", "--validbool", "--invalidbool", "--validvalue=1", "--invalidvalue=2", "-x", "-b", "-q"}
+			errors = parseCommandLine(opts, args)
+			Expect(errors).To(BeEmpty())
+			Expect(opts.Command).To(Equal("lock"))
+			Expect(opts.Args).To(BeEmpty())
+			Expect(opts.BoolOpts).To(HaveKey("validbool"))
+			Expect(opts.BoolOpts).To(HaveKey("invalidbool"))
+			Expect(opts.StringOpts).To(HaveKey("validvalue"))
+			Expect(opts.StringOpts).To(HaveKey("invalidvalue"))
+			Expect(opts.BoolOpts).To(HaveKey("x"))
+			Expect(opts.BoolOpts).To(HaveKey("b"))
+			Expect(opts.BoolOpts).ToNot(HaveKey("q")) // std option
+
+			errors = validateCustomOptions(opts, []string{"validvalue"}, []string{"validbool", "x"})
+			Expect(errors).To(HaveLen(3))
+
 		})
 
 	})

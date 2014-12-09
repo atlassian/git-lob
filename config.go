@@ -12,7 +12,8 @@ import (
 	"strings"
 )
 
-// Options (command line or config file TODO)
+// Options (command line or config file)
+// Only general options, command-specific ones dealt with in commands
 type Options struct {
 	// Help option was requested
 	HelpRequested bool
@@ -28,6 +29,8 @@ type Options struct {
 	Command string
 	// Other value options not converted
 	StringOpts map[string]string
+	// Other boolean options not converted
+	BoolOpts StringSet
 	// Other arguments to the command
 	Args []string
 	// Whether to write output to a log
@@ -47,6 +50,7 @@ type Options struct {
 func NewOptions() *Options {
 	return &Options{
 		StringOpts: make(map[string]string),
+		BoolOpts:   NewStringSet(),
 		Args:       make([]string, 0, 5),
 		ChunkSize:  32 * 1024 * 1024}
 }
