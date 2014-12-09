@@ -44,6 +44,7 @@ func mainImpl() int {
 
 	// Init logging after command line opts
 	InitLogging()
+	InitCoreProviders()
 	defer ShutDownLogging()
 
 	if len(errors) > 0 {
@@ -77,6 +78,10 @@ func mainImpl() int {
 			return 0
 		}
 		return cmdCleanFilter()
+	case "listproviders":
+		return cmdListProviders()
+	case "provider":
+		return cmdProviderDetails()
 	case "push":
 		if GlobalOptions.HelpRequested {
 			cmdPushHelp()
@@ -116,7 +121,10 @@ Commands:
   					  usage)
   cleanup-shared      Delete any binaries in the shared store which have become
                       unreferenced because repos were manually deleted
+  listproviders       List the available remote providers
+  provider <name>     Print detail about named provider
   push                Upload local binaries to a remote.
+  pull                Download binaries from a remote.
 
   filter-smudge       Execute the git smudge filter (gitconfig only)
   filter-clean        Execute the git clean filter (gitconfig only)

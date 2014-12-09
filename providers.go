@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 )
 
 // General interface that all sync providers must implement
@@ -78,11 +79,43 @@ func RegisterSyncProvider(p SyncProvider) error {
 }
 
 // Retrieve a SyncProvider with the associated typeID
-func GetSyncProvider(typeID string) SyncProvider {
+func GetSyncProvider(typeID string) (SyncProvider, error) {
 	p, ok := syncProviders[typeID]
 	if !ok {
-		LogErrorf("Requested unknown SyncProvider: ", typeID)
-		return nil
+		return nil, errors.New(fmt.Sprintf("Requested unknown SyncProvider: ", typeID))
 	}
-	return p
+	return p, nil
+}
+
+// Install the core providers
+func InitCoreProviders() {
+	RegisterSyncProvider(&FileSystemSyncProvider{})
+}
+
+func cmdListProviders() int {
+	fmt.Println()
+	fmt.Println("Available remote providers:")
+	for _, p := range syncProviders {
+		fmt.Println(" *", p.HelpTextSummary())
+	}
+	fmt.Println()
+	return 0
+}
+
+func cmdProviderDetails() int {
+	fmt.Println()
+	// Potentially list many
+	ret := 0
+	for _, arg := range GlobalOptions.Args {
+		p, err := GetSyncProvider(arg)
+		if err != nil {
+			fmt.Println(err)
+			ret++
+		} else {
+			fmt.Println(p.HelpTextDetail())
+			fmt.Println()
+		}
+
+	}
+	return ret
 }
