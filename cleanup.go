@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-func Cleanup() int {
+func cmdCleanup() int {
 	files, err := PurgeUnreferenced(GlobalOptions.DryRun)
 	if err != nil {
 		LogErrorf("Cleanup failed: %v\n", err)
@@ -22,7 +22,7 @@ func Cleanup() int {
 
 }
 
-func CleanupShared() int {
+func cmdCleanupShared() int {
 	files, err := PurgeSharedStore(GlobalOptions.DryRun)
 	if err != nil {
 		LogErrorf("Cleanup failed: %v\n", err)
@@ -38,7 +38,7 @@ func CleanupShared() int {
 	return 0
 }
 
-func printCleanupHelp() {
+func cmdCleanupHelp() {
 	fmt.Println(`Usage: git-lob cleanup [options]
 
   Removes binaries unreferenced by any commit or the index from the local repo
@@ -59,7 +59,7 @@ Options:
 `)
 }
 
-func printCleanupSharedHelp() {
+func cmdCleanupSharedHelp() {
 	fmt.Println(`Usage: git-lob cleanup-shared [options]
 
   Removes binaries from the shared store which are no longer linked to by any

@@ -5,12 +5,11 @@ import (
 )
 
 // Push command line tool
-func Push() int {
-
+func cmdPush() int {
 	return 0
 }
 
-func printPushHelp() {
+func cmdPushHelp() {
 	fmt.Println(`Usage: git-lob push [options] [<remote> [<ref>...]]
 
   Uploads binaries to a remote, sending only binaries required to ensure 
@@ -79,7 +78,7 @@ file system as a remote transport (obviously very simplistic):
     fetch = +refs/heads/*:refs/remotes/origin/*
     # these next 2 lines are required to configure the remote binary store
     git-lob-provider = filesystem
-    git-lob-url = /Volumes/shared/something/something/binary/store
+    git-lob-path = /Volumes/shared/something/something/binary/store
     
 Other providers may require other parameters. It's important to note that you
 can share a binary store among multiple remote repos if you wish, much like

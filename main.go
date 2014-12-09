@@ -55,34 +55,34 @@ func mainImpl() int {
 	switch GlobalOptions.Command {
 	case "cleanup":
 		if GlobalOptions.HelpRequested {
-			printCleanupHelp()
+			cmdCleanupHelp()
 			return 0
 		}
-		return Cleanup()
+		return cmdCleanup()
 	case "cleanup-shared":
 		if GlobalOptions.HelpRequested {
-			printCleanupSharedHelp()
+			cmdCleanupSharedHelp()
 			return 0
 		}
-		return CleanupShared()
+		return cmdCleanupShared()
 	case "filter-smudge":
 		if GlobalOptions.HelpRequested {
-			printSmudgeFilterHelp()
+			cmdSmudgeFilterHelp()
 			return 0
 		}
-		return SmudgeFilter()
+		return cmdSmudgeFilter()
 	case "filter-clean":
 		if GlobalOptions.HelpRequested {
-			printCleanFilterHelp()
+			cmdCleanFilterHelp()
 			return 0
 		}
-		return CleanFilter()
+		return cmdCleanFilter()
 	case "push":
 		if GlobalOptions.HelpRequested {
-			printPushHelp()
+			cmdPushHelp()
 			return 0
 		}
-		return Push()
+		return cmdPush()
 	default:
 		if GlobalOptions.HelpRequested {
 			printHelp()

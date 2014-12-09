@@ -14,7 +14,7 @@ const SHAPrefix = "git-lob: "
 const SHALen = 40
 const SHALineLen = len(SHAPrefix) + SHALen
 
-func SmudgeFilter() int {
+func cmdSmudgeFilter() int {
 	return SmudgeFilterWithReaderWriter(os.Stdin, os.Stdout)
 }
 
@@ -50,7 +50,7 @@ func SmudgeFilterWithReaderWriter(in io.Reader, out io.Writer) int {
 	return 3
 }
 
-func CleanFilter() int {
+func cmdCleanFilter() int {
 	return CleanFilterWithReaderWriter(os.Stdin, os.Stdout)
 }
 
@@ -98,7 +98,7 @@ func CleanFilterWithReaderWriter(in io.Reader, out io.Writer) int {
 	return 0
 }
 
-func printSmudgeFilterHelp() {
+func cmdSmudgeFilterHelp() {
 	fmt.Println(`Usage: git-lob filter-smudge [options]
 
   The smudge filter converts a file stored in git to a file in the working
@@ -114,7 +114,7 @@ Options:
   --dry-run            Don't actually delete anything, just report
 `)
 }
-func printCleanFilterHelp() {
+func cmdCleanFilterHelp() {
 	fmt.Println(`Usage: git-lob filter-clean [options]
 
   The clean filter converts a file in the working directory to a form which
