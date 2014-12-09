@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -93,22 +94,10 @@ func FormatSize(sz int64) string {
 // Search a sorted slice of strings for a specific string
 // Returns boolean for if found, and either location or insertion point
 func StringBinarySearch(sortedSlice []string, searchTerm string) (bool, int) {
-	low := 0
-	high := len(sortedSlice) - 1
-	for low <= high {
-		middle := int((high + low) / 2)
-		v := sortedSlice[middle]
-		switch {
-		case v == searchTerm:
-			return true, middle
-		case v < searchTerm:
-			low = middle + 1
-		default:
-			high = middle - 1
-		}
-	}
-
-	return false, low
+	// Convenience method to easily provide boolean of whether to insert or not
+	idx := sort.SearchStrings(sortedSlice, searchTerm)
+	found := idx < len(sortedSlice) && sortedSlice[idx] == searchTerm
+	return found, idx
 }
 
 // Walk first parents starting from startSHA and call callback
