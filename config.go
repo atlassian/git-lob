@@ -30,8 +30,6 @@ type Options struct {
 	StringOpts map[string]string
 	// Other arguments to the command
 	Args []string
-	// Force option (not used for all commands)
-	Force bool
 	// Whether to write output to a log
 	LogEnabled bool
 	// Log file (optional, defaults to ~/git-lob.log if not specified)

@@ -43,8 +43,6 @@ func parseCommandLine(opts *Options, args []string) (errors []string) {
 				opts.DryRun = true
 			case "noninteractive":
 				opts.NonInteractive = true
-			case "force":
-				opts.Force = true
 			default:
 				errors = append(errors, fmt.Sprintf("git-lob: invalid option: %v", arg))
 			}
@@ -58,8 +56,6 @@ func parseCommandLine(opts *Options, args []string) (errors []string) {
 				opts.Quiet = true
 			case "n":
 				opts.NonInteractive = true
-			case "f":
-				opts.Force = true
 			default:
 				errors = append(errors, fmt.Sprintf("git-lob: invalid option: %v", arg))
 			}

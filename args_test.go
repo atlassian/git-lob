@@ -20,7 +20,7 @@ var _ = Describe("Args", func() {
 			errors = parseCommandLine(opts, args)
 			Expect(errors).ToNot(BeEmpty())
 			// Command required, with other options
-			args = []string{"git-lob", "--force", "-q"}
+			args = []string{"git-lob", "--verbose", "-q"}
 			errors = parseCommandLine(opts, args)
 			Expect(errors).ToNot(BeEmpty())
 		})
@@ -29,7 +29,6 @@ var _ = Describe("Args", func() {
 			errors = parseCommandLine(opts, args)
 			Expect(errors).To(BeEmpty())
 			Expect(opts.Command).To(Equal("lock"))
-			Expect(opts.Force).To(Equal(false))
 			Expect(opts.Quiet).To(Equal(false))
 			Expect(opts.Verbose).To(Equal(false))
 			Expect(opts.DryRun).To(Equal(false))
@@ -42,7 +41,6 @@ var _ = Describe("Args", func() {
 			errors = parseCommandLine(opts, args)
 			Expect(errors).To(BeEmpty())
 			Expect(opts.Command).To(Equal("lock"))
-			Expect(opts.Force).To(Equal(true))
 			Expect(opts.Quiet).To(Equal(true))
 			Expect(opts.Verbose).To(Equal(true))
 			Expect(opts.DryRun).To(Equal(false))
@@ -51,11 +49,10 @@ var _ = Describe("Args", func() {
 			Expect(opts.StringOpts).To(Equal(map[string]string{}))
 		})
 		It("detects long options", func() {
-			args = []string{"git-lob", "lock", "--quiet", "--verbose", "--force", "--noninteractive"}
+			args = []string{"git-lob", "lock", "--quiet", "--verbose", "--noninteractive"}
 			errors = parseCommandLine(opts, args)
 			Expect(errors).To(BeEmpty())
 			Expect(opts.Command).To(Equal("lock"))
-			Expect(opts.Force).To(Equal(true))
 			Expect(opts.Quiet).To(Equal(true))
 			Expect(opts.Verbose).To(Equal(true))
 			Expect(opts.DryRun).To(Equal(false))
@@ -68,7 +65,6 @@ var _ = Describe("Args", func() {
 			errors = parseCommandLine(opts, args)
 			Expect(errors).To(BeEmpty())
 			Expect(opts.Command).To(Equal("lock"))
-			Expect(opts.Force).To(Equal(false))
 			Expect(opts.Quiet).To(Equal(false))
 			Expect(opts.Verbose).To(Equal(true))
 			Expect(opts.DryRun).To(Equal(false))
@@ -81,7 +77,6 @@ var _ = Describe("Args", func() {
 			errors = parseCommandLine(opts, args)
 			Expect(errors).To(BeEmpty())
 			Expect(opts.Command).To(Equal("lock"))
-			Expect(opts.Force).To(Equal(false))
 			Expect(opts.Quiet).To(Equal(false))
 			Expect(opts.Verbose).To(Equal(true))
 			Expect(opts.DryRun).To(Equal(true))
