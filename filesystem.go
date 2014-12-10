@@ -64,7 +64,7 @@ func (*FileSystemSyncProvider) uploadSingleFile(remoteName, filename, fromDir, t
 			// File exists on remote, check the size
 			if destfi.Size() == srcfi.Size() {
 				// File already present and correct size, skip
-				LogDebugf("Not updating %v on remote %v, already up to date", filename, remoteName)
+				LogDebugf("Not updating %v on remote %v, already up to date\n", filename, remoteName)
 				if callback != nil {
 					if callback(filename, true, 100) {
 						return true
@@ -138,7 +138,7 @@ func (*FileSystemSyncProvider) uploadSingleFile(remoteName, filename, fromDir, t
 			msg = fmt.Sprintf("Upload error: number of bytes written to %v in upload of %v does not agree (%d/%d)",
 				remoteName, srcfilename, n, srcfi.Size())
 		}
-		LogErrorf(msg)
+		LogError(msg)
 		errorList = append(errorList, msg)
 		return false
 	}
