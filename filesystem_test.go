@@ -95,7 +95,7 @@ var _ = Describe("Filesystem", func() {
 			for _, file := range filesToCorrupt {
 				fullremotepath := filepath.Join(mockremotepath, file)
 				stat, _ := os.Stat(fullremotepath)
-				f, err := os.OpenFile(fullremotepath, os.O_TRUNC, 0644)
+				f, err := os.OpenFile(fullremotepath, os.O_TRUNC|os.O_WRONLY, 0644)
 				Expect(err).To(BeNil(), "Should not be error corrupting file")
 				if stat.Size() < 2 {
 					f.Write(bytes.Repeat([]byte{0}, 5))
