@@ -20,6 +20,11 @@ type SyncProvider interface {
 	HelpTextDetail() string
 }
 
+// Callback when progress is made uploading / downloading
+// fileInProgress: relative path of file, isSkipped: whether file was up to date, percent: progress
+// return true to abort the process for this and all other files in the batch
+type SyncProgressCallback func(fileInProgress string, isSkipped bool, percent int) (abort bool)
+
 // Providers implementing this interface provide basic sync capabilities
 // These providers require no server-side processing, only simple file access
 // but are limited to a direct file-based representation of storage and are less efficent
@@ -32,7 +37,7 @@ type BasicSyncProvider interface {
 	// For each file, if the remote already has this file and it's the same size, skip.
 	// Must only return nil if remote is considered fully up to date with these files
 	// If force = true, files should be uploaded even if they're already there & the correct size
-	Upload(remoteName string, filenames []string, fromDir string, force bool) error
+	Upload(remoteName string, filenames []string, fromDir string, force bool, callback SyncProgressCallback) error
 	// Download the list of files (binary storage). The paths are relative and files should
 	// be placed relative to toDir. Ideally in-progress downloads should go to other locations
 	// and be moved to the final location on success, although git-lob will detect files
@@ -41,7 +46,7 @@ type BasicSyncProvider interface {
 	// will have already done that (and if the file is already there, it means the caller
 	// wishes for it to be re-downloaded).
 	// Must only return nil if all files were successfully uploaded
-	Download(remoteName string, filenames []string, toDir string) error
+	Download(remoteName string, filenames []string, toDir string, callback SyncProgressCallback) error
 }
 
 // Providers implementing this interface provide smary sync capabilities

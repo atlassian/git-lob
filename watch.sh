@@ -2,4 +2,4 @@
 
 # watches, compiles & runs tests
 # skips running any tests which have LONG in description
-ginkgo watch --skip=LONGTEST
+ginkgo watch --skip="(LONGTEST|REMOTETEST)"

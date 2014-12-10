@@ -52,6 +52,7 @@ func NewOptions() *Options {
 		StringOpts: make(map[string]string),
 		BoolOpts:   NewStringSet(),
 		Args:       make([]string, 0, 5),
+		GitConfig:  make(map[string]string),
 		ChunkSize:  32 * 1024 * 1024}
 }
 
