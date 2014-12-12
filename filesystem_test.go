@@ -81,10 +81,57 @@ func testUpload(files []string, fromDir, toDir string) {
 	Expect(filesSkipped).To(HaveLen(len(files)-len(filesToCorrupt)), "Non-corrupt files should be skipped")
 }
 
+func testDownload(files []string, fromDir, toDir string) {
+
+	// Hack the git config to mock destination
+	GlobalOptions.GitConfig["remote.origin.git-lob-path"] = fromDir
+
+	fsync := FileSystemSyncProvider{}
+	// Record of callbacks for files
+	var filesDownloaded []string = make([]string, 0, len(files))
+	var filesSkipped []string
+	callback := func(filename string, isSkipped bool, percent int) (abort bool) {
+		if percent == 100 {
+			if isSkipped {
+				filesSkipped = append(filesSkipped, filename)
+			} else {
+				filesDownloaded = append(filesDownloaded, filename)
+			}
+		}
+		return false
+	}
+	err := fsync.Download("origin", files, toDir, callback)
+	Expect(err).To(BeNil(), "Should not have error downloading")
+	Expect(filesDownloaded).To(Equal(files), "Callback should have seen all the files at 100%")
+	Expect(filesSkipped).To(BeEmpty(), "No files should be skipped")
+	// Check files exist & are correct size
+	for _, file := range files {
+		fulllocalpath := filepath.Join(fromDir, file)
+		fullremotepath := filepath.Join(toDir, file)
+
+		remotestat, err := os.Stat(fullremotepath)
+		Expect(err).To(BeNil(), "Remote file should exist")
+		localstat, err := os.Stat(fulllocalpath)
+		Expect(err).To(BeNil(), "Local file should exist")
+		Expect(remotestat.Size()).To(Equal(localstat.Size()), "Remote file should be the same size as local")
+	}
+
+	// Now check that when we do it again with a subset of files it works
+	// (Download has no force, just downloads all requested files)
+	filesToDownload := []string{files[3], files[5], files[9], files[12]}
+	filesDownloaded = make([]string, 0, len(files))
+	filesSkipped = nil
+	err = fsync.Download("origin", filesToDownload, toDir, callback)
+	Expect(err).To(BeNil(), "Should not have error downloading")
+	Expect(filesDownloaded).To(Equal(filesToDownload), "Correct files should be downloaded")
+	Expect(filesSkipped).To(BeEmpty(), "No files should be skipped")
+
+}
+
 var _ = Describe("Filesystem", func() {
 
 	localpath := filepath.Join(os.TempDir(), "MockFileSystemLocal")
-	localfiles := GetRandomListOfFilesForTest(3, 3, 2)
+	testfiles := GetRandomListOfFilesForTest(3, 3, 2)
 	//remotefiles := GetRandomListOfFilesForTest(5, 3, 2)
 
 	Context("Mocked remote tests", func() {
@@ -92,31 +139,64 @@ var _ = Describe("Filesystem", func() {
 		// requires more environmental setup. We just use a local drive
 		mockremotepath := filepath.Join(os.TempDir(), "MockFileSystemRemote")
 
-		BeforeEach(func() {
-			os.MkdirAll(mockremotepath, 0755)
+		Context("Upload", func() {
+			BeforeEach(func() {
+				os.MkdirAll(mockremotepath, 0755)
 
-			// Create local files
-			for _, file := range localfiles {
-				// generate of random size
-				sz := rand.Intn(10000)
-				fullpath := filepath.Join(localpath, file)
-				os.MkdirAll(filepath.Dir(fullpath), 0755)
-				f, err := os.OpenFile(fullpath, os.O_CREATE|os.O_TRUNC, 0644)
-				if err != nil {
-					Fail(err.Error())
+				// Create local files
+				for _, file := range testfiles {
+					// generate of random size
+					sz := rand.Intn(10000)
+					fullpath := filepath.Join(localpath, file)
+					os.MkdirAll(filepath.Dir(fullpath), 0755)
+					f, err := os.OpenFile(fullpath, os.O_CREATE|os.O_TRUNC, 0644)
+					if err != nil {
+						Fail(err.Error())
+					}
+					f.Write(bytes.Repeat([]byte{255}, sz))
+					f.Close()
 				}
-				f.Write(bytes.Repeat([]byte{255}, sz))
-				f.Close()
-			}
 
-		})
-		AfterEach(func() {
-			os.RemoveAll(mockremotepath)
-			os.RemoveAll(localpath)
+			})
+			AfterEach(func() {
+				os.RemoveAll(mockremotepath)
+				os.RemoveAll(localpath)
+			})
+
+			It("successfully uploads", func() {
+				testUpload(testfiles, localpath, mockremotepath)
+			})
 		})
 
-		It("successfully uploads", func() {
-			testUpload(localfiles, localpath, mockremotepath)
+		Context("Download", func() {
+			BeforeEach(func() {
+				os.MkdirAll(mockremotepath, 0755)
+				os.RemoveAll(localpath)
+				os.MkdirAll(localpath, 0755)
+
+				// Create remote files
+				for _, file := range testfiles {
+					// generate of random size
+					sz := rand.Intn(10000)
+					fullpath := filepath.Join(mockremotepath, file)
+					os.MkdirAll(filepath.Dir(fullpath), 0755)
+					f, err := os.OpenFile(fullpath, os.O_CREATE|os.O_TRUNC, 0644)
+					if err != nil {
+						Fail(err.Error())
+					}
+					f.Write(bytes.Repeat([]byte{255}, sz))
+					f.Close()
+				}
+
+			})
+			AfterEach(func() {
+				os.RemoveAll(mockremotepath)
+				os.RemoveAll(localpath)
+			})
+
+			It("successfully uploads", func() {
+				testDownload(testfiles, mockremotepath, localpath)
+			})
 		})
 
 	})
@@ -134,62 +214,63 @@ var _ = Describe("Filesystem", func() {
 		nfspath := os.Getenv("GITLOB_TEST_REMOTE_NFSPATH")
 		afppath := os.Getenv("GITLOB_TEST_REMOTE_AFPPATH")
 
-		BeforeEach(func() {
-			if smbpath != "" {
-				os.MkdirAll(smbpath, 0755)
-			}
-			if nfspath != "" {
-				os.MkdirAll(nfspath, 0755)
-			}
-			if afppath != "" {
-				os.MkdirAll(afppath, 0755)
-			}
-			// Create local files
-			for _, file := range localfiles {
-				// generate of random size
-				sz := rand.Intn(10000)
-				fullpath := filepath.Join(localpath, file)
-				os.MkdirAll(filepath.Dir(fullpath), 0755)
-				f, err := os.OpenFile(fullpath, os.O_CREATE|os.O_TRUNC, 0644)
-				if err != nil {
-					Fail(err.Error())
-				}
-				f.Write(bytes.Repeat([]byte{255}, sz))
-				f.Close()
-			}
-
-		})
-		AfterEach(func() {
-			if smbpath != "" {
-				os.RemoveAll(smbpath)
-			}
-			if nfspath != "" {
-				os.RemoveAll(nfspath)
-			}
-			if afppath != "" {
-				os.RemoveAll(afppath)
-			}
-			os.RemoveAll(localpath)
-		})
-		Describe("Real remote upload tests", func() {
-			It("Uploads to SMB", func() {
+		Context("Upload", func() {
+			BeforeEach(func() {
 				if smbpath != "" {
-					testUpload(localfiles, localpath, smbpath)
+					os.MkdirAll(smbpath, 0755)
 				}
-			})
-			It("Uploads to NFS", func() {
 				if nfspath != "" {
-					testUpload(localfiles, localpath, nfspath)
+					os.MkdirAll(nfspath, 0755)
 				}
-			})
-			It("Uploads to AFP", func() {
 				if afppath != "" {
-					testUpload(localfiles, localpath, afppath)
+					os.MkdirAll(afppath, 0755)
+				}
+				// Create local files
+				for _, file := range testfiles {
+					// generate of random size
+					sz := rand.Intn(10000)
+					fullpath := filepath.Join(localpath, file)
+					os.MkdirAll(filepath.Dir(fullpath), 0755)
+					f, err := os.OpenFile(fullpath, os.O_CREATE|os.O_TRUNC, 0644)
+					if err != nil {
+						Fail(err.Error())
+					}
+					f.Write(bytes.Repeat([]byte{255}, sz))
+					f.Close()
 				}
 
+			})
+			AfterEach(func() {
+				if smbpath != "" {
+					os.RemoveAll(smbpath)
+				}
+				if nfspath != "" {
+					os.RemoveAll(nfspath)
+				}
+				if afppath != "" {
+					os.RemoveAll(afppath)
+				}
+				os.RemoveAll(localpath)
+			})
+			Describe("Real remote upload tests", func() {
+				It("Uploads to SMB", func() {
+					if smbpath != "" {
+						testUpload(testfiles, localpath, smbpath)
+					}
+				})
+				It("Uploads to NFS", func() {
+					if nfspath != "" {
+						testUpload(testfiles, localpath, nfspath)
+					}
+				})
+				It("Uploads to AFP", func() {
+					if afppath != "" {
+						testUpload(testfiles, localpath, afppath)
+					}
+
+				})
 			})
 		})
-
 	})
 
 })
