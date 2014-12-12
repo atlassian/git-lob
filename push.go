@@ -2,11 +2,81 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"strings"
 )
 
 // Push command line tool
 func cmdPush() int {
+
+	// git-lob push [--all] [--recheck] [--force] [<remote> [<ref>...]]
+
+	// Validate custom options
+	errorList := validateCustomOptions(GlobalOptions, nil, []string{"all", "recheck", "force"})
+	if len(errorList) > 0 {
+		fmt.Fprintf(os.Stderr, strings.Join(errorList, "\n"))
+		return 9
+	}
+
+	optAll := GlobalOptions.BoolOpts.Contains("all")
+	optRecheck := GlobalOptions.BoolOpts.Contains("recheck")
+	optForce := GlobalOptions.BoolOpts.Contains("force")
+
+	// Determine remote
+	var remoteName string
+	var refspecs []*GitRefSpec
+	if len(GlobalOptions.Args) > 0 {
+		// first parameter must be remote if there are arguments
+		remoteName = GlobalOptions.Args[0]
+
+		// Remaining args are refspecs
+		if len(GlobalOptions.Args) > 1 {
+			// Not valid if --all
+			if optAll {
+				fmt.Fprintf(os.Stderr, "git-lob: Too many arguments; cannot include refspec when using --all\n")
+				return 7
+			}
+			for _, arg := range GlobalOptions.Args[1:] {
+				r := ParseGitRefSpec(arg)
+				refspecs = append(refspecs, r)
+			}
+		}
+
+	} else {
+		remoteName = GetGitDefaultRemote()
+	}
+
+	// check the remote config to make sure it's valid
+	provider, err := GetProviderForRemote(remoteName)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "git-lob: %v\n", err)
+		return 7
+	}
+
+	if len(refspecs) == 0 {
+		// No refspecs specified, so determine default
+		if optAll {
+			// TODO - enumerate all refs & include in refspecs
+		} else {
+			// TODO - determine refspec from current branch & push settings
+		}
+	}
+
+	switch p := provider.(type) {
+	case BasicSyncProvider:
+		PushBasic(p, remoteName, refspecs, optForce, optRecheck)
+	case SmartSyncProvider:
+		PushSmart(p, remoteName, refspecs, optForce, optRecheck)
+	}
+
 	return 0
+}
+
+func PushBasic(provider BasicSyncProvider, remoteName string, refspecs []*GitRefSpec, force bool, recheck bool) {
+	// TODO
+}
+func PushSmart(provider SmartSyncProvider, remoteName string, refspecs []*GitRefSpec, force bool, recheck bool) {
+	// TODO
 }
 
 func cmdPushHelp() {
