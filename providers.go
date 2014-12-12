@@ -18,6 +18,9 @@ type SyncProvider interface {
 	// parameters in gitconfig, for use as a response to
 	// 'git-lob provider <TypeID>'
 	HelpTextDetail() string
+
+	// Return whether the configuration for a given remote is valid
+	ValidateConfig(remoteName string) error
 }
 
 // Callback when progress is made uploading / downloading

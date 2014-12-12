@@ -44,6 +44,23 @@ in the target file structure and can be safely deleted if older than 24h.
 `
 }
 
+func (*FileSystemSyncProvider) ValidateConfig(remoteName string) error {
+	pathsetting := fmt.Sprintf("remote.%v.git-lob-path", remoteName)
+	path := GlobalOptions.GitConfig[pathsetting]
+	if path == "" {
+		return fmt.Errorf("Configuration invalid for 'filesystem', missing setting %v", pathsetting)
+	}
+	// Check it exists
+	exists, isdir := FileOrDirExists(path)
+	if !exists {
+		return fmt.Errorf("Configuration invalid for 'filesystem', %v does not exist", path)
+	}
+	if !isdir {
+		return fmt.Errorf("Configuration invalid for 'filesystem', %v is not a directory", path)
+	}
+	return nil
+}
+
 func (*FileSystemSyncProvider) uploadSingleFile(remoteName, filename, fromDir, toDir string, fileMode os.FileMode,
 	force bool, callback SyncProgressCallback) (errorList []string, abort bool) {
 	// Check to see if the file is already there, right size
