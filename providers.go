@@ -125,3 +125,26 @@ func cmdProviderDetails() int {
 	}
 	return ret
 }
+
+// Get the provider name specified for the named remote in the current git repo
+// May return "" if not specified
+func GetProviderNameForRemote(remoteName string) string {
+	return GlobalOptions.GitConfig[fmt.Sprintf("remote.%v.git-lob-provider", remoteName)]
+}
+
+// Get the provider for a given remote, and validate that it's configured correctly
+func GetProviderForRemote(remoteName string) (SyncProvider, error) {
+	providerName := GetProviderNameForRemote(remoteName)
+	if providerName == "" {
+		return nil, fmt.Errorf("Configuration remote.%v.git-lob-provider is missing", remoteName)
+	}
+	provider, err := GetSyncProvider(providerName)
+	if err != nil {
+		return nil, err
+	}
+	err = provider.ValidateConfig(remoteName)
+	if err != nil {
+		return nil, err
+	}
+	return provider, nil
+}
