@@ -45,7 +45,7 @@ in the target file structure and can be safely deleted if older than 24h.
 }
 
 func (*FileSystemSyncProvider) uploadSingleFile(remoteName, filename, fromDir, toDir string, fileMode os.FileMode,
-	errorList []string, force bool, callback SyncProgressCallback) (abort bool) {
+	force bool, callback SyncProgressCallback) (errorList []string, abort bool) {
 	// Check to see if the file is already there, right size
 	srcfilename := filepath.Join(fromDir, filename)
 	srcfi, err := os.Stat(srcfilename)
@@ -54,7 +54,7 @@ func (*FileSystemSyncProvider) uploadSingleFile(remoteName, filename, fromDir, t
 		LogErrorf(msg)
 		errorList = append(errorList, msg)
 		// Keep going with other files
-		return false
+		return errorList, false
 	}
 
 	destfilename := filepath.Join(toDir, filename)
@@ -67,10 +67,10 @@ func (*FileSystemSyncProvider) uploadSingleFile(remoteName, filename, fromDir, t
 				LogDebugf("Not updating %v on remote %v, already up to date\n", filename, remoteName)
 				if callback != nil {
 					if callback(filename, true, 100) {
-						return true
+						return errorList, true
 					}
 				}
-				return false
+				return errorList, false
 			}
 		}
 	}
@@ -83,7 +83,7 @@ func (*FileSystemSyncProvider) uploadSingleFile(remoteName, filename, fromDir, t
 		msg := fmt.Sprintf("Unable to create dir %v: %v", parentDir, err)
 		LogErrorf(msg)
 		errorList = append(errorList, msg)
-		return false
+		return errorList, false
 	}
 	// Create a temporary file to copy, avoid issues with interruptions
 	// Note this isn't a valid thing to do in security conscious cases but this isn't one
@@ -93,7 +93,7 @@ func (*FileSystemSyncProvider) uploadSingleFile(remoteName, filename, fromDir, t
 		msg := fmt.Sprintf("Unable to create temp file for upload in %v: %v", parentDir, err)
 		LogErrorf(msg)
 		errorList = append(errorList, msg)
-		return false
+		return errorList, false
 	}
 	tmpfilename := outf.Name()
 	// This is safe to do even though we manually close & rename because both calls are no-ops if we succeed
@@ -106,14 +106,14 @@ func (*FileSystemSyncProvider) uploadSingleFile(remoteName, filename, fromDir, t
 		msg := fmt.Sprintf("Unable to read input file for upload %v: %v", srcfilename, err)
 		LogErrorf(msg)
 		errorList = append(errorList, msg)
-		return false
+		return errorList, false
 	}
 	defer inf.Close()
 
 	// Initial callback
 	if callback != nil {
 		if callback(filename, false, 0) {
-			return true
+			return errorList, true
 		}
 	}
 	var copysize int64 = 0
@@ -122,7 +122,7 @@ func (*FileSystemSyncProvider) uploadSingleFile(remoteName, filename, fromDir, t
 		copysize += n
 		if callback != nil && srcfi.Size() > 0 {
 			if callback(filename, false, int(copysize/srcfi.Size())) {
-				return true
+				return errorList, true
 			}
 		}
 		n, err = io.CopyN(outf, inf, BUFSIZE)
@@ -140,7 +140,7 @@ func (*FileSystemSyncProvider) uploadSingleFile(remoteName, filename, fromDir, t
 		}
 		LogError(msg)
 		errorList = append(errorList, msg)
-		return false
+		return errorList, false
 	}
 	// Otherwise, file data is ok on remote
 	// Move to correct location - remove before to deal with force or bad size cases
@@ -149,10 +149,10 @@ func (*FileSystemSyncProvider) uploadSingleFile(remoteName, filename, fromDir, t
 	// Final callback
 	if callback != nil {
 		if callback(filename, false, 100) {
-			return true
+			return errorList, true
 		}
 	}
-	return false
+	return errorList, false
 
 }
 
@@ -177,8 +177,10 @@ func (self *FileSystemSyncProvider) Upload(remoteName string, filenames []string
 	var errorList []string
 	for _, filename := range filenames {
 		// Allow aborting
-		if self.uploadSingleFile(remoteName, filename, fromDir, destpath,
-			destpathfi.Mode(), errorList, force, callback) {
+		newerrs, abort := self.uploadSingleFile(remoteName, filename, fromDir, destpath,
+			destpathfi.Mode(), force, callback)
+		errorList = append(errorList, newerrs...)
+		if abort {
 			break
 		}
 	}
