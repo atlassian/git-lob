@@ -132,4 +132,22 @@ var _ = Describe("Git", func() {
 		})
 	})
 
+	Describe("GitRefIsSHA", func() {
+		It("Identifies SHAs", func() {
+			Expect(GitRefIsSHA("40940fde248a07aadf414500db594107f7d5499d")).To(BeTrue(), "Long SHA is SHA")
+			Expect(GitRefIsFullSHA("40940fde248a07aadf414500db594107f7d5499d")).To(BeTrue(), "Long SHA is full SHA")
+			Expect(GitRefIsSHA("40940fde")).To(BeTrue(), "Short SHA is SHA")
+			Expect(GitRefIsFullSHA("40940fde")).To(BeFalse(), "Short SHA is not full SHA")
+			Expect(GitRefIsSHA("something something something")).To(BeFalse(), "Non-SHA is not SHA")
+			Expect(GitRefIsFullSHA("something something something")).To(BeFalse(), "Non-SHA is not full SHA")
+			Expect(GitRefIsSHA("")).To(BeFalse(), "Blank is not SHA")
+			Expect(GitRefIsFullSHA("")).To(BeFalse(), "Blank is not full SHA")
+			Expect(GitRefIsSHA("40940fde248a07aadf 14500db594107f7d5499d")).To(BeFalse(), "2 short SHAs is not SHA")
+			Expect(GitRefIsFullSHA("40940fde248a07aadf 14500db594107f7d5499d")).To(BeFalse(), "2 short SHAs is not full SHA")
+			Expect(GitRefIsSHA("40940fdg248a07aadfe14500db594x07f7d5y99d")).To(BeFalse(), "Corrupted SHA is not SHA")
+			Expect(GitRefIsFullSHA("40940fdg248a07aadfe14500db594x07f7d5y99d")).To(BeFalse(), "Corrupted SHA is not full SHA")
+		})
+
+	})
+
 })

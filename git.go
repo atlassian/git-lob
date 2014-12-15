@@ -144,10 +144,18 @@ func ParseGitRefSpec(s string) *GitRefSpec {
 
 }
 
+var IsSHARegex *regexp.Regexp = regexp.MustCompile("^[0-9A-Fa-f]{8,40}$")
+
+// Return whether a single git reference (not refspec, so no ranges) is a full SHA or not
+// SHAs can be used directly for things like lob lookup but other refs have too be converted
+// This version requires a full length SHA (40 characters)
+func GitRefIsFullSHA(ref string) bool {
+	return len(ref) == 40 && IsSHARegex.MatchString(ref)
+}
+
 // Return whether a single git reference (not refspec, so no ranges) is a SHA or not
 // SHAs can be used directly for things like lob lookup but other refs have too be converted
-var IsSHARegex *regexp.Regexp = regexp.MustCompile("^[0-9A-Fa-f]{40}$")
-
+// This version accepts SHAs that are 8-40 characters in length, so accepts short SHAs
 func GitRefIsSHA(ref string) bool {
-	return len(ref) == 40 && IsSHARegex.MatchString(ref)
+	return IsSHARegex.MatchString(ref)
 }
