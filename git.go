@@ -51,6 +51,8 @@ func WalkGitHistory(startSHA string, callback func(currentSHA, parentSHA string)
 			// 81 chars long, 2x40 SHAs + space
 			if len(currentLine) >= 81 {
 				parentSHA = strings.TrimSpace(currentLine[41:81])
+			} else {
+				parentSHA = ""
 			}
 			quit, callbackError = callback(currentSHA, parentSHA)
 			if quit {
