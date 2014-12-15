@@ -108,5 +108,28 @@ var _ = Describe("Git", func() {
 		})
 
 	})
+	Describe("ParseGitRefSpec", func() {
+		It("Parses non-range", func() {
+			r := ParseGitRefSpec("master")
+			Expect(r).To(Equal(&GitRefSpec{"master", "", ""}))
+			r = ParseGitRefSpec("79a32558d986e35c080dd3000fb4c7608b67fb46")
+			Expect(r).To(Equal(&GitRefSpec{"79a32558d986e35c080dd3000fb4c7608b67fb46", "", ""}))
+		})
+
+		It("Parses .. range", func() {
+			r := ParseGitRefSpec("feature1..master")
+			Expect(r).To(Equal(&GitRefSpec{"feature1", "..", "master"}))
+			r = ParseGitRefSpec("0de56..HEAD^1")
+			Expect(r).To(Equal(&GitRefSpec{"0de56", "..", "HEAD^1"}))
+			r = ParseGitRefSpec("40940fde248a07aadf414500db594107f7d5499d..e84486d69ef5c960c5ed4b0912da919a6d2d74d8")
+			Expect(r).To(Equal(&GitRefSpec{"40940fde248a07aadf414500db594107f7d5499d", "..", "e84486d69ef5c960c5ed4b0912da919a6d2d74d8"}))
+		})
+		It("Parses ... range", func() {
+			r := ParseGitRefSpec("feature1...master")
+			Expect(r).To(Equal(&GitRefSpec{"feature1", "...", "master"}))
+			r = ParseGitRefSpec("40940fde248a07aadf414500db594107f7d5499d...e84486d69ef5c960c5ed4b0912da919a6d2d74d8")
+			Expect(r).To(Equal(&GitRefSpec{"40940fde248a07aadf414500db594107f7d5499d", "...", "e84486d69ef5c960c5ed4b0912da919a6d2d74d8"}))
+		})
+	})
 
 })
