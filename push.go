@@ -21,6 +21,7 @@ func cmdPush() int {
 	optAll := GlobalOptions.BoolOpts.Contains("all")
 	optRecheck := GlobalOptions.BoolOpts.Contains("recheck")
 	optForce := GlobalOptions.BoolOpts.Contains("force")
+	optDryRun := GlobalOptions.DryRun
 
 	// Determine remote
 	var remoteName string
@@ -56,9 +57,28 @@ func cmdPush() int {
 	if len(refspecs) == 0 {
 		// No refspecs specified, so determine default
 		if optAll {
-			// TODO - enumerate all refs & include in refspecs
+			branches, err := GetGitLocalBranches()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "git-lob: unable to get local branch list - %v\n", err)
+				return 7
+			}
+			for _, branch := range branches {
+				refspecs = append(refspecs, &GitRefSpec{branch, "", ""})
+			}
+
 		} else {
-			// TODO - determine refspec from current branch & push settings
+			// Check remote.<remote>.push for default refspec
+			def, ok := GlobalOptions.GitConfig[fmt.Sprintf("remote.%v.push", remoteName)]
+			if ok {
+				pushspecs := strings.Fields(def)
+				for _, s := range pushspecs {
+					refspecs = append(refspecs, &GitRefSpec{s, "", ""})
+				}
+			} else {
+				// determine refspec from current branch & push settings
+				branch := GetGitCurrentBranch()
+				refspecs = append(refspecs, &GitRefSpec{branch, "", ""})
+			}
 		}
 	}
 
@@ -76,7 +96,7 @@ func cmdPush() int {
 			} else {
 				fmt.Printf("\rPushing: %v %d%%\tOverall: %d%%\t(%v)", fileInProgress, filepercent, overallpercent, rate)
 			}
-		} else {
+		} else if !GlobalOptions.Quiet {
 			fmt.Printf("\rPushing: %d%%\t(%v)", overallpercent, rate)
 		}
 
@@ -84,26 +104,30 @@ func cmdPush() int {
 
 	}
 
-	fmt.Println("Pushing to ", remoteName)
+	if !GlobalOptions.Quiet {
+		fmt.Println("Pushing binaries for", refspecs, "to", remoteName)
+	}
 
 	switch p := provider.(type) {
 	case BasicSyncProvider:
-		PushBasic(p, remoteName, refspecs, optForce, optRecheck, progress)
+		PushBasic(p, remoteName, refspecs, optDryRun, optForce, optRecheck, progress)
 	case SmartSyncProvider:
-		PushSmart(p, remoteName, refspecs, optForce, optRecheck, progress)
+		PushSmart(p, remoteName, refspecs, optDryRun, optForce, optRecheck, progress)
 	}
 
 	// Because no newlines in progress reporting
-	fmt.Println()
+	if !GlobalOptions.Quiet {
+		fmt.Println()
+	}
 
 	return 0
 }
 
-func PushBasic(provider BasicSyncProvider, remoteName string, refspecs []*GitRefSpec, force bool, recheck bool,
+func PushBasic(provider BasicSyncProvider, remoteName string, refspecs []*GitRefSpec, dryRun, force, recheck bool,
 	callback func(fileInProgress string, isSkipped bool, filepercent, overallpercent int, rate string) (abort bool)) {
 	// TODO
 }
-func PushSmart(provider SmartSyncProvider, remoteName string, refspecs []*GitRefSpec, force bool, recheck bool,
+func PushSmart(provider SmartSyncProvider, remoteName string, refspecs []*GitRefSpec, dryRun, force, recheck bool,
 	callback func(fileInProgress string, isSkipped bool, filepercent, overallpercent int, rate string) (abort bool)) {
 	// TODO
 }
@@ -130,8 +154,9 @@ Parameters:
             are uploaded for. You can specify zero, one, or many local refs.
             There is no destination ref as in git push.
 
-            If no ref is specified, and --all is not used, remote.*.push 
-            is consulted to see what to push, with push.default as a fallback.
+            If no ref is specified, and --all is not used, then 
+            remote.<remotename>.push is used if present, otherwise the current
+            branch is used.
 
             COMMIT RANGES
 
