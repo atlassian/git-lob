@@ -19,6 +19,20 @@ type GitRefSpec struct {
 	Ref2 string
 }
 
+// Returns whether a GitRefSpec is a range or not
+func (r *GitRefSpec) IsRange() bool {
+	return (r.RangeOp == ".." || r.RangeOp == "...") &&
+		r.Ref1 != "" && r.Ref2 != ""
+}
+
+func (r *GitRefSpec) String() string {
+	if r.IsRange() {
+		return fmt.Sprintf("%v%v%v", r.Ref1, r.RangeOp, r.Ref2)
+	} else {
+		return r.Ref1
+	}
+}
+
 // Walk first parents starting from startSHA and call callback
 // First call will be startSHA & its parent
 // Parent will be blank string if there are no more parents & walk will stop after
