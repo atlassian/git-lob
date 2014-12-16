@@ -86,22 +86,29 @@ func cmdPush() int {
 		}
 	}
 
-	progress := func(fileInProgress string, isSkipped bool, filepercent, overallpercent int, rate string) (abort bool) {
-		// Note, no newline, just carriage return to overwrite single line in place
-		if GlobalOptions.Verbose {
-			// report file name too
-			if filepercent == 100 {
-				// in verbose mode we include newline after reporting file name at 100%
-				if isSkipped {
-					fmt.Printf("\rSkipped: %v (Up to date)\n", fileInProgress)
-				} else {
-					fmt.Printf("\rPushed: %v 100%%\n", fileInProgress)
-				}
-			} else {
-				fmt.Printf("\rPushing: %v %d%%\tOverall: %d%%\t(%v)", fileInProgress, filepercent, overallpercent, rate)
+	progress := func(t PushCallbackType, desc string, itempercent, overallpercent int, rate string) (abort bool) {
+		switch t {
+		case PushCallbackCalculate:
+			if !GlobalOptions.Quiet {
+				fmt.Println(desc)
 			}
-		} else if !GlobalOptions.Quiet {
-			fmt.Printf("\rPushing: %d%%\t(%v)", overallpercent, rate)
+		case PushCallbackSkip:
+			if GlobalOptions.Verbose {
+				fmt.Println("Skipped:", desc, "(Up to date)")
+			}
+		case PushCallbackUpload:
+			// Re-use the same line for each of these updates, except in verbose mode when we newline on completion
+			if GlobalOptions.Verbose {
+				// report file name too
+				if itempercent == 100 {
+					fmt.Printf("\rPushed: %v 100%%\n", desc)
+				} else {
+					fmt.Printf("\rPushing: %v %d%%\tOverall: %d%%\t(%v)", desc, itempercent, overallpercent, rate)
+				}
+			} else if !GlobalOptions.Quiet {
+				fmt.Printf("\rPushing: %d%%\t(%v)", overallpercent, rate)
+			}
+
 		}
 
 		return false
@@ -112,13 +119,18 @@ func cmdPush() int {
 		fmt.Println("Pushing binaries for", refspecs, "to", remoteName)
 	}
 
+	var pusherr error
 	switch p := provider.(type) {
 	case BasicSyncProvider:
-		PushBasic(p, remoteName, refspecs, optDryRun, optForce, optRecheck, progress)
+		pusherr = PushBasic(p, remoteName, refspecs, optDryRun, optForce, optRecheck, progress)
 	case SmartSyncProvider:
-		PushSmart(p, remoteName, refspecs, optDryRun, optForce, optRecheck, progress)
+		pusherr = PushSmart(p, remoteName, refspecs, optDryRun, optForce, optRecheck, progress)
 	}
 
+	if pusherr != nil {
+		fmt.Fprintf(os.Stderr, "git-lob: push error - %v", err.Error())
+		return 12
+	}
 	// Because no newlines in progress reporting
 	if !GlobalOptions.Quiet {
 		fmt.Println()
@@ -127,13 +139,34 @@ func cmdPush() int {
 	return 0
 }
 
+type PushCallbackType int
+
+const (
+	// Push process is figuring out what to push
+	PushCallbackCalculate PushCallbackType = iota
+	// Push process is transferring data
+	PushCallbackUpload PushCallbackType = iota
+	// Push process is skipping data because it's already up to date
+	PushCallbackSkip PushCallbackType = iota
+)
+
+// Callback when progress is made during push
+// t: what stage of the push process this is for, preparing, uploading or skipping something
+// desc: either a general message or an item name (e.g. file name in upload stage)
+// itempercent: if applicable, what percent of this item is done
+// overallpercent: what overall percent of the process is done
+// rate: upload rate for info if applicable
+// return true to abort the (entire) process
+type PushCallback func(t PushCallbackType, desc string, itempercent, overallpercent int, rate string) (abort bool)
+
 func PushBasic(provider BasicSyncProvider, remoteName string, refspecs []*GitRefSpec, dryRun, force, recheck bool,
-	callback func(fileInProgress string, isSkipped bool, filepercent, overallpercent int, rate string) (abort bool)) {
-	// TODO
+	callback PushCallback) error {
+	return nil
 }
 func PushSmart(provider SmartSyncProvider, remoteName string, refspecs []*GitRefSpec, dryRun, force, recheck bool,
-	callback func(fileInProgress string, isSkipped bool, filepercent, overallpercent int, rate string) (abort bool)) {
+	callback PushCallback) error {
 	// TODO
+	return nil
 }
 
 func cmdPushHelp() {
