@@ -51,7 +51,11 @@ func cmdPush() int {
 	provider, err := GetProviderForRemote(remoteName)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "git-lob: %v\n", err)
-		return 7
+		return 6
+	}
+	if err = provider.ValidateConfig(remoteName); err != nil {
+		fmt.Fprintf(os.Stderr, "git-lob: remote %v has configuration problems:\n%v\n", remoteName, err)
+		return 6
 	}
 
 	if len(refspecs) == 0 {
