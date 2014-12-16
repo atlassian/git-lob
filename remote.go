@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -109,6 +110,11 @@ func recordRemoteBinariesUpToDateAtCommit(remoteName, commitSHA string) (already
 
 // Say that we've successfully pushed binaries for a remote at a commit (and all ancestors)
 func SuccessfullyPushedBinariesForCommit(remoteName, commitSHA string) error {
+
+	if !GitRefIsFullSHA(commitSHA) {
+		return fmt.Errorf("Invalid commit SHA, must be full 40 char SHA, not '%v'", commitSHA)
+	}
+
 	alreadyMarked, err := recordRemoteBinariesUpToDateAtCommit(remoteName, commitSHA)
 	if err != nil {
 		return err
