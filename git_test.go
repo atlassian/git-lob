@@ -150,4 +150,42 @@ var _ = Describe("Git", func() {
 
 	})
 
+	Describe("GetGitCurrentBranch", func() {
+		root := filepath.Join(os.TempDir(), "GitTest")
+		var oldwd string
+		BeforeEach(func() {
+			CreateGitRepoForTest(root)
+			oldwd, _ = os.Getwd()
+			os.Chdir(root)
+			cachedCurrentBranch = ""
+		})
+		AfterEach(func() {
+			os.Chdir(oldwd)
+			os.RemoveAll(root)
+			cachedCurrentBranch = ""
+		})
+		It("Identifies current branch", func() {
+			Expect(GetGitCurrentBranch()).To(Equal("master"), "Before 1st commit should be master branch")
+			cachedCurrentBranch = ""
+			exec.Command("git", "commit", "--allow-empty", "-m", "First commit").Run()
+			Expect(GetGitCurrentBranch()).To(Equal("master"), "After 1st commit should be master branch")
+			cachedCurrentBranch = ""
+			err := CreateBranchForTest("feature1")
+			Expect(err).To(BeNil())
+			err = CheckoutForTest("feature1")
+			Expect(err).To(BeNil())
+			Expect(GetGitCurrentBranch()).To(Equal("feature1"), "After creating new branch current branch should be updated")
+			exec.Command("git", "commit", "--allow-empty", "-m", "Second commit").Run()
+			cachedCurrentBranch = ""
+			Expect(GetGitCurrentBranch()).To(Equal("feature1"), "After creating new branch & committing current branch should be updated")
+			//cachedCurrentBranch = "" - note NOT clearing cache to test it
+			exec.Command("git", "checkout", "master").Run()
+			Expect(GetGitCurrentBranch()).To(Equal("feature1"), "Without clearing cache, current branch should be previous value")
+			cachedCurrentBranch = ""
+			Expect(GetGitCurrentBranch()).To(Equal("master"), "After clearing cache, current branch should be updated")
+
+		})
+
+	})
+
 })

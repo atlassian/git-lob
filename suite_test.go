@@ -262,3 +262,20 @@ func CreateCommitReferencingLOBsForTest(path string, filenamesBySha map[string]s
 		Fail("Unable to create commit: " + string(outp))
 	}
 }
+
+func CreateBranchForTest(branch string) error {
+	cmd := exec.Command("git", "branch", branch)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("git branch error: %v", string(out))
+	}
+	return nil
+}
+func CheckoutForTest(ref string) error {
+	cmd := exec.Command("git", "checkout", "-f", ref)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("git checkout error: %v", string(out))
+	}
+	return nil
+}
