@@ -62,20 +62,49 @@ func cmdPush() int {
 		}
 	}
 
+	progress := func(fileInProgress string, isSkipped bool, filepercent, overallpercent int, rate string) (abort bool) {
+		// Note, no newline, just carriage return to overwrite single line in place
+		if GlobalOptions.Verbose {
+			// report file name too
+			if filepercent == 100 {
+				// in verbose mode we include newline after reporting file name at 100%
+				if isSkipped {
+					fmt.Printf("\rSkipped: %v (Up to date)\n", fileInProgress)
+				} else {
+					fmt.Printf("\rPushed: %v 100%%\n", fileInProgress)
+				}
+			} else {
+				fmt.Printf("\rPushing: %v %d%%\tOverall: %d%%\t(%v)", fileInProgress, filepercent, overallpercent, rate)
+			}
+		} else {
+			fmt.Printf("\rPushing: %d%%\t(%v)", overallpercent, rate)
+		}
+
+		return false
+
+	}
+
+	fmt.Println("Pushing to ", remoteName)
+
 	switch p := provider.(type) {
 	case BasicSyncProvider:
-		PushBasic(p, remoteName, refspecs, optForce, optRecheck)
+		PushBasic(p, remoteName, refspecs, optForce, optRecheck, progress)
 	case SmartSyncProvider:
-		PushSmart(p, remoteName, refspecs, optForce, optRecheck)
+		PushSmart(p, remoteName, refspecs, optForce, optRecheck, progress)
 	}
+
+	// Because no newlines in progress reporting
+	fmt.Println()
 
 	return 0
 }
 
-func PushBasic(provider BasicSyncProvider, remoteName string, refspecs []*GitRefSpec, force bool, recheck bool) {
+func PushBasic(provider BasicSyncProvider, remoteName string, refspecs []*GitRefSpec, force bool, recheck bool,
+	callback func(fileInProgress string, isSkipped bool, filepercent, overallpercent int, rate string) (abort bool)) {
 	// TODO
 }
-func PushSmart(provider SmartSyncProvider, remoteName string, refspecs []*GitRefSpec, force bool, recheck bool) {
+func PushSmart(provider SmartSyncProvider, remoteName string, refspecs []*GitRefSpec, force bool, recheck bool,
+	callback func(fileInProgress string, isSkipped bool, filepercent, overallpercent int, rate string) (abort bool)) {
 	// TODO
 }
 
