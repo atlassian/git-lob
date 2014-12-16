@@ -171,3 +171,22 @@ func FindLatestAncestorWhereBinariesPushed(remoteName, commitSHA string) (string
 	})
 	return foundSHA, err
 }
+
+// A record of a set of LOB shas that are associated with a commit
+type CommitLOBRef struct {
+	commit  string
+	lobSHAs []string
+}
+
+// Get a list of commits which have LOB SHAs to push, given a refspec, in forward ancestry order
+// Only commits which have LOBs associated will be returned on the assumption that when
+// child commits are marked as pushed it will also mark the parents
+// If the refspec is itself a range, just queries that range for binary references
+// If the refspec is a single ref, then finds the latest ancestor we think has been pushed already
+// for this remote and returns the LOBs referred to in that range. If recheck is true,
+// ignores the record of the last commit we think we pushed and scans entire history (slow)
+func GetCommitLOBsToPushForRefSpec(remoteName string, refspec *GitRefSpec, recheck bool) ([]CommitLOBRef, error) {
+	// TODO
+	return []CommitLOBRef{}, nil
+
+}

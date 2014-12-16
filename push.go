@@ -161,8 +161,51 @@ type PushCallback func(t PushCallbackType, desc string, itempercent, overallperc
 
 func PushBasic(provider BasicSyncProvider, remoteName string, refspecs []*GitRefSpec, dryRun, force, recheck bool,
 	callback PushCallback) error {
+	// First, build up details of what it is we need to push so we can estimate %
+	numfiles := 0
+	var commitsToPush []CommitLOBRef
+	const calculatePercent = 10
+	for i, refspec := range refspecs {
+		callback(PushCallbackCalculate, fmt.Sprintf("Calculating data to push for %v", refspec),
+			0, calculatePercent*i/len(refspecs), "")
+		refcommits, err := GetCommitLOBsToPushForRefSpec(remoteName, refspec, recheck)
+		if err != nil {
+			return err
+		}
+
+		if len(refcommits) == 0 {
+			// if nothing to push, then mark this ref as pushed to make querying faster next time
+			if !dryRun {
+				var commitSHA string
+				var err error
+				if refspec.IsRange() {
+					commitSHA, err = GitRefToFullSHA(refspec.Ref2)
+				} else {
+					commitSHA, err = GitRefToFullSHA(refspec.Ref1)
+				}
+				if err != nil {
+					return err
+				}
+				SuccessfullyPushedBinariesForCommit(remoteName, commitSHA)
+			}
+
+		} else {
+			for _, commit := range refcommits {
+				numfiles += len(commit.lobSHAs)
+			}
+			commitsToPush = append(commitsToPush, refcommits...)
+		}
+	}
+
+	if !dryRun {
+		// TODO upload each commit in turn, then mark as pushed
+
+	}
+
 	return nil
+
 }
+
 func PushSmart(provider SmartSyncProvider, remoteName string, refspecs []*GitRefSpec, dryRun, force, recheck bool,
 	callback PushCallback) error {
 	// TODO
