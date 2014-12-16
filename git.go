@@ -159,3 +159,38 @@ func GitRefIsFullSHA(ref string) bool {
 func GitRefIsSHA(ref string) bool {
 	return IsSHARegex.MatchString(ref)
 }
+
+// Return a list of all local branches
+// Also FYI caches the current branch while we're at it so it's zero-cost to call
+// GetGitCurrentBranch after this
+func GetGitLocalBranches() ([]string, error) {
+	cmd := exec.Command("git", "branch")
+
+	outp, err := cmd.StdoutPipe()
+	if err != nil {
+		LogErrorf("Unable to get current branch: %v", err.Error())
+		return []string{}, err
+	}
+	cmd.Start()
+	scanner := bufio.NewScanner(outp)
+	foundcurrent := cachedCurrentBranch != ""
+	var ret []string
+	for scanner.Scan() {
+		line := scanner.Text()
+		if len(line) > 2 {
+			branch := line[2:]
+			ret = append(ret, branch)
+			// While we're at it, cache current branch
+			if !foundcurrent && line[0] == '*' {
+				cachedCurrentBranch = branch
+				foundcurrent = true
+			}
+
+		}
+
+	}
+	cmd.Wait()
+
+	return ret, nil
+
+}

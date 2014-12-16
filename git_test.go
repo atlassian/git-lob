@@ -187,5 +187,43 @@ var _ = Describe("Git", func() {
 		})
 
 	})
+	Describe("GetGitCurrentBranch", func() {
+		root := filepath.Join(os.TempDir(), "GitTest")
+		var oldwd string
+		BeforeEach(func() {
+			CreateGitRepoForTest(root)
+			oldwd, _ = os.Getwd()
+			os.Chdir(root)
+		})
+		AfterEach(func() {
+			os.Chdir(oldwd)
+			os.RemoveAll(root)
+		})
+		It("Lists branches", func() {
+			exec.Command("git", "commit", "--allow-empty", "-m", "First commit").Run()
+			CreateBranchForTest("feature/ABC")
+			CheckoutForTest("feature/ABC")
+			exec.Command("git", "commit", "--allow-empty", "-m", "Second commit").Run()
+			CreateBranchForTest("feature/DEF")
+			CheckoutForTest("feature/DEF")
+			exec.Command("git", "commit", "--allow-empty", "-m", "3rd commit").Run()
+			CheckoutForTest("master")
+			CreateBranchForTest("release/1.1")
+			CreateBranchForTest("release/1.2")
+			CreateBranchForTest("something")
+
+			branches, err := GetGitLocalBranches()
+			Expect(err).To(BeNil(), "Should not error in GetGitLocalBranches")
+			Expect(branches).To(HaveLen(6), "Should be 6 branches")
+			Expect(branches).To(ContainElement("master"))
+			Expect(branches).To(ContainElement("feature/ABC"))
+			Expect(branches).To(ContainElement("feature/DEF"))
+			Expect(branches).To(ContainElement("release/1.1"))
+			Expect(branches).To(ContainElement("release/1.2"))
+			Expect(branches).To(ContainElement("something"))
+
+		})
+
+	})
 
 })
