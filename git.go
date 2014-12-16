@@ -174,6 +174,19 @@ func GitRefIsSHA(ref string) bool {
 	return IsSHARegex.MatchString(ref)
 }
 
+func GitRefToFullSHA(ref string) (string, error) {
+	if GitRefIsFullSHA(ref) {
+		return ref, nil
+	}
+	// Otherwise use Git to expand to full 40 character SHA
+	cmd := exec.Command("git", "rev-parse", ref)
+	outp, err := cmd.Output()
+	if err != nil {
+		return ref, fmt.Errorf("Can't convert %v to a SHA: %v", ref, err.Error())
+	}
+	return strings.TrimSpace(string(outp)), nil
+}
+
 // Return a list of all local branches
 // Also FYI caches the current branch while we're at it so it's zero-cost to call
 // GetGitCurrentBranch after this
