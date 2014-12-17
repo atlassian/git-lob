@@ -80,8 +80,10 @@ func cmdPush() int {
 				}
 			} else {
 				// determine refspec from current branch & push settings
-				branch := GetGitCurrentBranch()
-				refspecs = append(refspecs, &GitRefSpec{branch, "", ""})
+				branches := GetGitPushDefaultBranches(remoteName)
+				for _, s := range branches {
+					refspecs = append(refspecs, &GitRefSpec{s, "", ""})
+				}
 			}
 		}
 	}
@@ -168,6 +170,7 @@ func PushBasic(provider BasicSyncProvider, remoteName string, refspecs []*GitRef
 	for i, refspec := range refspecs {
 		callback(PushCallbackCalculate, fmt.Sprintf("Calculating data to push for %v", refspec),
 			0, calculatePercent*i/len(refspecs), "")
+		// TODO - goroutine each ref in parallel?
 		refcommits, err := GetCommitLOBsToPushForRefSpec(remoteName, refspec, recheck)
 		if err != nil {
 			return err
@@ -235,8 +238,9 @@ Parameters:
             There is no destination ref as in git push.
 
             If no ref is specified, and --all is not used, then 
-            remote.<remotename>.push is used if present, otherwise the current
-            branch is used.
+            remote.<remotename>.push is used if present, otherwise push.default
+            is checked (matching, simple, current) to determine branches to 
+            push by default.
 
             COMMIT RANGES
 

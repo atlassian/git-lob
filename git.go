@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os/exec"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -195,7 +196,7 @@ func GetGitLocalBranches() ([]string, error) {
 
 	outp, err := cmd.StdoutPipe()
 	if err != nil {
-		LogErrorf("Unable to get current branch: %v", err.Error())
+		LogErrorf("Unable to get list local branches: %v", err.Error())
 		return []string{}, err
 	}
 	cmd.Start()
@@ -219,5 +220,140 @@ func GetGitLocalBranches() ([]string, error) {
 	cmd.Wait()
 
 	return ret, nil
+
+}
+
+// Return a list of all remote branches for a given remote
+// Note this doesn't retrieve mappings between local and remote branches, just a simple list
+func GetGitRemoteBranches(remoteName string) ([]string, error) {
+	cmd := exec.Command("git", "branch", "-r")
+
+	outp, err := cmd.StdoutPipe()
+	if err != nil {
+		LogErrorf("Unable to get list remote branches: %v", err.Error())
+		return []string{}, err
+	}
+	cmd.Start()
+	scanner := bufio.NewScanner(outp)
+	var ret []string
+	prefix := remoteName + "/"
+	for scanner.Scan() {
+		line := scanner.Text()
+		if len(line) > 2 {
+			line := line[2:]
+			if strings.HasPrefix(line, prefix) {
+				// Make sure we terminate at space, line may include alias
+				remotebranch := strings.Fields(line[len(prefix):])[0]
+				if remotebranch != "HEAD" {
+					ret = append(ret, remotebranch)
+				}
+			}
+		}
+
+	}
+	cmd.Wait()
+
+	return ret, nil
+
+}
+
+// Return a list of branches to push by default, based on push.default and local/remote branches
+// See push.default docs at https://www.kernel.org/pub/software/scm/git/docs/git-config.html
+func GetGitPushDefaultBranches(remoteName string) []string {
+	pushdef := GlobalOptions.GitConfig["push.default"]
+	if pushdef == "" {
+		// Use the git 2.0 'simple' default
+		pushdef = "simple"
+	}
+
+	if pushdef == "matching" {
+		// Multiple branches, but only where remote branch name matches
+		localbranches, err := GetGitLocalBranches()
+		if err != nil {
+			// will be logged, safe return
+			return []string{}
+		}
+		remotebranches, err := GetGitRemoteBranches(remoteName)
+		if err != nil {
+			// will be logged, safe return
+			return []string{}
+		}
+		// Probably sorted already but to be sure
+		sort.Strings(remotebranches)
+		var ret []string
+		for _, branch := range localbranches {
+			present, _ := StringBinarySearch(remotebranches, branch)
+
+			if present {
+				ret = append(ret, branch)
+			}
+		}
+		return ret
+	} else if pushdef == "current" || pushdef == "upstream" || pushdef == "simple" {
+		// Current, upstream, simple (in ascending complexity)
+		currentBranch := GetGitCurrentBranch()
+		if pushdef == "current" {
+			return []string{currentBranch}
+		}
+		// For upstream & simple we need to know what the upstream branch is
+		upstreamRemote, upstreamBranch := GetGitUpstreamBranch(currentBranch)
+		// Only proceed if the upstream is on this remote
+		if upstreamRemote == remoteName && upstreamBranch != "" {
+			if pushdef == "upstream" {
+				// For upstream we don't care what the remote branch is called
+				return []string{currentBranch}
+			} else {
+				// "simple"
+				// In this case git would only push if remote branch matches as well
+				if upstreamBranch == currentBranch {
+					return []string{currentBranch}
+				}
+			}
+		}
+	}
+
+	// "nothing", something we don't understand (safety), or fallthrough non-matched
+	return []string{}
+
+}
+
+// Get the upstream branch for a given local branch, as defined in what 'git pull' would do by default
+// returns the remote name and the remote branch separately for ease of use
+func GetGitUpstreamBranch(localbranch string) (remoteName, remoteBranch string) {
+	// Super-verbose mode gives us tracking branch info
+	cmd := exec.Command("git", "branch", "-vv")
+
+	outp, err := cmd.StdoutPipe()
+	if err != nil {
+		LogErrorf("Unable to get list branches: %v", err.Error())
+		return "", ""
+	}
+	cmd.Start()
+	scanner := bufio.NewScanner(outp)
+
+	// Output is like this:
+	//   branch1              387def9 [origin/branch1] Another new branch
+	// * master               aec3297 [origin/master: behind 1] Master change
+	// * feature1             e88c156 [origin/feature1: ahead 4, behind 6] Something something dark side
+	//   nottrackingbranch    f33e451 Some message
+
+	// Extract branch name and tracking branch (won't match branches with no tracking)
+	// Stops at ']' or ':' in tracking branch to deal with ahead/behind markers
+	trackRegex := regexp.MustCompile(`^[* ] (\S+)\s+[a-fA-F0-9]+\s+\[([^/]+)/([^\:]+)[\]:]`)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if match := trackRegex.FindStringSubmatch(line); match != nil {
+			lbranch := match[1]
+			if lbranch == localbranch {
+				return match[2], match[3]
+			}
+		}
+
+	}
+	cmd.Wait()
+
+	// no tracking for this branch
+	return "", ""
 
 }
