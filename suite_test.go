@@ -43,6 +43,14 @@ func CreateGitRepoForTest(path string) {
 		Fail("Unable to create git repo at " + path + ": " + err.Error())
 	}
 }
+func CreateBareGitRepoForTest(path string) {
+	cmd := exec.Command("git", "init", "--bare", path)
+	err := cmd.Run()
+	if err != nil {
+		Fail("Unable to create git repo at " + path + ": " + err.Error())
+	}
+}
+
 func CreateGitRepoWithSeparateGitDirForTest(path string, gitDir string) {
 	cmd := exec.Command("git", "init", "--separate-git-dir", gitDir, path)
 	err := cmd.Run()
@@ -263,19 +271,17 @@ func CreateCommitReferencingLOBsForTest(path string, filenamesBySha map[string]s
 	}
 }
 
-func CreateBranchForTest(branch string) error {
+func CreateBranchForTest(branch string) {
 	cmd := exec.Command("git", "branch", branch)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("git branch error: %v", string(out))
+		Fail("git branch error: " + string(out))
 	}
-	return nil
 }
-func CheckoutForTest(ref string) error {
+func CheckoutForTest(ref string) {
 	cmd := exec.Command("git", "checkout", "-f", ref)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("git checkout error: %v", string(out))
+		Fail("git checkout error: " + string(out))
 	}
-	return nil
 }

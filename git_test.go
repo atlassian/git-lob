@@ -170,10 +170,8 @@ var _ = Describe("Git", func() {
 			exec.Command("git", "commit", "--allow-empty", "-m", "First commit").Run()
 			Expect(GetGitCurrentBranch()).To(Equal("master"), "After 1st commit should be master branch")
 			cachedCurrentBranch = ""
-			err := CreateBranchForTest("feature1")
-			Expect(err).To(BeNil())
-			err = CheckoutForTest("feature1")
-			Expect(err).To(BeNil())
+			CreateBranchForTest("feature1")
+			CheckoutForTest("feature1")
 			Expect(GetGitCurrentBranch()).To(Equal("feature1"), "After creating new branch current branch should be updated")
 			exec.Command("git", "commit", "--allow-empty", "-m", "Second commit").Run()
 			cachedCurrentBranch = ""
@@ -221,6 +219,77 @@ var _ = Describe("Git", func() {
 			Expect(branches).To(ContainElement("release/1.1"))
 			Expect(branches).To(ContainElement("release/1.2"))
 			Expect(branches).To(ContainElement("something"))
+
+		})
+
+	})
+	Describe("Remote branches & tracking", func() {
+		root := filepath.Join(os.TempDir(), "GitTest")
+		remotePath := filepath.Join(os.TempDir(), "GitTestRemote")
+		var oldwd string
+		BeforeEach(func() {
+			CreateGitRepoForTest(root)
+			CreateBareGitRepoForTest(remotePath)
+			oldwd, _ = os.Getwd()
+			os.Chdir(root)
+			// Make a file:// ref so we don't have hardlinks (more standard)
+			remotePathUrl := strings.Replace(remotePath, "\\", "/", -1)
+			remotePathUrl = "file://" + remotePathUrl
+			exec.Command("git", "remote", "add", "origin", remotePathUrl).Run()
+		})
+		AfterEach(func() {
+			os.Chdir(oldwd)
+			os.RemoveAll(root)
+			os.RemoveAll(remotePath)
+		})
+
+		It("Reports remote branches correctly", func() {
+
+			// Create a bunch of local branches
+			exec.Command("git", "commit", "--allow-empty", "-m", "First commit").Run()
+			CreateBranchForTest("feature/ABC")
+			CheckoutForTest("feature/ABC")
+			exec.Command("git", "commit", "--allow-empty", "-m", "Second commit").Run()
+			CreateBranchForTest("feature/DEF")
+			CheckoutForTest("feature/DEF")
+			exec.Command("git", "commit", "--allow-empty", "-m", "3rd commit").Run()
+			CheckoutForTest("master")
+			CreateBranchForTest("release/1.1")
+			CreateBranchForTest("release/1.2")
+			CreateBranchForTest("something")
+			// Push some of those branches & set up tracking
+			exec.Command("git", "push", "--set-upstream", "origin", "master:master").Run()
+			exec.Command("git", "push", "--set-upstream", "origin", "feature/ABC:feature/ABC").Run()
+			exec.Command("git", "push", "--set-upstream", "origin", "feature/DEF:feature/DEFchangedonremote").Run()
+			// Push one that we DON'T set tracking branch for
+			exec.Command("git", "push", "origin", "something").Run()
+			// List remote branches
+			remoteBranches, err := GetGitRemoteBranches("origin")
+			Expect(err).To(BeNil(), "Should not error listing remote branches")
+			Expect(remoteBranches).To(HaveLen(4), "Should be 3 remote branches")
+			Expect(remoteBranches).To(ContainElement("master"), "Remote branch list check")
+			Expect(remoteBranches).To(ContainElement("feature/ABC"), "Remote branch list check")
+			Expect(remoteBranches).To(ContainElement("feature/DEFchangedonremote"), "Remote branch list check")
+			Expect(remoteBranches).To(ContainElement("something"), "Remote branch list check")
+
+			// now check tracking
+			remote, branch := GetGitUpstreamBranch("master")
+			Expect(remote).To(Equal("origin"), "Remote should be origin in tracking")
+			Expect(branch).To(Equal("master"), "Master should track master")
+			remote, branch = GetGitUpstreamBranch("feature/ABC")
+			Expect(remote).To(Equal("origin"), "Remote should be origin in tracking")
+			Expect(branch).To(Equal("feature/ABC"), "feature/ABC should track feature/ABC")
+			remote, branch = GetGitUpstreamBranch("feature/DEF")
+			Expect(remote).To(Equal("origin"), "Remote should be origin in tracking")
+			Expect(branch).To(Equal("feature/DEFchangedonremote"), "feature/DEF should track feature/DEFchangedonremote")
+			remote, branch = GetGitUpstreamBranch("something")
+			Expect(remote).To(Equal(""), "Should be no remote for untracked branch")
+			Expect(branch).To(Equal(""), "Should be no branch for untracked branch")
+			remote, branch = GetGitUpstreamBranch("release/1.1")
+			Expect(remote).To(Equal(""), "Should be no remote for untracked branch")
+			Expect(branch).To(Equal(""), "Should be no branch for untracked branch")
+
+			// Check tracking works with ahead / behind
 
 		})
 
