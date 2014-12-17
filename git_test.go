@@ -290,6 +290,24 @@ var _ = Describe("Git", func() {
 			Expect(branch).To(Equal(""), "Should be no branch for untracked branch")
 
 			// Check tracking works with ahead / behind
+			// Make 2 local commits on master, test ahead only
+			exec.Command("git", "commit", "--allow-empty", "-m", "4th commit").Run()
+			exec.Command("git", "commit", "--allow-empty", "-m", "5th commit").Run()
+			remote, branch = GetGitUpstreamBranch("master")
+			Expect(remote).To(Equal("origin"), "Remote should be origin in tracking when ahead")
+			Expect(branch).To(Equal("master"), "Master should track master when ahead")
+			// Push these to remote so we can test behind
+			exec.Command("git", "push", "origin", "master:master").Run()
+			// now reset 1 commit back so we're ahead 1, behind 1
+			exec.Command("git", "reset", "--hard", "HEAD^").Run()
+			remote, branch = GetGitUpstreamBranch("master")
+			Expect(remote).To(Equal("origin"), "Remote should be origin in tracking when ahead and behind")
+			Expect(branch).To(Equal("master"), "Master should track master when ahead and behind")
+			// now reset 1 MORE commit back so we're behind 2
+			exec.Command("git", "reset", "--hard", "HEAD^").Run()
+			remote, branch = GetGitUpstreamBranch("master")
+			Expect(remote).To(Equal("origin"), "Remote should be origin in tracking when behind")
+			Expect(branch).To(Equal("master"), "Master should track master when behind")
 
 		})
 
