@@ -1,8 +1,10 @@
 package main
 
 import (
+	"fmt"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -308,6 +310,113 @@ var _ = Describe("Git", func() {
 			remote, branch = GetGitUpstreamBranch("master")
 			Expect(remote).To(Equal("origin"), "Remote should be origin in tracking when behind")
 			Expect(branch).To(Equal("master"), "Master should track master when behind")
+
+		})
+
+	})
+
+	Describe("Query commit LOB references", func() {
+		root := filepath.Join(os.TempDir(), "GitTest")
+		var oldwd string
+		BeforeEach(func() {
+			CreateGitRepoForTest(root)
+			oldwd, _ = os.Getwd()
+			os.Chdir(root)
+		})
+		AfterEach(func() {
+			os.Chdir(oldwd)
+			os.RemoveAll(root)
+		})
+		It("Retrieves LOB references", func() {
+			lobshas := GetListOfRandomSHAsForTest(10)
+			// Add a few files with some lob SHAs (fake content, no store)
+			ioutil.WriteFile(filepath.Join(root, "file1.txt"),
+				[]byte(fmt.Sprintf("git-lob: %v", lobshas[0])), 0644)
+			ioutil.WriteFile(filepath.Join(root, "file2.txt"),
+				[]byte(fmt.Sprintf("git-lob: %v", lobshas[1])), 0644)
+			exec.Command("git", "add", "file1.txt", "file2.txt").Run()
+			exec.Command("git", "commit", "-m", "Initial").Run()
+			// Tag at useful points
+			exec.Command("git", "tag", "tag1").Run()
+			// add another file & modify
+			ioutil.WriteFile(filepath.Join(root, "file2.txt"),
+				[]byte(fmt.Sprintf("git-lob: %v", lobshas[2])), 0644)
+			ioutil.WriteFile(filepath.Join(root, "file3.txt"),
+				[]byte(fmt.Sprintf("git-lob: %v", lobshas[3])), 0644)
+			exec.Command("git", "add", "file2.txt", "file3.txt").Run()
+			exec.Command("git", "commit", "-m", "2nd commit").Run()
+			exec.Command("git", "tag", "tag2").Run()
+			// Also include commit that references NO shas
+			exec.Command("git", "commit", "--allow-empty", "-m", "Non-LOB commit").Run()
+
+			ioutil.WriteFile(filepath.Join(root, "file4.txt"),
+				[]byte(fmt.Sprintf("git-lob: %v", lobshas[4])), 0644)
+			exec.Command("git", "add", "file4.txt").Run()
+			exec.Command("git", "commit", "-m", "3rd commit").Run()
+			exec.Command("git", "tag", "tag3").Run()
+			ioutil.WriteFile(filepath.Join(root, "file1.txt"),
+				[]byte(fmt.Sprintf("git-lob: %v", lobshas[5])), 0644)
+			exec.Command("git", "add", "file1.txt").Run()
+			exec.Command("git", "commit", "-m", "4th commit").Run()
+			exec.Command("git", "tag", "tag4").Run()
+			ioutil.WriteFile(filepath.Join(root, "file5.txt"),
+				[]byte(fmt.Sprintf("git-lob: %v", lobshas[6])), 0644)
+			exec.Command("git", "add", "file5.txt").Run()
+			exec.Command("git", "commit", "-m", "5th commit").Run()
+			exec.Command("git", "tag", "tag5").Run()
+			// Now create a separate branch from tag3 for 7-9 shas
+			exec.Command("git", "checkout", "-b", "feature/1", "tag3").Run()
+			ioutil.WriteFile(filepath.Join(root, "file2.txt"),
+				[]byte(fmt.Sprintf("git-lob: %v", lobshas[7])), 0644)
+			ioutil.WriteFile(filepath.Join(root, "file3.txt"),
+				[]byte(fmt.Sprintf("git-lob: %v", lobshas[8])), 0644)
+			exec.Command("git", "add", "file2.txt", "file3.txt").Run()
+			exec.Command("git", "commit", "-m", "Feature commit 1").Run()
+			ioutil.WriteFile(filepath.Join(root, "file10.txt"),
+				[]byte(fmt.Sprintf("git-lob: %v", lobshas[9])), 0644)
+			exec.Command("git", "add", "file10.txt").Run()
+			exec.Command("git", "commit", "-m", "Feature commit 2").Run()
+			// return to master
+			exec.Command("git", "checkout", "master").Run()
+
+			correctSHAs := [][]string{
+				{lobshas[0], lobshas[1]}, // tag1, master & feature
+				{lobshas[2], lobshas[3]}, // tag2, master & feature
+				{lobshas[4]},             // tag3, master & feature
+				{lobshas[5]},             // tag4, master only
+				{lobshas[6]},             // tag5, master only
+				{lobshas[7], lobshas[8]}, // feature only
+				{lobshas[9]},             // feature only
+			}
+			// Now let's retrieve LOBs
+			// Entire history on current branch
+			commitlobs, err := GetGitCommitsReferencingLOBsInRange("", "")
+			Expect(err).To(BeNil(), "Should not fail calling GetGitCommitsReferencingLOBsInRange")
+			// There are 6 commits on the master branch, but only 5 reference LOBs
+			Expect(commitlobs).To(HaveLen(5), "Master branch should have 5 commits referencing LOBs")
+			for i, commit := range commitlobs {
+				Expect(commit.lobSHAs).To(Equal(correctSHAs[i]), "Commit %d should have correct SHAs", i)
+			}
+			// Just feature branch
+			commitlobs, err = GetGitCommitsReferencingLOBsInRange("tag3", "feature/1")
+			Expect(err).To(BeNil(), "Should not fail calling GetGitCommitsReferencingLOBsInRange")
+			// 2 commits from tag3 to feature/1, excluding tag3 itself
+			Expect(commitlobs).To(HaveLen(2), "Feature branch should have 2 commits referencing LOBs")
+			Expect(commitlobs[0].lobSHAs).To(Equal(correctSHAs[5]), "Commit should have correct SHAs")
+			Expect(commitlobs[1].lobSHAs).To(Equal(correctSHAs[6]), "Commit should have correct SHAs")
+			// Now just 'from' (on master)
+			commitlobs, err = GetGitCommitsReferencingLOBsInRange("tag4", "")
+			Expect(err).To(BeNil(), "Should not fail calling GetGitCommitsReferencingLOBsInRange")
+			// 1 commit from tag4 to master, excluding tag4 itself
+			Expect(commitlobs).To(HaveLen(1), "tag4 onwards is only 1 commit")
+			Expect(commitlobs[0].lobSHAs).To(Equal(correctSHAs[4]), "Commit should have correct SHAs")
+			// Now just 'to' (on master)
+			commitlobs, err = GetGitCommitsReferencingLOBsInRange("", "tag2")
+			Expect(err).To(BeNil(), "Should not fail calling GetGitCommitsReferencingLOBsInRange")
+			// 2 commits up to tag2 to master, excluding tag4 itself
+			Expect(commitlobs).To(HaveLen(2), "tag4 onwards is only 1 commit")
+			Expect(commitlobs[0].lobSHAs).To(Equal(correctSHAs[0]), "Commit should have correct SHAs")
+			Expect(commitlobs[1].lobSHAs).To(Equal(correctSHAs[1]), "Commit should have correct SHAs")
 
 		})
 
