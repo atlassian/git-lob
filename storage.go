@@ -166,17 +166,65 @@ func GetLOBInfo(sha string) (*LOBInfo, error) {
 
 }
 
+// If files are missing in the local repo but available in the shared
+// store, returns true after re-establishing the link
+// Note: this doesn't validate sizes of any files because it's assumed
+// because of hardlinking the files are either missing entirely or the
+// same as the shared store
+func recoverLocalLOBFilesFromSharedStore(sha string) bool {
+	if !isUsingSharedStorage() {
+		return false
+	}
+
+	metalocal := getLocalLOBMetaFilename(sha)
+	if !FileExists(metalocal) {
+		metashared := getSharedLOBMetaFilename(sha)
+		if FileExists(metashared) {
+			err := linkSharedLOBFilename(metalocal)
+			if err != nil {
+				return false
+			}
+		} else {
+			return false
+		}
+	}
+	// Meta should be complete & local now
+	info, err := GetLOBInfo(sha)
+	if err != nil {
+		return false
+	}
+	for i := 0; i < info.NumChunks; i++ {
+		local := getLocalLOBChunkFilename(sha, i)
+		if !FileExists(local) {
+			shared := getSharedLOBChunkFilename(sha, i)
+			if FileExists(shared) {
+				err := linkSharedLOBFilename(local)
+				if err != nil {
+					return false
+				}
+			} else {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
 // Retrieve LOB from storage
 func RetrieveLOB(sha string, out io.Writer) (info *LOBInfo, err error) {
 	info, err = GetLOBInfo(sha)
 
 	if err != nil {
 		if os.IsNotExist(err) {
-			// We don't have this file yet
-			// Potentially auto-download
-			// TODO
-			LogErrorf("LOB meta not found TODO AUTODOWNLOAD %v: %v\n", sha, err)
-			return nil, err
+			// Check whether we can recover from shared
+			if !recoverLocalLOBFilesFromSharedStore(sha) {
+				// OK we don't have this file yet
+				// Potentially auto-download
+				// TODO
+				LogErrorf("LOB meta not found TODO AUTODOWNLOAD %v: %v\n", sha, err)
+				return nil, err
+			}
 		} else {
 			// A problem
 			LogErrorf("Unable to retrieve LOB with SHA %v: %v\n", sha, err)
@@ -194,6 +242,12 @@ func RetrieveLOB(sha string, out io.Writer) (info *LOBInfo, err error) {
 	// one differs we know it's faulty
 	lastChunkIdx := info.NumChunks - 1
 	lastChunkStat, err := os.Stat(getLocalLOBChunkFilename(sha, lastChunkIdx))
+	if err != nil {
+		if !recoverLocalLOBFilesFromSharedStore(sha) {
+			LogErrorf("LOB file not found or wrong size TODO AUTODOWNLOAD: last chunk missing\n")
+			return info, err
+		}
+	}
 	lastChunkSize := lastChunkStat.Size()
 	otherChunksSize := fileSize - lastChunkSize
 	var chunkSize int64
@@ -216,9 +270,17 @@ func RetrieveLOB(sha string, out io.Writer) (info *LOBInfo, err error) {
 			}
 		}
 		if !FileExistsAndIsOfSize(chunkFilename, expectedSize) {
-			// TODO auto-download?
-			LogErrorf("LOB file not found or wrong size TODO AUTODOWNLOAD: %v expected to be %d bytes\n", chunkFilename, expectedSize)
-			return info, err
+			// Try to recover from shared store
+			recoveredFromShared := false
+			if recoverLocalLOBFilesFromSharedStore(sha) {
+				recoveredFromShared = FileExistsAndIsOfSize(chunkFilename, expectedSize)
+			}
+
+			if !recoveredFromShared {
+				// TODO auto-download?
+				LogErrorf("LOB file not found or wrong size TODO AUTODOWNLOAD: %v expected to be %d bytes\n", chunkFilename, expectedSize)
+				return info, err
+			}
 		}
 	}
 	// If all was well, start reading & streaming content
@@ -312,9 +374,8 @@ func storeLOBInfo(info *LOBInfo) error {
 
 func isUsingSharedStorage() bool {
 	if GlobalOptions.SharedStore != "" {
-		exists, isDir := FileOrDirExists(GlobalOptions.SharedStore)
 		// We create the folder on loading config
-		return exists && isDir
+		return DirExists(GlobalOptions.SharedStore)
 	}
 	return false
 }
