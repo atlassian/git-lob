@@ -39,6 +39,12 @@ func cmdPush() int {
 			}
 			for _, arg := range GlobalOptions.Args[1:] {
 				r := ParseGitRefSpec(arg)
+				// Only allow .. range for push, not ...
+				if r.RangeOp == "..." {
+					fmt.Fprintf(os.Stderr, "git-lob: '...' range operator is not supported for push, only '..'\n")
+					return 7
+				}
+
 				refspecs = append(refspecs, r)
 			}
 		}
