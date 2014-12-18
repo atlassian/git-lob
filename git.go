@@ -368,6 +368,7 @@ func GetGitUpstreamBranch(localbranch string) (remoteName, remoteBranch string) 
 // Commits will be in ASCENDING order (parents before children) unlike WalkGitHistory
 // Either of from, to or both can be blank to have an unbounded range of commits based on current HEAD
 // It is required that if both are supplied, 'from' is an ancestor of 'to'
+// Range is exclusive of 'from' and inclusive of 'to'
 func GetGitCommitsReferencingLOBsInRange(from, to string) ([]CommitLOBRef, error) {
 
 	args := []string{"log", `--format=commitsha: %H`, "-p",
