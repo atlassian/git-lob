@@ -34,6 +34,12 @@ func (r *GitRefSpec) String() string {
 	}
 }
 
+// A record of a set of LOB shas that are associated with a commit
+type CommitLOBRef struct {
+	commit  string
+	lobSHAs []string
+}
+
 // Walk first parents starting from startSHA and call callback
 // First call will be startSHA & its parent
 // Parent will be blank string if there are no more parents & walk will stop after
@@ -355,5 +361,80 @@ func GetGitUpstreamBranch(localbranch string) (remoteName, remoteBranch string) 
 
 	// no tracking for this branch
 	return "", ""
+
+}
+
+// Returns list of commits which have LOB SHAs referenced in them, in a given commit range
+// Either of from, to or both can be blank to have an unbounded range of commits based on current HEAD
+// It is required that if both are supplied, 'from' is an ancestor of 'to'
+func GetGitCommitsReferencingLOBsInRange(from, to string) ([]CommitLOBRef, error) {
+
+	args := []string{"log", "--format='commitsha: %%H'", "-p", "-G", "^git-lob: [A-Fa-f0-9]{40}$"}
+
+	if from != "" && to != "" {
+		args = append(args, fmt.Sprintf("%v..%v", from, to))
+	} else {
+		if to != "" {
+			args = append(args, to)
+		} else if from != "" {
+			args = append(args, fmt.Sprintf("%v..HEAD", from))
+		}
+		// if from & to are both blank, just use default behaviour of git log
+	}
+
+	// Sadly we still get more output than we actually need, but this is the minimum we can get
+	// For each commit we'll get something like this:
+	/*
+	   COMMITSHA:af2607421c9fee2e430cde7e7073a7dad07be559
+
+	   diff --git a/atheneNormalMap.png b/atheneNormalMap.png
+	   new file mode 100644
+	   index 0000000..272b5c1
+	   --- /dev/null
+	   +++ b/atheneNormalMap.png
+	   @@ -0,0 +1 @@
+	   +git-lob: b022770eab414c36575290c993c29799bc6610c3
+	*/
+	// There can be multiple diffs per commit (multiple binaries)
+	// Also when a binary is changed the diff will include a '-' line for the old SHA
+	// So it's important that we only pull git-lob SHAs with a '+' prefix
+
+	// Use 1 regex to capture all for speed
+	regex := regexp.MustCompile(`^(commitsha|\+git-lob): ([A-Fa-f0-9]{40})`)
+
+	cmd := exec.Command("git", args...)
+	outp, err := cmd.StdoutPipe()
+	if err != nil {
+		LogErrorf("Unable to call git-log: %v", err.Error())
+		return []CommitLOBRef{}, err
+	}
+	cmd.Start()
+	scanner := bufio.NewScanner(outp)
+
+	var currentCommit *CommitLOBRef
+	var ret []CommitLOBRef
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		if match := regex.FindStringSubmatch(line); match != nil {
+			sha := match[2]
+			if match[1] == "commitsha" {
+				if currentCommit != nil {
+					ret = append(ret, *currentCommit)
+					currentCommit = nil
+				}
+				currentCommit = &CommitLOBRef{commit: sha}
+			} else { // git-lob is the only other possibility from regex, skip pointless test
+				currentCommit.lobSHAs = append(currentCommit.lobSHAs, sha)
+			}
+		}
+	}
+	// Final commit
+	if currentCommit != nil {
+		ret = append(ret, *currentCommit)
+		currentCommit = nil
+	}
+
+	return ret, nil
 
 }

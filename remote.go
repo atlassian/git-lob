@@ -172,12 +172,6 @@ func FindLatestAncestorWhereBinariesPushed(remoteName, commitSHA string) (string
 	return foundSHA, err
 }
 
-// A record of a set of LOB shas that are associated with a commit
-type CommitLOBRef struct {
-	commit  string
-	lobSHAs []string
-}
-
 // Get a list of commits which have LOB SHAs to push, given a refspec, in forward ancestry order
 // Only commits which have LOBs associated will be returned on the assumption that when
 // child commits are marked as pushed it will also mark the parents
@@ -186,7 +180,28 @@ type CommitLOBRef struct {
 // for this remote and returns the LOBs referred to in that range. If recheck is true,
 // ignores the record of the last commit we think we pushed and scans entire history (slow)
 func GetCommitLOBsToPushForRefSpec(remoteName string, refspec *GitRefSpec, recheck bool) ([]CommitLOBRef, error) {
-	// TODO
+	if refspec.IsRange() {
+		// Only need to deal with '..' range operator for push
+		return GetGitCommitsReferencingLOBsInRange(refspec.Ref1, refspec.Ref2)
+
+	} else {
+		// Determine range from last pushed - must be full SHA basis
+		commitSHA, err := GitRefToFullSHA(refspec.Ref1)
+		if err != nil {
+			return []CommitLOBRef{}, err
+		}
+		if recheck {
+			// Scan for LOBs in entire history
+			return GetGitCommitsReferencingLOBsInRange("", commitSHA)
+		} else {
+			lastPushed, err := FindLatestAncestorWhereBinariesPushed(remoteName, commitSHA)
+			if err != nil {
+				return []CommitLOBRef{}, err
+			}
+			return GetGitCommitsReferencingLOBsInRange(lastPushed, commitSHA)
+		}
+
+	}
 	return []CommitLOBRef{}, nil
 
 }
