@@ -24,6 +24,18 @@ func FileOrDirExists(path string) (exists bool, isDir bool) {
 	}
 }
 
+// Utility method to determine if a file (NOT dir) exists
+func FileExists(path string) bool {
+	ret, isDir := FileOrDirExists(path)
+	return ret && !isDir
+}
+
+// Utility method to determine if a dir (NOT file) exists
+func DirExists(path string) bool {
+	ret, isDir := FileOrDirExists(path)
+	return ret && isDir
+}
+
 // Utility method to determine if a file/dir exists and is of a specific size
 func FileExistsAndIsOfSize(path string, sz int64) bool {
 	fi, err := os.Stat(path)
