@@ -365,11 +365,15 @@ func GetGitUpstreamBranch(localbranch string) (remoteName, remoteBranch string) 
 }
 
 // Returns list of commits which have LOB SHAs referenced in them, in a given commit range
+// Commits will be in ASCENDING order (parents before children) unlike WalkGitHistory
 // Either of from, to or both can be blank to have an unbounded range of commits based on current HEAD
 // It is required that if both are supplied, 'from' is an ancestor of 'to'
 func GetGitCommitsReferencingLOBsInRange(from, to string) ([]CommitLOBRef, error) {
 
-	args := []string{"log", "--format='commitsha: %%H'", "-p", "-G", "^git-lob: [A-Fa-f0-9]{40}$"}
+	args := []string{"log", `--format=commitsha: %H`, "-p",
+		"--topo-order", "--first-parent",
+		"--reverse", // we want to list them in ascending order
+		"-G", "^git-lob: [A-Fa-f0-9]{40}$"}
 
 	if from != "" && to != "" {
 		args = append(args, fmt.Sprintf("%v..%v", from, to))
@@ -415,7 +419,6 @@ func GetGitCommitsReferencingLOBsInRange(from, to string) ([]CommitLOBRef, error
 	var ret []CommitLOBRef
 	for scanner.Scan() {
 		line := scanner.Text()
-
 		if match := regex.FindStringSubmatch(line); match != nil {
 			sha := match[2]
 			if match[1] == "commitsha" {
