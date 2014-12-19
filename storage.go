@@ -152,9 +152,21 @@ func GetLOBInfo(sha string) (*LOBInfo, error) {
 	infobytes, err := ioutil.ReadFile(meta)
 
 	if err != nil {
-		// Maybe just that it's not been downloaded yet
-		// Let caller decide
-		return nil, err
+		if os.IsNotExist(err) {
+			// Try to recover from shared
+			if recoverLocalLOBFilesFromSharedStore(sha) {
+				infobytes, err = ioutil.ReadFile(meta)
+				if err != nil {
+					// Dang
+					return nil, err
+				}
+				// otherwise we recovered!
+			} else {
+				return nil, err
+			}
+		} else {
+			return nil, err
+		}
 	}
 	// Read JSON metadata
 	info := &LOBInfo{}
@@ -220,14 +232,11 @@ func RetrieveLOB(sha string, out io.Writer) (info *LOBInfo, err error) {
 
 	if err != nil {
 		if os.IsNotExist(err) {
-			// Check whether we can recover from shared
-			if !recoverLocalLOBFilesFromSharedStore(sha) {
-				// OK we don't have this file yet
-				// Potentially auto-download
-				// TODO
-				LogErrorf("LOB meta not found TODO AUTODOWNLOAD %v: %v\n", sha, err)
-				return nil, err
-			}
+			// OK we don't have this file yet
+			// Potentially auto-download
+			// TODO
+			LogErrorf("LOB meta not found TODO AUTODOWNLOAD %v: %v\n", sha, err)
+			return nil, err
 		} else {
 			// A problem
 			LogErrorf("Unable to retrieve LOB with SHA %v: %v\n", sha, err)
