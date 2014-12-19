@@ -22,6 +22,9 @@ type LOBInfo struct {
 	Size int64
 	// Number of chunks that make up the whole LOB (integrity check)
 	NumChunks int
+	// The chunk size that was used to divide this LOB (since can be configured separately)
+	ChunkSize int64
+}
 }
 
 // Gets the root folder of this git repository (the one containing .git)
@@ -237,36 +240,18 @@ func RetrieveLOB(sha string, out io.Writer) (info *LOBInfo, err error) {
 	// Pre-validate all the files BEFORE we start streaming data to out
 	// if we fail part way through we don't want to have written partial
 	// data, should be all or nothing
-	// Don't assume size of stored file chunks, maybe we want to allow chunk size
-	// to change; calculate the total size, and the chunk size so that if
-	// one differs we know it's faulty
-	lastChunkIdx := info.NumChunks - 1
-	lastChunkStat, err := os.Stat(getLocalLOBChunkFilename(sha, lastChunkIdx))
-	if err != nil {
-		if !recoverLocalLOBFilesFromSharedStore(sha) {
-			LogErrorf("LOB file not found or wrong size TODO AUTODOWNLOAD: last chunk missing\n")
-			return info, err
-		}
-	}
-	lastChunkSize := lastChunkStat.Size()
-	otherChunksSize := fileSize - lastChunkSize
-	var chunkSize int64
-	if otherChunksSize > 0 && info.NumChunks > 1 {
-		chunkSize = otherChunksSize / int64(info.NumChunks-1)
-	} else {
-		chunkSize = lastChunkSize
-	}
+	lastChunkSize := fileSize - (int64(info.NumChunks-1) * info.ChunkSize)
 	// Check all files
 	for i := 0; i < info.NumChunks; i++ {
 		chunkFilename := getLocalLOBChunkFilename(sha, i)
 		var expectedSize int64
 		if i+1 < info.NumChunks {
-			expectedSize = chunkSize
+			expectedSize = info.ChunkSize
 		} else {
 			if info.NumChunks == 1 {
 				expectedSize = fileSize
 			} else {
-				expectedSize = fileSize - (chunkSize * int64(info.NumChunks-1))
+				expectedSize = lastChunkSize
 			}
 		}
 		if !FileExistsAndIsOfSize(chunkFilename, expectedSize) {
@@ -506,7 +491,7 @@ func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
 	// We *may* now move the data to LOB dir
 	// We won't if it already exists & is the correct size
 	// Construct LOBInfo & write to final location
-	info := &LOBInfo{SHA: shaStr, Size: totalSize, NumChunks: len(chunkFilenames)}
+	info := &LOBInfo{SHA: shaStr, Size: totalSize, NumChunks: len(chunkFilenames), ChunkSize: GlobalOptions.ChunkSize}
 	err = storeLOBInfo(info)
 
 	// Check each chunk file

@@ -64,7 +64,8 @@ func CreateGitRepoWithSeparateGitDirForTest(path string, gitDir string) {
 // SHA will have been calculated outside the software so can be validated
 func CreateSmallTestLOBFileForStoring(filename string) (correctInfo *LOBInfo) {
 	// This was calculated with 'shasum' on Mac OS X with this file content
-	correctLOBInfo := &LOBInfo{SHA: "772157c6ef480852edf921f5924b1ca582b0d78f", NumChunks: 1, Size: 128 * 255 * 16}
+	correctLOBInfo := &LOBInfo{SHA: "772157c6ef480852edf921f5924b1ca582b0d78f",
+		NumChunks: 1, Size: 128 * 255 * 16, ChunkSize: GlobalOptions.ChunkSize}
 
 	// Create binary file
 	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0755)
@@ -85,7 +86,8 @@ func CreateSmallTestLOBFileForStoring(filename string) (correctInfo *LOBInfo) {
 // As CreateSmallTestLOBFileForStoring but will create a larger file which will need multiple chunks
 func CreateLargeTestLOBFileForStoring(filename string) (correctInfo *LOBInfo) {
 	// This was calculated with 'shasum' on Mac OS X with this file content
-	correctLOBInfo := &LOBInfo{SHA: "6dc61e7c7d33e87592da1e534063052a17bf8f3c", NumChunks: 4, Size: 25000 * 255 * 16}
+	correctLOBInfo := &LOBInfo{SHA: "6dc61e7c7d33e87592da1e534063052a17bf8f3c",
+		NumChunks: 4, Size: 25000 * 255 * 16, ChunkSize: GlobalOptions.ChunkSize}
 
 	// Create binary file
 	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0755)
@@ -105,7 +107,8 @@ func CreateLargeTestLOBFileForStoring(filename string) (correctInfo *LOBInfo) {
 // Manually insert small LOB file into the LOB store ready for retrieval
 func CreateSmallTestLOBDataForRetrieval() (correctInfo *LOBInfo) {
 	// This was calculated with 'shasum' on Mac OS X with this file content
-	correctLOBInfo := &LOBInfo{SHA: "772157c6ef480852edf921f5924b1ca582b0d78f", NumChunks: 1, Size: 128 * 255 * 16}
+	correctLOBInfo := &LOBInfo{SHA: "772157c6ef480852edf921f5924b1ca582b0d78f",
+		NumChunks: 1, Size: 128 * 255 * 16, ChunkSize: GlobalOptions.ChunkSize}
 	err := storeLOBInfo(correctLOBInfo)
 	Expect(err).To(BeNil(), "Shouldn't be error creating LOB meta file")
 
@@ -138,7 +141,8 @@ func CreateLargeTestLOBDataForRetrieval() (correctInfo *LOBInfo) {
 	correctFileSize := int64(25000 * 255 * 16)
 	correctNumChunks := 4
 	correctChunkSize := int64(32 * 1024 * 1024)
-	correctLOBInfo := &LOBInfo{SHA: "6dc61e7c7d33e87592da1e534063052a17bf8f3c", NumChunks: correctNumChunks, Size: correctFileSize}
+	correctLOBInfo := &LOBInfo{SHA: "6dc61e7c7d33e87592da1e534063052a17bf8f3c",
+		NumChunks: correctNumChunks, Size: correctFileSize, ChunkSize: correctChunkSize}
 
 	err := storeLOBInfo(correctLOBInfo)
 	Expect(err).To(BeNil(), "Shouldn't be error creating LOB meta file")
