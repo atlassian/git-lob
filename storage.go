@@ -13,7 +13,7 @@ import (
 	"regexp"
 )
 
-const BUFSIZE = 8192
+const BUFSIZE = 131072
 
 // Information about a LOB
 type LOBInfo struct {
