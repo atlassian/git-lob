@@ -612,11 +612,11 @@ func DeleteLOB(sha string) error {
 // In the rare case that a break has occurred between shared storage
 // and the local hardlink, this method will re-link if the shared
 // store has it
-func GetLOBFilesForSHA(sha, basedir string, check bool, checkHash bool) ([]string, error) {
+func GetLOBFilesForSHA(sha, basedir string, check bool, checkHash bool) (files []string, size int64, _err error) {
 	var ret []string
 	info, err := GetLOBInfo(sha)
 	if err != nil {
-		return []string{}, err
+		return []string{}, 0, err
 	}
 	// add meta file (relative) - already checked by GetLOBInfo above
 	relmeta := getLOBRelMetaFilename(sha)
@@ -652,7 +652,7 @@ func GetLOBFilesForSHA(sha, basedir string, check bool, checkHash bool) ([]strin
 
 				if !recoveredFromShared {
 					LogErrorf("LOB file not found or wrong size: %v expected to be %d bytes\n", abschunk, expectedSize)
-					return ret, err
+					return ret, info.Size, err
 				}
 			}
 
@@ -661,12 +661,12 @@ func GetLOBFilesForSHA(sha, basedir string, check bool, checkHash bool) ([]strin
 				f, err := os.OpenFile(abschunk, os.O_RDONLY, 0644)
 				if err != nil {
 					LogErrorf("Error opening LOB file %v to check SHA: %v\n", abschunk, err)
-					return ret, err
+					return ret, info.Size, err
 				}
 				_, err = io.Copy(shaRecalc, f)
 				if err != nil {
 					LogErrorf("Error copying LOB file %v into SHA calculator: %v\n", abschunk, err)
-					return ret, err
+					return ret, info.Size, err
 				}
 				f.Close()
 			}
@@ -679,11 +679,11 @@ func GetLOBFilesForSHA(sha, basedir string, check bool, checkHash bool) ([]strin
 		if sha != shaRecalcStr {
 			msg := fmt.Sprintf("Integrity error; content of files for LOB SHA %v actually have SHA %v", sha, shaRecalcStr)
 			LogErrorf("%v\n", msg)
-			return ret, errors.New(msg)
+			return ret, info.Size, errors.New(msg)
 		}
 	}
 
-	return ret, nil
+	return ret, info.Size, nil
 
 }
 
@@ -692,7 +692,7 @@ func GetLOBFilesForSHA(sha, basedir string, check bool, checkHash bool) ([]strin
 // the SHA for a deep validation of content (slower but complete)
 // If ccheckHash = false, just checks the presence & size of all files (quick & most likely correct)
 func CheckLOBFilesForSHA(sha, basedir string, checkHash bool) error {
-	_, err := GetLOBFilesForSHA(sha, basedir, true, checkHash)
+	_, _, err := GetLOBFilesForSHA(sha, basedir, true, checkHash)
 	return err
 }
 
@@ -702,23 +702,25 @@ func CheckLOBFilesForSHA(sha, basedir string, checkHash bool) error {
 // is checked and only if all the files for a SHA are valid are they included in the
 // returned list. In this case the error return is an IntegrityError and includes the bad SHAs
 // The filenames returned are relative to basedir, the root folder for all of the files
-func GetLOBFilenamesWithBaseDir(shas []string, check bool) (files []string, basedir string, err error) {
+func GetLOBFilenamesWithBaseDir(shas []string, check bool) (files []string, basedir string, totalSize int64, err error) {
 	// Note how we always return the basedir as the local LOB root
 	// this is because all SHAs are hard linked here even when using shared storage
 	basedir = GetLocalLOBRoot()
 	var ret []string
 	var errorshas []string
+	var retSize int64
 	for _, sha := range shas {
 		// Do basic check, not content check
-		shafiles, shaerr := GetLOBFilesForSHA(sha, basedir, check, false)
+		shafiles, shasize, shaerr := GetLOBFilesForSHA(sha, basedir, check, false)
 		if shaerr != nil {
 			errorshas = append(errorshas, sha)
 		} else {
 			ret = append(ret, shafiles...)
+			retSize += shasize
 		}
 	}
 	if len(errorshas) > 0 {
-		return ret, basedir, &IntegrityError{errorshas}
+		return ret, basedir, retSize, &IntegrityError{errorshas}
 	}
-	return ret, basedir, nil
+	return ret, basedir, retSize, nil
 }

@@ -101,6 +101,24 @@ func FormatSize(sz int64) string {
 	}
 }
 
+// Format a bytes per second transfer rate into a display format
+func FormatTransferRate(bytesPerSecond int64) string {
+	switch {
+	case bytesPerSecond >= (1 << 50): // yeah, right ;)
+		return fmt.Sprintf("%.3gPB/s", float32(bytesPerSecond)/float32(1<<50))
+	case bytesPerSecond >= (1 << 40):
+		return fmt.Sprintf("%.3gTB/s", float32(bytesPerSecond)/float32(1<<40))
+	case bytesPerSecond >= (1 << 30):
+		return fmt.Sprintf("%.3gGB/s", float32(bytesPerSecond)/float32(1<<30))
+	case bytesPerSecond >= (1 << 20):
+		return fmt.Sprintf("%.3gMB/s", float32(bytesPerSecond)/float32(1<<20))
+	case bytesPerSecond >= (1 << 10):
+		return fmt.Sprintf("%.3gKB/s", float32(bytesPerSecond)/float32(1<<10))
+	default:
+		return fmt.Sprintf("%dBytes/s", bytesPerSecond)
+	}
+}
+
 // Search a sorted slice of strings for a specific string
 // Returns boolean for if found, and either location or insertion point
 func StringBinarySearch(sortedSlice []string, searchTerm string) (bool, int) {

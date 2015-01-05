@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 )
 
 // Push command line tool
@@ -95,7 +94,7 @@ func cmdPush() int {
 		}
 	}
 
-	progress := func(t PushCallbackType, desc string, itempercent, overallpercent int, rate string) (abort bool) {
+	progress := func(t PushCallbackType, desc string, itemBytesDone, itemBytes int64, totalBytesDone, totalBytes int64) (abort bool) {
 		switch t {
 		case PushCallbackCalculate:
 			if !GlobalOptions.Quiet {
@@ -106,16 +105,21 @@ func cmdPush() int {
 				fmt.Println("Skipped:", desc, "(Up to date)")
 			}
 		case PushCallbackUpload:
-			// Re-use the same line for each of these updates, except in verbose mode when we newline on completion
-			if GlobalOptions.Verbose {
-				// report file name too
-				if itempercent == 100 {
-					fmt.Printf("\rPushed: %v 100%%\n", desc)
-				} else {
-					fmt.Printf("\rPushing: %v %d%%\tOverall: %d%%\t(%v)", desc, itempercent, overallpercent, rate)
-				}
+			if itemBytesDone == itemBytes && GlobalOptions.Verbose {
+				fmt.Printf("\rPushed: %v 100%%\n", desc)
 			} else if !GlobalOptions.Quiet {
-				fmt.Printf("\rPushing: %d%%\t(%v)", overallpercent, rate)
+				if itemBytes != 0 && totalBytes != 0 {
+					itemPercent := int(itemBytesDone / itemBytes)
+					overallPercent := int(totalBytesDone / totalBytes)
+					// TODO Rate
+					fmt.Printf("\rPushing: %v %d%%\tOverall: %v of %v(%d%%)\t(%v)", desc, itemPercent,
+						FormatSize(totalBytesDone), FormatSize(totalBytes), overallPercent, FormatTransferRate(1000))
+					if GlobalOptions.Verbose {
+						// Newline in verbose mode so we keep each file reported
+						fmt.Println()
+					}
+
+				}
 			}
 
 		}
@@ -162,11 +166,20 @@ const (
 // Callback when progress is made during push
 // t: what stage of the push process this is for, preparing, uploading or skipping something
 // desc: either a general message or an item name (e.g. file name in upload stage)
-// itempercent: if applicable, what percent of this item is done
-// overallpercent: what overall percent of the process is done
-// rate: upload rate for info if applicable
+// itemBytesDone: if applicable, how many bytes transferred for this item
+// itemBytes: if applicable, how many bytes comprise this item
+// totalBytesDone: the number of bytes transferred for all items
+// totalBytes: the number of bytes needed to transfer all of this task
 // return true to abort the (entire) process
-type PushCallback func(t PushCallbackType, desc string, itempercent, overallpercent int, rate string) (abort bool)
+type PushCallback func(t PushCallbackType, desc string, itemBytesDone, itemBytes int64, totalBytesDone, totalBytes int64) (abort bool)
+
+// Some temporary storage used to pre-calculate the amount of data we'll need to upload
+type PushCommitContentDetails struct {
+	CommitSHA  string   // the commit's SHA
+	Files      []string // list of files we'll need to upload, relative path
+	BaseDir    string   // the base dir of the above files
+	TotalBytes int64    // total bytes for all files in the list
+}
 
 func PushBasic(provider BasicSyncProvider, remoteName string, refspecs []*GitRefSpec, dryRun, force, recheck bool,
 	callback PushCallback) error {
@@ -174,14 +187,11 @@ func PushBasic(provider BasicSyncProvider, remoteName string, refspecs []*GitRef
 	LogDebugf("Pushing to %v via %v\n", remoteName, provider.TypeID())
 
 	// First, build up details of what it is we need to push so we can estimate %
-	numfiles := 0
-	var commitsToPush []CommitLOBRef
-	const calculatePercent = 10
-	const uploadPercent = 100 - calculatePercent
+	var allCommitsSize int64
+	var commitsToPush []*PushCommitContentDetails
 	for i, refspec := range refspecs {
 		callback(PushCallbackCalculate, fmt.Sprintf("Calculating data to push for %v", refspec),
-			0, calculatePercent*i/len(refspecs), "")
-		// TODO - goroutine each ref in parallel?
+			int64(i), int64(len(refspecs)), 0, 0)
 		refcommits, err := GetCommitLOBsToPushForRefSpec(remoteName, refspec, recheck)
 		if err != nil {
 			return err
@@ -205,82 +215,80 @@ func PushBasic(provider BasicSyncProvider, remoteName string, refspecs []*GitRef
 			}
 
 		} else {
-			oldnumfiles := numfiles
 			for _, commit := range refcommits {
-				numfiles += len(commit.lobSHAs)
+				filenames, basedir, totalSize, err := GetLOBFilenamesWithBaseDir(commit.lobSHAs, true)
+				if err != nil {
+					return err
+				}
+				commitsToPush = append(commitsToPush, &PushCommitContentDetails{
+					CommitSHA:  commit.commit,
+					Files:      filenames,
+					BaseDir:    basedir,
+					TotalBytes: totalSize})
+
+				allCommitsSize += totalSize
 			}
-			LogDebugf("Refspec %v: %d commits with %d binaries to push\n",
-				refspec, len(refcommits), numfiles-oldnumfiles)
-			commitsToPush = append(commitsToPush, refcommits...)
+			LogDebugf("Refspec %v: %d commits with %v to push\n",
+				refspec, len(refcommits), FormatSize(allCommitsSize))
 		}
+
 		callback(PushCallbackCalculate, fmt.Sprintf("Finished calculating data to push for %v", refspec),
-			100, calculatePercent*(i+1)/len(refspecs), "")
+			int64(i+1), int64(len(refspecs)), 0, 0)
 	}
 
 	if !dryRun {
 		filesdone := 0
-		percentStart := float32(calculatePercent)
-		percentPerFile := float32(uploadPercent) / float32(numfiles)
-		LogDebugf("Uploading %d files to %v via %v\n", numfiles, remoteName, provider.TypeID())
+		LogDebugf("Uploading %v to %v via %v\n", FormatSize(allCommitsSize), remoteName, provider.TypeID())
 
+		var bytesFromFilesDoneSoFar int64
 		for _, commit := range commitsToPush {
-			filenames, basedir, err := GetLOBFilenamesWithBaseDir(commit.lobSHAs, true)
-			if err != nil {
-				return err
-			} else {
-				// Upload now
-				// Use a local callback which calls the higher level callback at most every 1s
-				lastCallbackTime := time.Now()
-				var lastFilename string
-				var percentFileStart float32
-				localcallback := func(fileInProgress string, isSkipped bool, percent int) (abort bool) {
-					if lastFilename != fileInProgress {
-						percentFileStart = percentStart + percentPerFile*float32(filesdone)
-						// New file, always callback
-						if isSkipped {
-							filesdone++
-							callback(PushCallbackSkip, fileInProgress, 100, int(percentFileStart+percentPerFile), "")
-						} else {
-							if lastFilename != "" {
-								// we obviously never got a 100% call for previous file
-								filesdone++
-								callback(PushCallbackUpload, lastFilename, 100, int(percentFileStart), "")
-							}
-							// Start new file
-							callback(PushCallbackUpload, fileInProgress, 0, int(percentFileStart), "")
-						}
-						lastFilename = fileInProgress
+			// Upload now
+			var lastFilename string
+			var lastFileBytes int64
+			localcallback := func(fileInProgress string, isSkipped bool, bytesDone, totalBytes int64) (abort bool) {
+				if lastFilename != fileInProgress {
+					// New file, always callback
+					if isSkipped {
+						filesdone++
+						bytesFromFilesDoneSoFar += totalBytes
+						callback(PushCallbackSkip, fileInProgress, totalBytes, totalBytes, bytesFromFilesDoneSoFar, allCommitsSize)
 					} else {
-						if percent == 100 {
-							// finished
+						if lastFilename != "" {
+							// we obviously never got a 100% call for previous file
 							filesdone++
-							callback(PushCallbackUpload, fileInProgress, 100, int(percentFileStart+percentPerFile), "")
-							lastFilename = ""
-						} else {
-							// Otherwise this is a progress callback, don't post more than 1 per second for this type
-							elapsed := time.Since(lastCallbackTime)
-							if elapsed.Seconds() > 1.0 {
-								lastCallbackTime = time.Now()
-								return callback(PushCallbackUpload, fileInProgress, percent,
-									int(percentFileStart+percentPerFile*float32(percent/100)), "")
-							}
+							bytesFromFilesDoneSoFar += lastFileBytes
+							callback(PushCallbackUpload, lastFilename, lastFileBytes, lastFileBytes, bytesFromFilesDoneSoFar, allCommitsSize)
 						}
+						// Start new file
+						callback(PushCallbackUpload, fileInProgress, bytesDone, totalBytes, bytesFromFilesDoneSoFar+bytesDone, allCommitsSize)
 					}
-					return false
+					lastFilename = fileInProgress
+					lastFileBytes = totalBytes
+				} else {
+					if bytesDone == totalBytes {
+						// finished
+						filesdone++
+						bytesFromFilesDoneSoFar += totalBytes
+						callback(PushCallbackUpload, fileInProgress, bytesDone, totalBytes, bytesFromFilesDoneSoFar, allCommitsSize)
+						lastFilename = ""
+					} else {
+						// Otherwise this is a progress callback
+						return callback(PushCallbackUpload, fileInProgress, bytesDone, totalBytes, bytesFromFilesDoneSoFar+bytesDone, allCommitsSize)
+					}
 				}
-				err = provider.Upload(remoteName, filenames, basedir, force, localcallback)
-				if err != nil {
-					// Stop at commit we can't upload
-					return err
-				}
-				// Otherwise mark commit as pushed
-				err = SuccessfullyPushedBinariesForCommit(remoteName, commit.commit)
-				if err != nil {
-					// Stop at commit we can't mark
-					return err
-				}
+				return false
 			}
-
+			err := provider.Upload(remoteName, commit.Files, commit.BaseDir, force, localcallback)
+			if err != nil {
+				// Stop at commit we can't upload
+				return err
+			}
+			// Otherwise mark commit as pushed
+			err = SuccessfullyPushedBinariesForCommit(remoteName, commit.CommitSHA)
+			if err != nil {
+				// Stop at commit we can't mark
+				return err
+			}
 		}
 	}
 

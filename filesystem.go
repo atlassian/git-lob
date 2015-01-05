@@ -83,7 +83,7 @@ func (*FileSystemSyncProvider) uploadSingleFile(remoteName, filename, fromDir, t
 				// File already present and correct size, skip
 				LogDebugf("Not updating %v on remote %v, already up to date\n", filename, remoteName)
 				if callback != nil {
-					if callback(filename, true, 100) {
+					if callback(filename, true, srcfi.Size(), srcfi.Size()) {
 						return errorList, true
 					}
 				}
@@ -129,7 +129,7 @@ func (*FileSystemSyncProvider) uploadSingleFile(remoteName, filename, fromDir, t
 
 	// Initial callback
 	if callback != nil {
-		if callback(filename, false, 0) {
+		if callback(filename, false, 0, srcfi.Size()) {
 			return errorList, true
 		}
 	}
@@ -156,7 +156,7 @@ func (*FileSystemSyncProvider) uploadSingleFile(remoteName, filename, fromDir, t
 			msg = fmt.Sprintf("Problem while uploading %v to %v: %v", srcfilename, remoteName, err)
 		} else {
 			msg = fmt.Sprintf("Upload error: number of bytes written to %v in upload of %v does not agree (%d/%d)",
-				remoteName, srcfilename, n, srcfi.Size())
+				remoteName, srcfilename, copysize, srcfi.Size())
 		}
 		LogError(msg)
 		errorList = append(errorList, msg)
@@ -259,7 +259,7 @@ func (*FileSystemSyncProvider) downloadSingleFile(remoteName, filename, fromDir,
 
 	// Initial callback
 	if callback != nil {
-		if callback(filename, false, 0) {
+		if callback(filename, false, 0, srcfi.Size()) {
 			return errorList, true
 		}
 	}
@@ -286,7 +286,7 @@ func (*FileSystemSyncProvider) downloadSingleFile(remoteName, filename, fromDir,
 			msg = fmt.Sprintf("Problem while downloading %v to %v: %v", srcfilename, remoteName, err)
 		} else {
 			msg = fmt.Sprintf("Download error: number of bytes written to %v in download of %v does not agree (%d/%d)",
-				remoteName, srcfilename, n, srcfi.Size())
+				remoteName, srcfilename, copysize, srcfi.Size())
 		}
 		LogError(msg)
 		errorList = append(errorList, msg)

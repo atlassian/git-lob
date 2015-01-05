@@ -40,8 +40,8 @@ var _ = Describe("Filesystem", func() {
 		// Record of callbacks for files
 		var filesUploaded []string = make([]string, 0, len(files))
 		var filesSkipped []string
-		callback := func(filename string, isSkipped bool, percent int) (abort bool) {
-			if percent == 100 {
+		callback := func(filename string, isSkipped bool, bytesDone, totalBytes int64) (abort bool) {
+			if bytesDone == totalBytes {
 				if isSkipped {
 					filesSkipped = append(filesSkipped, filename)
 				} else {
@@ -112,8 +112,8 @@ var _ = Describe("Filesystem", func() {
 		// Record of callbacks for files
 		var filesDownloaded []string = make([]string, 0, len(files))
 		var filesSkipped []string
-		callback := func(filename string, isSkipped bool, percent int) (abort bool) {
-			if percent == 100 {
+		callback := func(filename string, isSkipped bool, bytesDone, totalBytes int64) (abort bool) {
+			if bytesDone == totalBytes {
 				if isSkipped {
 					filesSkipped = append(filesSkipped, filename)
 				} else {
@@ -188,7 +188,7 @@ var _ = Describe("Filesystem", func() {
 				os.RemoveAll(localpath)
 			})
 
-			It("successfully uploads", func() {
+			It("successfully downloads", func() {
 				testDownload(testfiles, mockremotepath, localpath)
 			})
 		})
