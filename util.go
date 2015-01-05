@@ -119,6 +119,28 @@ func FormatTransferRate(bytesPerSecond int64) string {
 	}
 }
 
+// Calculates transfer rates by averaging over n samples
+type TransferRateCalculator struct {
+	numSamples      int
+	samples         []int64 // bytesPerSecond samples
+	sampleInsertIdx int
+}
+
+func NewTransferRateCalculator(numSamples int) *TransferRateCalculator {
+	return &TransferRateCalculator{numSamples, make([]int64, numSamples), 0}
+}
+func (t *TransferRateCalculator) AddSample(bytesPerSecond int64) {
+	t.samples[t.sampleInsertIdx] = bytesPerSecond
+	t.sampleInsertIdx = (t.sampleInsertIdx + 1) % t.numSamples
+}
+func (t *TransferRateCalculator) Average() int64 {
+	var sum int64
+	for _, s := range t.samples {
+		sum += s
+	}
+	return sum / int64(t.numSamples)
+}
+
 // Search a sorted slice of strings for a specific string
 // Returns boolean for if found, and either location or insertion point
 func StringBinarySearch(sortedSlice []string, searchTerm string) (bool, int) {
