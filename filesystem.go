@@ -134,15 +134,18 @@ func (*FileSystemSyncProvider) uploadSingleFile(remoteName, filename, fromDir, t
 		}
 	}
 	var copysize int64 = 0
-	n, err := io.CopyN(outf, inf, BUFSIZE)
-	for err == nil {
+	for {
+		var n int64
+		n, err = io.CopyN(outf, inf, BUFSIZE)
 		copysize += n
-		if callback != nil && srcfi.Size() > 0 {
-			if callback(filename, false, int(copysize/srcfi.Size())) {
+		if n > 0 && callback != nil && srcfi.Size() > 0 {
+			if callback(filename, false, copysize, srcfi.Size()) {
 				return errorList, true
 			}
 		}
-		n, err = io.CopyN(outf, inf, BUFSIZE)
+		if err != nil {
+			break
+		}
 	}
 	outf.Close()
 	inf.Close()
@@ -163,12 +166,6 @@ func (*FileSystemSyncProvider) uploadSingleFile(remoteName, filename, fromDir, t
 	// Move to correct location - remove before to deal with force or bad size cases
 	os.Remove(destfilename)
 	os.Rename(tmpfilename, destfilename)
-	// Final callback
-	if callback != nil {
-		if callback(filename, false, 100) {
-			return errorList, true
-		}
-	}
 	return errorList, false
 
 }
@@ -267,15 +264,18 @@ func (*FileSystemSyncProvider) downloadSingleFile(remoteName, filename, fromDir,
 		}
 	}
 	var copysize int64 = 0
-	n, err := io.CopyN(outf, inf, BUFSIZE)
-	for err == nil {
+	for {
+		var n int64
+		n, err = io.CopyN(outf, inf, BUFSIZE)
 		copysize += n
-		if callback != nil && srcfi.Size() > 0 {
-			if callback(filename, false, int(copysize/srcfi.Size())) {
+		if n > 0 && callback != nil && srcfi.Size() > 0 {
+			if callback(filename, false, copysize, srcfi.Size()) {
 				return errorList, true
 			}
 		}
-		n, err = io.CopyN(outf, inf, BUFSIZE)
+		if err != nil {
+			break
+		}
 	}
 	outf.Close()
 	inf.Close()
@@ -296,12 +296,6 @@ func (*FileSystemSyncProvider) downloadSingleFile(remoteName, filename, fromDir,
 	// Move to correct location - remove before to deal with force or bad size cases
 	os.Remove(destfilename)
 	os.Rename(tmpfilename, destfilename)
-	// Final callback
-	if callback != nil {
-		if callback(filename, false, 100) {
-			return errorList, true
-		}
-	}
 	return errorList, false
 
 }
