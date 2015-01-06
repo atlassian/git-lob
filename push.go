@@ -208,12 +208,13 @@ func cmdPush() int {
 			avgRate := transferRate.Average()
 
 			if lastProgress.ItemBytes != 0 && lastProgress.TotalBytes != 0 {
-				itemPercent := int(lastProgress.ItemBytesDone / lastProgress.ItemBytes)
-				overallPercent := int(lastProgress.TotalBytesDone / lastProgress.TotalBytes)
-				durationRemaining := time.Duration((lastProgress.TotalBytes-lastProgress.TotalBytesDone)/avgRate) * time.Second
-				fmt.Printf("\rPushing: %v %d%%\tOverall: %v of %v(%d%%)\t(%v ETA %v)", lastProgress.Desc, itemPercent,
-					FormatSize(lastProgress.TotalBytesDone), FormatSize(lastProgress.TotalBytes),
-					overallPercent, FormatTransferRate(avgRate), durationRemaining.String())
+				itemPercent := int((100 * lastProgress.ItemBytesDone) / lastProgress.ItemBytes)
+				overallPercent := int((100 * lastProgress.TotalBytesDone) / lastProgress.TotalBytes)
+				bytesRemaining := lastProgress.TotalBytes - lastProgress.TotalBytesDone
+				secondsRemaining := bytesRemaining / avgRate
+				timeRemaining := time.Duration(secondsRemaining) * time.Second
+				fmt.Printf("\rPushing: %v %d%% Overall: %d%% (%v ETA %v)", lastProgress.Desc, itemPercent,
+					overallPercent, FormatTransferRate(avgRate), timeRemaining)
 			}
 		}
 
