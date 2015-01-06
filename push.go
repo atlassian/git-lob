@@ -215,9 +215,10 @@ func cmdPush() int {
 		fmt.Fprintf(os.Stderr, "git-lob: push error - %v", err.Error())
 		return 12
 	}
-	// Because no newlines in progress reporting
 	if !GlobalOptions.Quiet {
+		// Because no newlines in progress reporting
 		fmt.Println()
+		fmt.Println("Successfully pushed binaries to", remoteName)
 	}
 
 	return 0
