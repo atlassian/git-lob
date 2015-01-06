@@ -228,9 +228,13 @@ func cmdPush() int {
 		return 12
 	}
 	if !GlobalOptions.Quiet {
-		// Because no newlines in progress reporting
-		fmt.Println()
-		fmt.Println("Successfully pushed binaries to", remoteName)
+		if GlobalOptions.DryRun {
+			fmt.Println("Done, run again without --dry-run to perform real push")
+		} else {
+			// Because no newlines in progress reporting
+			fmt.Println()
+			fmt.Println("Successfully pushed binaries to", remoteName)
+		}
 	}
 
 	return 0
@@ -284,15 +288,20 @@ func PushBasic(provider BasicSyncProvider, remoteName string, refspecs []*GitRef
 	var allCommitsSize int64
 	var commitsToPush []*PushCommitContentDetails
 	for i, refspec := range refspecs {
-		callback(&PushCallbackData{PushCallbackCalculate, fmt.Sprintf("Calculating data to push for %v", refspec),
-			int64(i), int64(len(refspecs)), 0, 0})
+		if GlobalOptions.Verbose {
+			callback(&PushCallbackData{PushCallbackCalculate, fmt.Sprintf("Calculating data to push for %v", refspec),
+				int64(i), int64(len(refspecs)), 0, 0})
+		}
 		refcommits, err := GetCommitLOBsToPushForRefSpec(remoteName, refspec, recheck)
 		if err != nil {
 			return err
 		}
 
+		var refCommitsSize int64
+
 		if len(refcommits) == 0 {
-			LogDebugf("Refspec %v: Nothing to push\n", refspec)
+			callback(&PushCallbackData{PushCallbackCalculate, fmt.Sprintf("Refspec %v: Nothing to push", refspec),
+				int64(i), int64(len(refspecs)), 0, 0})
 			// if nothing to push, then mark this ref as pushed to make querying faster next time
 			if !dryRun {
 				var commitSHA string
@@ -320,19 +329,24 @@ func PushBasic(provider BasicSyncProvider, remoteName string, refspecs []*GitRef
 					BaseDir:    basedir,
 					TotalBytes: totalSize})
 
+				refCommitsSize += totalSize
 				allCommitsSize += totalSize
 			}
-			LogDebugf("Refspec %v: %d commits with %v to push\n",
-				refspec, len(refcommits), FormatSize(allCommitsSize))
+			callback(&PushCallbackData{PushCallbackCalculate, fmt.Sprintf("Refspec %v: %d commits with %v to push",
+				refspec, len(refcommits), FormatSize(refCommitsSize)), int64(i + 1), int64(len(refspecs)), 0, 0})
 		}
 
-		callback(&PushCallbackData{PushCallbackCalculate, fmt.Sprintf("Finished calculating data to push for %v", refspec),
-			int64(i + 1), int64(len(refspecs)), 0, 0})
+		if GlobalOptions.Verbose {
+			callback(&PushCallbackData{PushCallbackCalculate, fmt.Sprintf("Finished calculating data to push for %v", refspec),
+				int64(i + 1), int64(len(refspecs)), 0, 0})
+		}
 	}
 
 	if !dryRun {
 		filesdone := 0
-		LogDebugf("Uploading %v to %v via %v\n", FormatSize(allCommitsSize), remoteName, provider.TypeID())
+		callback(&PushCallbackData{PushCallbackCalculate,
+			fmt.Sprintf("Uploading %v to %v via %v", FormatSize(allCommitsSize), remoteName, provider.TypeID()),
+			0, 0, 0, 0})
 
 		var bytesFromFilesDoneSoFar int64
 		for _, commit := range commitsToPush {
