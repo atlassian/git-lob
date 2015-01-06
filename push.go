@@ -143,12 +143,20 @@ func cmdPush() int {
 	var lastTotalBytesDone int64
 	var lastTime = time.Now()
 	var lastProgress *PushCallbackData
+	complete := false
 	for _ = range tickChan {
 		// We run this every 0.5s
 		var finalUploadProgress *PushCallbackData
-		for stop := false; !stop; {
+		for stop := false; !stop && !complete; {
 			select {
 			case data := <-callbackChan:
+				if data == nil {
+					// channel was closed, we've finished
+					stop = true
+					complete = true
+					break
+				}
+
 				// Some progress data is available
 				// May get many of these and we only want to display the last one
 				// unless it's general infoo or we're in verbose mode
@@ -207,6 +215,10 @@ func cmdPush() int {
 					FormatSize(lastProgress.TotalBytesDone), FormatSize(lastProgress.TotalBytes),
 					overallPercent, FormatTransferRate(avgRate), durationRemaining.String())
 			}
+		}
+
+		if complete {
+			break
 		}
 
 	}
