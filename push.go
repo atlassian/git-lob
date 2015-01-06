@@ -173,40 +173,39 @@ func cmdPush() int {
 						// Otherwise we only really want to display the last one
 						finalUploadProgress = data
 					}
-
 				}
 			default:
 				// No (more) progress data
 				stop = true
-				// Write progress data for this 0.5s if relevant
-				// If either we have new progress data, or unfinished progress data from previous
-				if finalUploadProgress != nil || lastProgress != nil {
-					var bytesPerSecond int64
-					if finalUploadProgress != nil && finalUploadProgress.ItemBytes != 0 && finalUploadProgress.TotalBytes != 0 {
-						lastProgress = finalUploadProgress
-						bytesDoneThisTick := finalUploadProgress.TotalBytesDone - lastTotalBytesDone
-						lastTotalBytesDone = finalUploadProgress.TotalBytesDone
-						seconds := float32(time.Since(lastTime).Seconds())
-						if seconds > 0 {
-							bytesPerSecond = int64(float32(bytesDoneThisTick) / seconds)
-						}
-					} else {
-						// Actually the default but lets be specific
-						bytesPerSecond = 0
-					}
-					// Calculate transfer rate
-					transferRate.AddSample(bytesPerSecond)
-					avgRate := transferRate.Average()
-
-					if lastProgress.ItemBytes != 0 && lastProgress.TotalBytes != 0 {
-						itemPercent := int(lastProgress.ItemBytesDone / lastProgress.ItemBytes)
-						overallPercent := int(lastProgress.TotalBytesDone / lastProgress.TotalBytes)
-						durationRemaining := time.Duration((lastProgress.TotalBytes-lastProgress.TotalBytesDone)/avgRate) * time.Second
-						fmt.Printf("\rPushing: %v %d%%\tOverall: %v of %v(%d%%)\t(%v: ETA %v)", lastProgress.Desc, itemPercent,
-							FormatSize(lastProgress.TotalBytesDone), FormatSize(lastProgress.TotalBytes),
-							overallPercent, FormatTransferRate(avgRate), durationRemaining.String())
-					}
+			}
+		}
+		// Write progress data for this 0.5s if relevant
+		// If either we have new progress data, or unfinished progress data from previous
+		if finalUploadProgress != nil || lastProgress != nil {
+			var bytesPerSecond int64
+			if finalUploadProgress != nil && finalUploadProgress.ItemBytes != 0 && finalUploadProgress.TotalBytes != 0 {
+				lastProgress = finalUploadProgress
+				bytesDoneThisTick := finalUploadProgress.TotalBytesDone - lastTotalBytesDone
+				lastTotalBytesDone = finalUploadProgress.TotalBytesDone
+				seconds := float32(time.Since(lastTime).Seconds())
+				if seconds > 0 {
+					bytesPerSecond = int64(float32(bytesDoneThisTick) / seconds)
 				}
+			} else {
+				// Actually the default but lets be specific
+				bytesPerSecond = 0
+			}
+			// Calculate transfer rate
+			transferRate.AddSample(bytesPerSecond)
+			avgRate := transferRate.Average()
+
+			if lastProgress.ItemBytes != 0 && lastProgress.TotalBytes != 0 {
+				itemPercent := int(lastProgress.ItemBytesDone / lastProgress.ItemBytes)
+				overallPercent := int(lastProgress.TotalBytesDone / lastProgress.TotalBytes)
+				durationRemaining := time.Duration((lastProgress.TotalBytes-lastProgress.TotalBytesDone)/avgRate) * time.Second
+				fmt.Printf("\rPushing: %v %d%%\tOverall: %v of %v(%d%%)\t(%v ETA %v)", lastProgress.Desc, itemPercent,
+					FormatSize(lastProgress.TotalBytesDone), FormatSize(lastProgress.TotalBytes),
+					overallPercent, FormatTransferRate(avgRate), durationRemaining.String())
 			}
 		}
 
