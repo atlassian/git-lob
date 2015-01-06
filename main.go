@@ -8,12 +8,20 @@ import (
 )
 
 var (
-	GlobalOptions *Options = NewOptions()
-	VersionMajor           = 0
-	VersionMinor           = 1
-	VersionPatch           = 0
-	VersionString          = fmt.Sprintf("%d.%d.%d", VersionMajor, VersionMinor, VersionPatch)
+	GlobalOptions  *Options = NewOptions()
+	VersionMajor            = 0
+	VersionMinor            = 1
+	VersionPatch            = 0
+	VersionBuildID string   // populated in build.sh to the git hash
 )
+
+func Version() string {
+	if VersionBuildID != "" {
+		return fmt.Sprintf("%d.%d.%d [%v]", VersionMajor, VersionMinor, VersionPatch, VersionBuildID)
+	} else {
+		return fmt.Sprintf("%d.%d.%d", VersionMajor, VersionMinor, VersionPatch)
+	}
+}
 
 func main() {
 	// Need to send the result code to the OS but also need to support 'defer'

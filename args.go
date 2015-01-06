@@ -31,7 +31,7 @@ func parseCommandLine(opts *Options, args []string) (errors []string) {
 			switch stropt {
 			case "version":
 				// Just write version and exit
-				fmt.Fprintf(os.Stdout, "git-lob version %v\n", VersionString)
+				fmt.Fprintf(os.Stdout, "git-lob version %v\n", Version())
 				os.Exit(0)
 			case "help":
 				opts.HelpRequested = true
