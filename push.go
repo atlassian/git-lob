@@ -201,10 +201,10 @@ func cmdPush() int {
 					if lastProgress.ItemBytes != 0 && lastProgress.TotalBytes != 0 {
 						itemPercent := int(lastProgress.ItemBytesDone / lastProgress.ItemBytes)
 						overallPercent := int(lastProgress.TotalBytesDone / lastProgress.TotalBytes)
-						// TODO Maybe add estimated time remaining?
-						fmt.Printf("\rPushing: %v %d%%\tOverall: %v of %v(%d%%)\t(%v)", lastProgress.Desc, itemPercent,
+						durationRemaining := time.Duration((lastProgress.TotalBytes-lastProgress.TotalBytesDone)/avgRate) * time.Second
+						fmt.Printf("\rPushing: %v %d%%\tOverall: %v of %v(%d%%)\t(%v: ETA %v)", lastProgress.Desc, itemPercent,
 							FormatSize(lastProgress.TotalBytesDone), FormatSize(lastProgress.TotalBytes),
-							overallPercent, FormatTransferRate(avgRate))
+							overallPercent, FormatTransferRate(avgRate), durationRemaining.String())
 					}
 				}
 			}
