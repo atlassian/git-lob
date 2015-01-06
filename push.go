@@ -44,6 +44,8 @@ func cmdPush() int {
 				if r.RangeOp == "..." {
 					fmt.Fprintf(os.Stderr, "git-lob: '...' range operator is not supported for push, only '..'\n")
 					return 7
+				} else if r.IsRange() && r.IsEmptyRange() {
+					fmt.Fprintf(os.Stderr, "Warning: %v is an empty range, did you mean to use %v^..%v ?\n", r, r.Ref1, r.Ref2)
 				}
 
 				refspecs = append(refspecs, r)

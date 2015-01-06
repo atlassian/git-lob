@@ -26,6 +26,12 @@ func (r *GitRefSpec) IsRange() bool {
 		r.Ref1 != "" && r.Ref2 != ""
 }
 
+// Returns whether a GitRefSpec is an empty range (using the same ref for start & end)
+func (r *GitRefSpec) IsEmptyRange() bool {
+	return (r.RangeOp == ".." || r.RangeOp == "...") &&
+		r.Ref1 != "" && r.Ref1 == r.Ref2
+}
+
 func (r *GitRefSpec) String() string {
 	if r.IsRange() {
 		return fmt.Sprintf("%v%v%v", r.Ref1, r.RangeOp, r.Ref2)
