@@ -300,7 +300,7 @@ func PushBasic(provider BasicSyncProvider, remoteName string, refspecs []*GitRef
 		var refCommitsSize int64
 
 		if len(refcommits) == 0 {
-			callback(&PushCallbackData{PushCallbackCalculate, fmt.Sprintf("Refspec %v: Nothing to push", refspec),
+			callback(&PushCallbackData{PushCallbackCalculate, fmt.Sprintf(" * %v: Nothing to push", refspec),
 				int64(i), int64(len(refspecs)), 0, 0})
 			// if nothing to push, then mark this ref as pushed to make querying faster next time
 			if !dryRun {
@@ -332,7 +332,7 @@ func PushBasic(provider BasicSyncProvider, remoteName string, refspecs []*GitRef
 				refCommitsSize += totalSize
 				allCommitsSize += totalSize
 			}
-			callback(&PushCallbackData{PushCallbackCalculate, fmt.Sprintf("Refspec %v: %d commits with %v to push",
+			callback(&PushCallbackData{PushCallbackCalculate, fmt.Sprintf(" * %v: %d commits with %v to push",
 				refspec, len(refcommits), FormatSize(refCommitsSize)), int64(i + 1), int64(len(refspecs)), 0, 0})
 		}
 
