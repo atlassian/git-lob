@@ -342,7 +342,7 @@ func PushBasic(provider BasicSyncProvider, remoteName string, refspecs []*GitRef
 		}
 	}
 
-	if !dryRun {
+	if !dryRun && len(commitsToPush) > 0 {
 		filesdone := 0
 		callback(&PushCallbackData{PushCallbackCalculate,
 			fmt.Sprintf("Uploading %v to %v via %v", FormatSize(allCommitsSize), remoteName, provider.TypeID()),
