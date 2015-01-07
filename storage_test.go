@@ -545,4 +545,168 @@ var _ = Describe("Storage", func() {
 		})
 
 	})
+	Describe("Getting & checking LOB files", func() {
+		var lobinfos []*LOBInfo
+		var origDir string
+		var smallFileIdx []int
+		var midFileIdx []int
+		var largeFileIdx []int
+		var savedChunkSize int64
+		BeforeEach(func() {
+			CreateGitRepoForTest(root)
+			origDir, _ = os.Getwd()
+			os.Chdir(root)
+
+			files := []string{
+				"smallfile1.bin",
+				"smallfile2.bin",
+				"smallfile3.bin",
+				"midfile1.bin",
+				"midfile2.bin",
+				"midfile3.bin",
+				"largefile1.bin",
+				"largefile2.bin"}
+
+			// Reduce global chunk size for test
+			// we need to test many chunks but let's not take lots of time
+			savedChunkSize = GlobalOptions.ChunkSize
+			GlobalOptions.ChunkSize = 16384
+
+			sizes := []int64{50, 150, 200,
+				GlobalOptions.ChunkSize + 100,
+				GlobalOptions.ChunkSize + 1200,
+				GlobalOptions.ChunkSize + 3400,
+				GlobalOptions.ChunkSize*3 - 200,
+				GlobalOptions.ChunkSize*3 - 1000}
+
+			smallFileIdx = []int{0, 1, 2}
+			midFileIdx = []int{3, 4, 5}
+			largeFileIdx = []int{6, 7}
+
+			// Create a bunch of files
+			lobinfos = make([]*LOBInfo, 0, len(files))
+			for i, f := range files {
+				sz := sizes[i]
+				filename := path.Join(root, f)
+				CreateRandomFileForTest(sz, filename)
+				info, err := StoreLOBForTest(filename)
+				if err != nil {
+					Fail(err.Error())
+				}
+				lobinfos = append(lobinfos, info)
+			}
+
+		})
+		AfterEach(func() {
+			os.Chdir(origDir)
+			// Delete repo
+			os.RemoveAll(root)
+
+			GlobalOptions.ChunkSize = savedChunkSize
+		})
+
+		It("Shallow checks LOB files", func() {
+			// Initial test, everything should validate (just use check)
+			basedir := GetLocalLOBRoot()
+			for _, li := range lobinfos {
+				files, sz, err := GetLOBFilesForSHA(li.SHA, basedir, true, false)
+				Expect(err).To(BeNil(), "Should be no error when checking LOB file for %v", li.SHA)
+				Expect(files).To(HaveLen(li.NumChunks+1), "Should have the right number of files")
+				Expect(sz).To(BeEquivalentTo(li.Size), "Total size should be correct")
+			}
+
+			// Test for simple corruptions
+			// Remove a meta file
+			var err error
+			metafile := getLocalLOBMetaFilename(lobinfos[smallFileIdx[0]].SHA)
+			os.Remove(metafile)
+			err = CheckLOBFilesForSHA(lobinfos[smallFileIdx[0]].SHA, basedir, false)
+			Expect(err).ToNot(BeNil(), "Should detect missing meta file")
+
+			var chunkfile string
+			// Remove a chunk file (only one)
+			chunkfile = getLocalLOBChunkFilename(lobinfos[smallFileIdx[1]].SHA, 0)
+			os.Remove(chunkfile)
+			err = CheckLOBFilesForSHA(lobinfos[smallFileIdx[1]].SHA, basedir, false)
+			Expect(err).ToNot(BeNil(), "Should detect missing chunk file for single-chunk file")
+			// Remove a chunk file (one of many - first)
+			chunkfile = getLocalLOBChunkFilename(lobinfos[midFileIdx[0]].SHA, 0)
+			os.Remove(chunkfile)
+			err = CheckLOBFilesForSHA(lobinfos[midFileIdx[0]].SHA, basedir, false)
+			Expect(err).ToNot(BeNil(), "Should detect missing first chunk file for 2-chunk file")
+			// Remove a chunk file (one of many - last)
+			chunkfile = getLocalLOBChunkFilename(lobinfos[midFileIdx[1]].SHA, 1)
+			os.Remove(chunkfile)
+			err = CheckLOBFilesForSHA(lobinfos[midFileIdx[1]].SHA, basedir, false)
+			Expect(err).ToNot(BeNil(), "Should detect missing second chunk file for 2-chunk file")
+
+			// Change the size of a chunk file (single chunk)
+			chunkfile = getLocalLOBChunkFilename(lobinfos[smallFileIdx[2]].SHA, 0)
+			f, _ := os.OpenFile(chunkfile, os.O_APPEND|os.O_RDWR, 0644)
+			f.Write([]byte("icorruptthee"))
+			f.Close()
+			err = CheckLOBFilesForSHA(lobinfos[smallFileIdx[2]].SHA, basedir, false)
+			Expect(err).ToNot(BeNil(), "Should detect incorrect size chunk file for single-chunk file")
+			// Change the size of a chunk file (one of many - first)
+			chunkfile = getLocalLOBChunkFilename(lobinfos[midFileIdx[2]].SHA, 0)
+			f, _ = os.OpenFile(chunkfile, os.O_APPEND|os.O_RDWR, 0644)
+			f.Write([]byte("hssss"))
+			f.Close()
+			err = CheckLOBFilesForSHA(lobinfos[midFileIdx[2]].SHA, basedir, false)
+			Expect(err).ToNot(BeNil(), "Should detect incorrect size chunk file for multi-chunk file (first)")
+			// Change the size of a chunk file (one of many - middle)
+			chunkfile = getLocalLOBChunkFilename(lobinfos[largeFileIdx[0]].SHA, 1)
+			f, _ = os.OpenFile(chunkfile, os.O_APPEND|os.O_RDWR, 0644)
+			f.Write([]byte("itburns"))
+			f.Close()
+			err = CheckLOBFilesForSHA(lobinfos[largeFileIdx[0]].SHA, basedir, false)
+			Expect(err).ToNot(BeNil(), "Should detect incorrect size chunk file for multi-chunk file (middle)")
+			// Change the size of a chunk file (one of many - last)
+			chunkfile = getLocalLOBChunkFilename(lobinfos[largeFileIdx[1]].SHA, lobinfos[largeFileIdx[1]].NumChunks-1)
+			f, _ = os.OpenFile(chunkfile, os.O_APPEND|os.O_RDWR, 0644)
+			f.Write([]byte("ngggg"))
+			f.Close()
+			err = CheckLOBFilesForSHA(lobinfos[largeFileIdx[1]].SHA, basedir, false)
+			Expect(err).ToNot(BeNil(), "Should detect incorrect size chunk file for multi-chunk file (last)")
+
+		})
+
+		It("Deep checks LOB files", func() {
+			// Initial test, everything should validate (just use check)
+			basedir := GetLocalLOBRoot()
+			for _, li := range lobinfos {
+				files, sz, err := GetLOBFilesForSHA(li.SHA, basedir, true, true)
+				Expect(err).To(BeNil(), "Should be no error when checking LOB file for %v", li.SHA)
+				Expect(files).To(HaveLen(li.NumChunks+1), "Should have the right number of files")
+				Expect(sz).To(BeEquivalentTo(li.Size), "Total size should be correct")
+			}
+
+			// Test for deep corruptions
+			var chunkfile string
+			var err error
+			// Change 2 bytes of a chunk file, size unchanged (single chunk)
+			chunkfile = getLocalLOBChunkFilename(lobinfos[smallFileIdx[0]].SHA, 0)
+			f, _ := os.OpenFile(chunkfile, os.O_RDWR|os.O_SYNC, 0644)
+			f.Seek(10, os.SEEK_SET)
+			f.Write([]byte("00"))
+			f.Close()
+			// check that we wouldn't detect this without checking the SHA
+			err = CheckLOBFilesForSHA(lobinfos[smallFileIdx[0]].SHA, basedir, false)
+			Expect(err).To(BeNil(), "Should not detect the corruption without deep hash check")
+			err = CheckLOBFilesForSHA(lobinfos[smallFileIdx[0]].SHA, basedir, true)
+			Expect(err).ToNot(BeNil(), "Should detect the corruption with deep hash check")
+			// Change 2 bytes of a chunk file, size unchanged (multiple chunk)
+			chunkfile = getLocalLOBChunkFilename(lobinfos[midFileIdx[0]].SHA, 1)
+			f, _ = os.OpenFile(chunkfile, os.O_RDWR|os.O_SYNC, 0644)
+			f.Seek(51, os.SEEK_SET)
+			f.Write([]byte("zf"))
+			f.Close()
+			err = CheckLOBFilesForSHA(lobinfos[midFileIdx[0]].SHA, basedir, false)
+			Expect(err).To(BeNil(), "Should not detect the corruption without deep hash check (second chunk)")
+			err = CheckLOBFilesForSHA(lobinfos[midFileIdx[0]].SHA, basedir, true)
+			Expect(err).ToNot(BeNil(), "Should detect the corruption with deep hash check (second chunk)")
+
+		})
+
+	})
 })

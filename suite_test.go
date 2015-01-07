@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
+	cryptorand "crypto/rand"
 	"crypto/sha1"
 	"fmt"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"io"
 	"io/ioutil"
 	"log"
 	"math/rand"
@@ -193,6 +196,23 @@ func CreateLargeTestLOBDataForRetrieval() (correctInfo *LOBInfo) {
 	return correctLOBInfo
 }
 
+// Create a file with random data of size sz
+func CreateRandomFileForTest(sz int64, filename string) {
+	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0644)
+	if err != nil {
+		Fail(fmt.Sprintf("Can't create test file %v: %v", filename, err))
+	}
+	defer f.Close()
+	// random data
+	fileWriter := bufio.NewWriter(f)
+	_, err = io.CopyN(fileWriter, cryptorand.Reader, sz)
+	fileWriter.Flush()
+	if err != nil {
+		Fail(fmt.Sprintf("Can't write random data to test file %v: %v", filename, err))
+	}
+
+}
+
 // generate a random list of SHAs for testing purposes
 // these SHAs are random and don't correspond to any valid data
 func GetListOfRandomSHAsForTest(num int) []string {
@@ -288,4 +308,15 @@ func CheckoutForTest(ref string) {
 	if err != nil {
 		Fail("git checkout error: " + string(out))
 	}
+}
+
+// Wrapper function to add a file to the LOB database (no git interaction)
+// filename relative path of file to current dir
+func StoreLOBForTest(filename string) (*LOBInfo, error) {
+	f, err := os.OpenFile(filename, os.O_RDONLY, 0644)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	return StoreLOB(bufio.NewReader(f), []byte(""))
 }
