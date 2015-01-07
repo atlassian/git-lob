@@ -702,6 +702,8 @@ func CheckLOBFilesForSHA(sha, basedir string, checkHash bool) error {
 // is checked and only if all the files for a SHA are valid are they included in the
 // returned list. In this case the error return is an IntegrityError and includes the bad SHAs
 // The filenames returned are relative to basedir, the root folder for all of the files
+// Note that 'check' only checks the surface level integrity (all the files are there & correct size). If you
+// want to do a deep integrity check (ensure all bytes are valid), use CheckLOBFilesForSHA with checkHash=true
 func GetLOBFilenamesWithBaseDir(shas []string, check bool) (files []string, basedir string, totalSize int64, err error) {
 	// Note how we always return the basedir as the local LOB root
 	// this is because all SHAs are hard linked here even when using shared storage
