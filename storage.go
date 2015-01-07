@@ -651,8 +651,9 @@ func GetLOBFilesForSHA(sha, basedir string, check bool, checkHash bool) (files [
 				}
 
 				if !recoveredFromShared {
-					LogErrorf("LOB file not found or wrong size: %v expected to be %d bytes\n", abschunk, expectedSize)
-					return ret, info.Size, err
+					msg := fmt.Sprintf("LOB file not found or wrong size: %v expected to be %d bytes", abschunk, expectedSize)
+					LogError(msg)
+					return ret, info.Size, errors.New(msg)
 				}
 			}
 
