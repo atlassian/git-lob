@@ -81,7 +81,6 @@ func (*FileSystemSyncProvider) uploadSingleFile(remoteName, filename, fromDir, t
 			// File exists on remote, check the size
 			if destfi.Size() == srcfi.Size() {
 				// File already present and correct size, skip
-				LogDebugf("Not updating %v on remote %v, already up to date\n", filename, remoteName)
 				if callback != nil {
 					if callback(filename, true, srcfi.Size(), srcfi.Size()) {
 						return errorList, true
