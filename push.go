@@ -221,8 +221,13 @@ func cmdPush() int {
 				bytesRemaining := lastProgress.TotalBytes - lastProgress.TotalBytesDone
 				secondsRemaining := bytesRemaining / avgRate
 				timeRemaining := time.Duration(secondsRemaining) * time.Second
-				msg := fmt.Sprintf("Pushing: %v %d%% Overall: %d%% (%v ETA %v)", lastProgress.Desc, itemPercent,
-					overallPercent, FormatTransferRate(avgRate), timeRemaining)
+				var msg string
+				if GlobalOptions.Verbose {
+					msg = fmt.Sprintf("Pushing: %v %d%% Overall: %d%% (%v ETA %v)", lastProgress.Desc, itemPercent,
+						overallPercent, FormatTransferRate(avgRate), timeRemaining)
+				} else {
+					msg = fmt.Sprintf("Pushing: %d%% (%v ETA %v)", overallPercent, FormatTransferRate(avgRate), timeRemaining)
+				}
 				OverwriteConsoleLine(msg, lastConsoleLineLen, os.Stdout)
 				lastConsoleLineLen = len(msg)
 			}
