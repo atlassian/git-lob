@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"regexp"
 	"sort"
@@ -148,4 +149,15 @@ func StringBinarySearch(sortedSlice []string, searchTerm string) (bool, int) {
 	idx := sort.SearchStrings(sortedSlice, searchTerm)
 	found := idx < len(sortedSlice) && sortedSlice[idx] == searchTerm
 	return found, idx
+}
+
+// Overwrite the current line in the console (e.g. for progressive update)
+// Requires the previous line length so that it can clear it with spaces
+func OverwriteConsoleLine(newString string, lastLineLength int, iobuf io.Writer) {
+	if len(newString) < lastLineLength {
+		fmt.Fprintf(iobuf, "\r%v%v", newString, strings.Repeat(" ", lastLineLength-len(newString)))
+	} else {
+		fmt.Fprintf(iobuf, "\r%v", newString)
+	}
+
 }

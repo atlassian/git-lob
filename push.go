@@ -146,6 +146,7 @@ func cmdPush() int {
 	var lastTime = time.Now()
 	var lastProgress *PushCallbackData
 	complete := false
+	lastConsoleLineLen := 0
 	for _ = range tickChan {
 		// We run this every 0.5s
 		var finalUploadProgress *PushCallbackData
@@ -178,7 +179,12 @@ func cmdPush() int {
 				case PushCallbackUpload:
 					// Print completion in verbose mode
 					if data.ItemBytesDone == data.ItemBytes && GlobalOptions.Verbose {
-						fmt.Printf("\rPushed: %v 100%%\n", data.Desc)
+						msg := fmt.Sprintf("Pushed: %v 100%%", data.Desc)
+						OverwriteConsoleLine(msg, lastConsoleLineLen, os.Stdout)
+						lastConsoleLineLen = len(msg)
+						// Clear line on completion in verbose mode
+						// Don't do this as \n in string above since we need to clear spaces after
+						fmt.Println()
 					} else if !GlobalOptions.Quiet {
 						// Otherwise we only really want to display the last one
 						finalUploadProgress = data
@@ -215,8 +221,10 @@ func cmdPush() int {
 				bytesRemaining := lastProgress.TotalBytes - lastProgress.TotalBytesDone
 				secondsRemaining := bytesRemaining / avgRate
 				timeRemaining := time.Duration(secondsRemaining) * time.Second
-				fmt.Printf("\rPushing: %v %d%% Overall: %d%% (%v ETA %v)", lastProgress.Desc, itemPercent,
+				msg := fmt.Sprintf("Pushing: %v %d%% Overall: %d%% (%v ETA %v)", lastProgress.Desc, itemPercent,
 					overallPercent, FormatTransferRate(avgRate), timeRemaining)
+				OverwriteConsoleLine(msg, lastConsoleLineLen, os.Stdout)
+				lastConsoleLineLen = len(msg)
 			}
 		}
 
