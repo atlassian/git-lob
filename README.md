@@ -90,7 +90,31 @@ Include a line for all file types you want to be handled by git-lob. After savin
 
 ## Configuring remote storage ##
 
-Coming soon.
+Binaries in git-lob are not stored in the regular git repo, but a corresponding
+binary store must always exist to provide the actual binary content. A remote
+in git usually only gives you the real git repo, so git-lob needs to expand
+the configuration parameters to git remotes to specify the location of the 
+corresponding remote binary store. 
+
+The parameters depend on the type of binary storage ('provider') being used; see `git-lob providers` for a list of available providers and `git-lob provider <provider>` for specific details of one provider.
+
+As an example, let's take the 'filesystem' provider, which simply uses the OS's
+file system as a remote transport (obviously very simplistic):
+
+```ini
+[remote "origin"]
+    # these 2 lines are standard git
+    url = ssh://git@bitbucket.org/something/somthing.git
+    fetch = +refs/heads/*:refs/remotes/origin/*
+    # these next 2 lines are required to configure the remote binary store
+    git-lob-provider = filesystem
+    git-lob-path = /Volumes/shared/something/something/binary/store
+```
+Other providers may require other parameters. It's important to note that you
+can share a binary store among multiple remote repos if you wish, much like
+the local git-lob.sharedstore option, since binaries are stored by SHA. 
+Identical file content in multiple repos can be stored only once this way.
+Of course, access control may be an issue to consider here though.
 
 ## Other options ##
 git-lob supports a number of command-line parameters, and configuration parameters in your .gitconfig (user or repository level). Please call 'git-lob --help' for full details.
