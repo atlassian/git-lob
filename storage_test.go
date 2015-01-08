@@ -206,6 +206,73 @@ var _ = Describe("Storage", func() {
 
 		})
 
+		Context("Store single chunk LOB of exact chunk size", func() {
+			exact1 := path.Join(folders[1], "exact1.dat")
+			exact2 := path.Join(folders[1], "exact2.dat")
+			var oldChunkSize int64
+
+			BeforeEach(func() {
+				// Jig the chunk size for efficient testing
+				oldChunkSize = GlobalOptions.ChunkSize
+				GlobalOptions.ChunkSize = 200
+				CreateRandomFileForTest(GlobalOptions.ChunkSize, exact1)
+				CreateRandomFileForTest(GlobalOptions.ChunkSize*2, exact2)
+
+			})
+			AfterEach(func() {
+				os.Remove(exact1)
+				os.Remove(exact2)
+				GlobalOptions.ChunkSize = oldChunkSize
+			})
+
+			It("correctly stores files which are exact multiples of chunk size", func() {
+				f, err := os.Open(exact1)
+				if err != nil {
+					Fail(fmt.Sprintf("Can't reopen test file %v: %v", exact1, err))
+				}
+				defer f.Close()
+				// Need to read leader for consistency with real usage
+				leader := make([]byte, SHALineLen)
+				c, err := f.Read(leader)
+				if err != nil {
+					Fail(fmt.Sprintf("Can't read leader of test file %v: %v", exact1, err))
+				}
+				lobinfo, err := StoreLOB(f, leader[:c])
+				Expect(err).To(BeNil(), "Shouldn't be error storing LOB")
+				Expect(lobinfo.Size).To(BeEquivalentTo(GlobalOptions.ChunkSize), "Size should be correct")
+				Expect(lobinfo.NumChunks).To(BeEquivalentTo(1), "Should only be one chunk")
+				Expect(lobinfo.ChunkSize).To(BeEquivalentTo(GlobalOptions.ChunkSize), "Chunk size should be correct")
+				fileinfo, err := os.Stat(getLocalLOBChunkFilename(lobinfo.SHA, 0))
+				Expect(err).To(BeNil(), "Shouldn't be error opening stored LOB")
+				Expect(fileinfo.Size()).To(Equal(lobinfo.Size), "Stored LOB should be correct size")
+
+				f2, err := os.Open(exact2)
+				if err != nil {
+					Fail(fmt.Sprintf("Can't reopen test file %v: %v", exact2, err))
+				}
+				defer f2.Close()
+				// Need to read leader for consistency with real usage
+				leader = make([]byte, SHALineLen)
+				c, err = f2.Read(leader)
+				if err != nil {
+					Fail(fmt.Sprintf("Can't read leader of test file %v: %v", exact2, err))
+				}
+				lobinfo, err = StoreLOB(f2, leader[:c])
+				Expect(err).To(BeNil(), "Shouldn't be error storing LOB")
+				Expect(lobinfo.Size).To(BeEquivalentTo(GlobalOptions.ChunkSize*2), "Size should be correct")
+				Expect(lobinfo.NumChunks).To(BeEquivalentTo(2), "Should be 2 chunks")
+				Expect(lobinfo.ChunkSize).To(BeEquivalentTo(GlobalOptions.ChunkSize), "Chunk size should be correct")
+				fileinfo, err = os.Stat(getLocalLOBChunkFilename(lobinfo.SHA, 0))
+				Expect(err).To(BeNil(), "Shouldn't be error opening stored LOB")
+				Expect(fileinfo.Size()).To(Equal(lobinfo.ChunkSize), "Stored LOB should be correct size")
+				fileinfo, err = os.Stat(getLocalLOBChunkFilename(lobinfo.SHA, 1))
+				Expect(err).To(BeNil(), "Shouldn't be error opening stored LOB")
+				Expect(fileinfo.Size()).To(Equal(lobinfo.ChunkSize), "Stored LOB should be correct size")
+
+			})
+
+		})
+
 		Context("Store large multiple chunk LOB [LONGTEST]", func() {
 
 			testFileName := path.Join(folders[2], "large.dat")
@@ -688,7 +755,7 @@ var _ = Describe("Storage", func() {
 			chunkfile = getLocalLOBChunkFilename(lobinfos[smallFileIdx[0]].SHA, 0)
 			f, _ := os.OpenFile(chunkfile, os.O_RDWR|os.O_SYNC, 0644)
 			f.Seek(10, os.SEEK_SET)
-			f.Write([]byte("00"))
+			f.Write([]byte("qq"))
 			f.Close()
 			// check that we wouldn't detect this without checking the SHA
 			err = CheckLOBFilesForSHA(lobinfos[smallFileIdx[0]].SHA, basedir, false)

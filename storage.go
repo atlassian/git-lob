@@ -457,69 +457,74 @@ func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
 	var totalSize int64 = 0
 
 	for {
-		// New chunk file?
-		if outf == nil {
-			outf, err = ioutil.TempFile("", "tempchunk")
-			if err != nil {
-				LogErrorf("Unable to create chunk %d: %v\n", len(chunkFilenames), err)
-				fatalError = err
-				break
-			}
-			LogDebugf("Creating temporary chunk file #%d: %v\n", len(chunkFilenames), outf.Name())
-			chunkFilenames = append(chunkFilenames, outf.Name())
-			currentChunkSize = 0
-		}
-		if writeLeader {
-			LogDebugf("Writing leader of size %d to %v\n", len(leader), outf.Name())
-			sha.Write(leader)
-			c, err := outf.Write(leader)
-			if err != nil {
-				LogErrorf("I/O error writing leader: %v wrote %d bytes of %d\n", err, c, len(leader))
-				fatalError = err
-				break
-			}
-			currentChunkSize += int64(c)
-			totalSize += int64(c)
+		var dataToWrite []byte
+
+		if writeLeader && len(leader) > 0 {
+			LogDebugf("Writing leader of size %d\n", len(leader))
+			dataToWrite = leader
 			writeLeader = false
-		}
-		// Read from incoming
-		var bytesToRead int64 = BUFSIZE
-		if BUFSIZE+currentChunkSize > GlobalOptions.ChunkSize {
-			// Read less than BUFSIZE so we stick to CHUNKLIMIT
-			bytesToRead = GlobalOptions.ChunkSize - currentChunkSize
-		}
-		c, err := in.Read(buf[:bytesToRead])
-		// Write any data to SHA & output
-		if c > 0 {
-			currentChunkSize += int64(c)
-			totalSize += int64(c)
-			sha.Write(buf[:c])
-			cw, err := outf.Write(buf[:c])
-			if err != nil || cw != c {
-				LogErrorf("I/O error writing chunk %d: %v\n", len(chunkFilenames), err)
-				fatalError = err
-				break
+		} else {
+			var bytesToRead int64 = BUFSIZE
+			if BUFSIZE+currentChunkSize > GlobalOptions.ChunkSize {
+				// Read less than BUFSIZE so we stick to CHUNKLIMIT
+				bytesToRead = GlobalOptions.ChunkSize - currentChunkSize
 			}
-		}
-		if err != nil {
-			if err == io.EOF {
-				// End of input
-				outf.Close()
-				break
-			} else {
-				LogErrorf("I/O error reading chunk %d: %v", len(chunkFilenames), err)
-				outf.Close()
-				fatalError = err
-				break
+			c, err := in.Read(buf[:bytesToRead])
+			// Write any data to SHA & output
+			if c > 0 {
+				dataToWrite = buf[:c]
+			} else if err != nil {
+				if err == io.EOF {
+					// End of input
+					outf.Close()
+					break
+				} else {
+					LogErrorf("I/O error reading chunk %d: %v", len(chunkFilenames), err)
+					outf.Close()
+					fatalError = err
+					break
+				}
 			}
-		}
-		// Deal with chunk limit
-		if currentChunkSize >= GlobalOptions.ChunkSize {
-			// Close this output, next iteration will create the next file
-			outf.Close()
-			outf = nil
+
 		}
 
+		// Write data
+		if len(dataToWrite) > 0 {
+			// New chunk file?
+			if outf == nil {
+				outf, err = ioutil.TempFile("", "tempchunk")
+				if err != nil {
+					LogErrorf("Unable to create chunk %d: %v\n", len(chunkFilenames), err)
+					fatalError = err
+					break
+				}
+				LogDebugf("Creating temporary chunk file #%d: %v\n", len(chunkFilenames), outf.Name())
+				chunkFilenames = append(chunkFilenames, outf.Name())
+				currentChunkSize = 0
+			}
+			sha.Write(dataToWrite)
+			c, err := outf.Write(dataToWrite)
+			if err != nil {
+				LogErrorf("I/O error writing chunk: %v wrote %d bytes of %d\n", err, c, len(dataToWrite))
+				fatalError = err
+				break
+			}
+			currentChunkSize += int64(c)
+			totalSize += int64(c)
+
+			// Read from incoming
+			// Deal with chunk limit
+			if currentChunkSize >= GlobalOptions.ChunkSize {
+				// Close this output, next iteration will create the next file
+				outf.Close()
+				outf = nil
+				currentChunkSize = 0
+			}
+		} else {
+			// No data to write
+			outf.Close()
+			break
+		}
 	}
 
 	if fatalError != nil {
