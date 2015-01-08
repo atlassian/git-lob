@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha1"
 	"fmt"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -205,6 +206,35 @@ var _ = Describe("Storage", func() {
 			})
 
 		})
+		Context("Store zero size file", func() {
+			zerofile := path.Join(folders[1], "zero.dat")
+			BeforeEach(func() {
+				CreateRandomFileForTest(0, zerofile)
+			})
+			AfterEach(func() {
+				os.Remove(zerofile)
+			})
+
+			It("correctly stores zero size files", func() {
+				f, err := os.Open(zerofile)
+				if err != nil {
+					Fail(fmt.Sprintf("Can't reopen test file %v: %v", zerofile, err))
+				}
+				defer f.Close()
+				// Need TRY to read leader for consistency with real usage
+				leader := make([]byte, SHALineLen)
+				c, err := f.Read(leader)
+				lobinfo, err := StoreLOB(f, leader[:c])
+				Expect(err).To(BeNil(), "Shouldn't be error storing LOB")
+				Expect(lobinfo.Size).To(BeEquivalentTo(0), "Size should be correct")
+				Expect(lobinfo.NumChunks).To(BeEquivalentTo(0), "Should only be one chunk")
+				Expect(lobinfo.ChunkSize).To(BeEquivalentTo(GlobalOptions.ChunkSize), "Chunk size should be correct")
+				shaZero := sha1.New()
+				shaZeroStr := fmt.Sprintf("%x", string(shaZero.Sum(nil)))
+				Expect(lobinfo.SHA).To(Equal(shaZeroStr), "SHA should be the zero file content SHA")
+
+			})
+		})
 
 		Context("Store single chunk LOB of exact chunk size", func() {
 			exact1 := path.Join(folders[1], "exact1.dat")
@@ -386,6 +416,44 @@ var _ = Describe("Storage", func() {
 				stat, err := os.Stat(outFilename)
 				Expect(err).To(BeNil(), "Shouldn't be error checking output file")
 				Expect(stat.Size()).To(Equal(info.Size), "Size on disk should agree with metadata")
+
+				os.Remove(outFilename)
+
+			})
+
+		})
+
+		Context("Retrieve a zero size file", func() {
+			It("correctly retrieves zero size LOB file", func() {
+				// Create the zero size storage (separate test for storing)
+				infile := path.Join(folders[1], "zeroin.dat")
+				CreateRandomFileForTest(0, infile)
+				_, err := StoreLOBForTest(infile)
+				os.Remove(infile)
+				if err != nil {
+					Fail(fmt.Sprintf("Error storing zero size file %v", infile))
+				}
+
+				// Zero size file SHA
+				shaZero := sha1.New()
+				shaZeroStr := fmt.Sprintf("%x", string(shaZero.Sum(nil)))
+
+				// output to a temp file
+				out, err := ioutil.TempFile("", "lobzerotest.dat")
+				Expect(err).To(BeNil(), "Shouldn't be error creating temp file")
+				outFilename := out.Name()
+				info, err := RetrieveLOB(shaZeroStr, out)
+
+				Expect(err).To(BeNil(), "Shouldn't be error retrieving LOB")
+				out.Close()
+
+				Expect(info.SHA).To(Equal(shaZeroStr), "SHA should agree")
+				Expect(info.Size).To(BeEquivalentTo(0), "Should be zero size")
+				Expect(info.NumChunks).To(BeEquivalentTo(0), "Should be no chunks should agree")
+				// Check output file
+				stat, err := os.Stat(outFilename)
+				Expect(err).To(BeNil(), "Shouldn't be error checking output file")
+				Expect(stat.Size()).To(BeEquivalentTo(0), "Size on disk should be zero")
 
 				os.Remove(outFilename)
 
