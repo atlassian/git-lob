@@ -8,6 +8,12 @@ import (
 	"path/filepath"
 )
 
+// Do we have a remote state cache for this remote yet?
+func hasRemoteStateCache(remoteName string) bool {
+	dir := filepath.Join(GetGitDir(), "git-lob", "state", "remotes", remoteName)
+	return DirExists(dir)
+}
+
 // Gets the root directory of the remote state cache for a given remote
 func getRemoteStateCacheRoot(remoteName string) string {
 	ret := filepath.Join(GetGitDir(), "git-lob", "state", "remotes", remoteName)
@@ -147,6 +153,11 @@ func SuccessfullyPushedBinariesForCommit(remoteName, commitSHA string) error {
 // Warning: this will make the next push expensive while it recalculates
 func ResetPushedBinaryState(remoteName string) error {
 	return os.RemoveAll(getRemoteStateCacheRoot(remoteName))
+}
+
+// Do we have any pushed binary state recorded for a remote?
+func HasPushedBinaryState(remoteName string) bool {
+	return hasRemoteStateCache(remoteName)
 }
 
 // Find the most recent ancestor of commitSHA (or itself) at which we believe we've

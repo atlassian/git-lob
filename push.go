@@ -101,6 +101,13 @@ func cmdPush() int {
 		fmt.Println("Pushing binaries for", refspecs, "to", remoteName)
 	}
 
+	// Warn about long calculation processes
+	if optRecheck {
+		fmt.Println("Re-checking all history as requested, this may take a while on large repos")
+	} else if !HasPushedBinaryState(remoteName) {
+		fmt.Println("No cached state for this remote, first time may take a while on large repos")
+	}
+
 	// Do the actual pushing in Goroutine, because we want to update the download rate & time estimates
 	// on a regular schedule, regardless of whether any actual callbacks are received
 	// If we only updated when callbacks happened (ie when data was transferred), if the data transfer halts
