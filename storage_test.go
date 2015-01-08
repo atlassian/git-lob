@@ -460,6 +460,45 @@ var _ = Describe("Storage", func() {
 			})
 
 		})
+		Describe("Changing chunk size", func() {
+			var oldChunkSize int64
+
+			BeforeEach(func() {
+				// Jig the chunk size for efficient testing
+				oldChunkSize = GlobalOptions.ChunkSize
+				GlobalOptions.ChunkSize = 512
+
+			})
+			AfterEach(func() {
+				GlobalOptions.ChunkSize = oldChunkSize
+			})
+
+			It("correctly stores files which are exact multiples of chunk size", func() {
+				filename := path.Join(folders[1], "changesize.dat")
+				CreateRandomFileForTest(GlobalOptions.ChunkSize*4+120, filename)
+				storeinfo, err := StoreLOBForTest(filename)
+				if err != nil {
+					Fail(fmt.Sprintf("Failed to store %v: %v", filename, err))
+				}
+
+				// Change the chunk size (smaller) & retrieve
+				GlobalOptions.ChunkSize = 256
+				out, err := ioutil.TempFile("", "changesize.dat")
+				Expect(err).To(BeNil(), "Shouldn't be error creating temp file")
+				outFilename := out.Name()
+				retrieveinfo, err := RetrieveLOB(storeinfo.SHA, out)
+				Expect(err).To(BeNil(), "Shouldn't be error retrieving LOB")
+				out.Close()
+
+				Expect(retrieveinfo).To(Equal(storeinfo), "Chunk size should not be changed on retrieve")
+				// Check output file
+				stat, err := os.Stat(outFilename)
+				Expect(err).To(BeNil(), "Shouldn't be error checking output file")
+				Expect(stat.Size()).To(Equal(retrieveinfo.Size), "Size on disk should agree with metadata")
+
+			})
+
+		})
 
 	})
 
@@ -844,4 +883,5 @@ var _ = Describe("Storage", func() {
 		})
 
 	})
+
 })
