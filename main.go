@@ -169,7 +169,5 @@ Config files:
                      e.g. ext3, HFS, NTFS, and the shared store and the repos
                      using it must be on the same filesystem (drive on Windows)
 
-  git-lob.retention  Number of days before latest commit that other revisions
-                     of files will be kept for
-
+  Other settings may be used by specific commands, see their help text.
 `
