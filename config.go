@@ -9,6 +9,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -43,17 +44,26 @@ type Options struct {
 	ChunkSize int64
 	// Shared folder in which to store binary files for all repos
 	SharedStore string
+	// 'Recent' window in days for all refs (branches/tags) compared to current date
+	RecentRefsPeriodDays int
+	// 'Recent' window in days for commits on HEAD compared to latest commit date
+	RecentCommitsPeriodHEAD int
+	// 'Recent' window in days for commits on other branches/tags compared to latest commit date
+	RecentCommitsPeriodOther int
 	// Combination of root .gitconfig and repository config as map
 	GitConfig map[string]string
 }
 
 func NewOptions() *Options {
 	return &Options{
-		StringOpts: make(map[string]string),
-		BoolOpts:   NewStringSet(),
-		Args:       make([]string, 0, 5),
-		GitConfig:  make(map[string]string),
-		ChunkSize:  32 * 1024 * 1024}
+		StringOpts:               make(map[string]string),
+		BoolOpts:                 NewStringSet(),
+		Args:                     make([]string, 0, 5),
+		GitConfig:                make(map[string]string),
+		ChunkSize:                32 * 1024 * 1024,
+		RecentRefsPeriodDays:     90,
+		RecentCommitsPeriodHEAD:  30,
+		RecentCommitsPeriodOther: 0}
 }
 
 // Load config from gitconfig and populate opts
@@ -107,6 +117,28 @@ func LoadConfig(opts *Options) {
 			}
 		}
 	}
+	//git-lob.recent-refs          default: 90 days
+	//git-lob.recent-commits-head  default: 30 days
+	//git-lob.recent-commits-other default: 0 days
+	if recentrefs := configmap["git-lob.recent-refs"]; recentrefs != "" {
+		n, err := strconv.ParseInt(recentrefs, 10, 0)
+		if err != nil {
+			GlobalOptions.RecentRefsPeriodDays = int(n)
+		}
+	}
+	if recent := configmap["git-lob.recent-commits-head"]; recent != "" {
+		n, err := strconv.ParseInt(recent, 10, 0)
+		if err != nil {
+			GlobalOptions.RecentCommitsPeriodHEAD = int(n)
+		}
+	}
+	if recent := configmap["git-lob.recent-commits-other"]; recent != "" {
+		n, err := strconv.ParseInt(recent, 10, 0)
+		if err != nil {
+			GlobalOptions.RecentCommitsPeriodOther = int(n)
+		}
+	}
+
 }
 
 // Read .gitconfig / .git/config for specific options to override
