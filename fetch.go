@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -12,15 +13,145 @@ func cmdFetch() int {
 	// git-lob fetch [--all] [--prune] [--force] [<remote> [<ref>...]]
 
 	// Validate custom options
-	errorList := validateCustomOptions(GlobalOptions, nil, []string{"all", "recheck", "force"})
+	errorList := validateCustomOptions(GlobalOptions, nil, []string{"prune", "force"})
 	if len(errorList) > 0 {
 		fmt.Fprintf(os.Stderr, strings.Join(errorList, "\n"))
 		return 9
 	}
 
-	// TODO
+	optPrune := GlobalOptions.BoolOpts.Contains("prune")
+	optForce := GlobalOptions.BoolOpts.Contains("force")
+	optDryRun := GlobalOptions.DryRun
+
+	// Determine remote
+	var remoteName string
+	// Ordered list of the commmits we're going to ls-tree to find binaries
+	var refspecs []*GitRefSpec
+
+	if len(GlobalOptions.Args) > 0 {
+		// first parameter must be remote if there are arguments
+		remoteName = GlobalOptions.Args[0]
+
+		// Remaining args are refspecs
+		if len(GlobalOptions.Args) > 1 {
+			for _, arg := range GlobalOptions.Args[1:] {
+				r := ParseGitRefSpec(arg)
+
+				// Only allow .. range for fetch, not ...
+				if r.RangeOp == "..." {
+					fmt.Fprintf(os.Stderr, "git-lob: '...' range operator is not supported for fetch, only '..'\n")
+					return 7
+				} else if r.IsRange() && r.IsEmptyRange() {
+					fmt.Fprintf(os.Stderr, "Warning: %v is an empty range, did you mean to use %v^..%v ?\n", r, r.Ref1, r.Ref2)
+				}
+
+				refspecs = append(refspecs, r)
+			}
+		}
+
+	} else {
+		remoteName = GetGitDefaultRemoteForPull()
+	}
+
+	if !GlobalOptions.Quiet {
+		if len(refspecs) > 0 {
+			fmt.Println("Fetching binaries for", refspecs, "from", remoteName)
+		} else {
+			fmt.Println("Fetching recent binaries from", remoteName)
+		}
+	}
+
+	// TODO call Fetch implementation
+	_ = optDryRun && optForce && optPrune
 
 	return 0
+}
+
+type FetchCallbackType int
+
+const (
+	// Fetch process is figuring out what to fetch
+	FetchCallbackCalculate FetchCallbackType = iota
+	// Fetch process is transferring data
+	FetchCallbackDownload FetchCallbackType = iota
+	// Fetch process is skipping data because it's already up to date
+	FetchCallbackSkip FetchCallbackType = iota
+)
+
+// Collected callback data for a fetch operation
+type FetchCallbackData struct {
+	// What stage of the fetch process this is for, preparing, downloading or skipping something
+	Type FetchCallbackType
+	// Either a general message or an item name (e.g. file name in download stage)
+	Desc string
+	// If applicable, how many bytes transferred for this item
+	ItemBytesDone int64
+	// If applicable, how many bytes comprise this item
+	ItemBytes int64
+	// The number of bytes transferred for all items
+	TotalBytesDone int64
+	// The number of bytes needed to transfer all of this task
+	TotalBytes int64
+}
+
+// Callback when progress is made during fetch
+// return true to abort the (entire) process
+type FetchCallback func(data *FetchCallbackData) (abort bool)
+
+// Implementation of fetch
+func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dryRun, force, prune bool,
+	callback FetchCallback) error {
+	// We need to build a list of commits ranges at which we want to ensure binaries are present locally
+	// We can't build the list of binaries solely from the log, because  not all binaries needed may have been
+	// modified in the range. Therefore we need 'git ls-tree' at the base ancestor in each range, followed by
+	// a 'git log -G' query for subsequent LOB changes. This is faster than doing ls-tree for every individual commit
+	// and eliminating duplicates.
+
+	if len(refspecs) == 0 {
+		// Append HEAD commits first
+		headrefspec, err := GetGitRecentCommitRange("HEAD", GlobalOptions.RecentCommitsPeriodHEAD)
+		if err != nil {
+			return errors.New(fmt.Sprintf("Error determining recent HEAD commits: %v", err.Error()))
+		}
+		// Find recent other refs
+		recentrefs, err := GetGitRecentRefs(GlobalOptions.RecentRefsPeriodDays)
+		if err != nil {
+			return errors.New(fmt.Sprintf("Error determining recent refs: %v", err.Error()))
+		}
+		refspecs = append(refspecs, headrefspec)
+		// Now each other ref, they should be in reverse date order from GetGitRecentRefs so we're doing
+		// things by priority, HEAD first then most recent
+		headSHA, _ := GitRefToFullSHA("HEAD")
+		for _, ref := range recentrefs {
+			// Don't duplicate HEAD commit though
+			if ref == headSHA {
+				continue
+			}
+			recentrefspec, err := GetGitRecentCommitRange(ref, GlobalOptions.RecentCommitsPeriodOther)
+			if err != nil {
+				return errors.New(fmt.Sprintf("Error determining recent commits on %v: %v", ref, err.Error()))
+			}
+			refspecs = append(refspecs, recentrefspec)
+		}
+	}
+
+	if len(refspecs) > 0 {
+		// OK, now we have a list of commit refspecs, which may be ranges, where we want to have binaries for
+		// all of the commits within them.
+		// For a single commit it's just an ls-tree, for a range it's an ls-tree on the start commit and
+		// a git log for changes in the range.
+
+		// TODO
+
+		// WAIT WAIT WAIT!!
+		// Could I instead use ls-tree on the END of the range, then use git log with a date range and -G at the same time?
+		// thus cutting out an extra git log (would need one to identify start commit and another for the -G)
+		// Diffs would be backwards, we'd have to look for minus entries instead?
+
+	}
+
+	return nil
+
 }
 
 func cmdFetchHelp() {
@@ -69,10 +200,6 @@ Options:
   --quiet, -q   Print less output
   --verbose, -v Print more output
   --dry-run     Don't actually delete anything, just report
-
-  --include=<path> These 2 options are to include/exclude files by path so you
-  --exclude=<path> can skip or focus on specific paths and not spend time
-                   downloading other files. Also see CONFIG section.
 
 REMOTES
 
@@ -126,9 +253,9 @@ CONFIG
 There are a few user config settings specific to the fetch command which can
 be in ~/.gitconfig or $REPO/.git/config.
 
-  git-lob.recent_refs          default: 90 days
-  git-lob.recent_commits_head  default: 30 days
-  git-lob.recent_commits_other default: 0 days
+  git-lob.recent-refs          default: 90 days
+  git-lob.recent-commits-head  default: 30 days
+  git-lob.recent-commits-other default: 0 days
 
 These 3 settings are used to control the meaning of 'recent commits', see
 RECENT COMMITS above.
