@@ -460,3 +460,46 @@ func GetGitCommitsReferencingLOBsInRange(from, to string) ([]CommitLOBRef, error
 	return ret, nil
 
 }
+
+// Expands a refspec range into a list of commits (full SHAs) using 'git log'
+// For empty ranges just returns refspec.Ref1 which will not be resolved to a full SHA
+func GitExpandRefSpecRangeToCommits(refspec *GitRefSpec) ([]string, error) {
+	if refspec.IsEmptyRange() {
+		// For empty range just include the ref
+		return []string{refspec.Ref1}, nil
+	}
+
+	var ret []string
+	cmd := exec.Command("git", "log", "--topo-order",
+		"--format=%H", refspec.String())
+
+	outp, err := cmd.StdoutPipe()
+	if err != nil {
+		LogErrorf("Unable to list commits for %v: %v", refspec.String(), err.Error())
+		return nil, err
+	}
+	cmd.Start()
+	scanner := bufio.NewScanner(outp)
+	for scanner.Scan() {
+		currentLine := scanner.Text()
+		if len(currentLine) >= 40 {
+			ret = append(ret, currentLine[:40])
+		}
+	}
+	cmd.Wait()
+
+	return ret, nil
+
+}
+
+// Get a list of refs (branches, tags) that have received commits in the last numdays
+func GetGitRecentRefs(numdays int) ([]string, error) {
+	// TODO
+	return nil, nil
+}
+
+// Get a refspec for a commit range representing all commits within numdays of when commit was made
+func GetGitRecentCommitRange(commit string, numdays int) (*GitRefSpec, error) {
+	// TODO
+	return nil, nil
+}
