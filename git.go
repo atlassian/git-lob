@@ -115,7 +115,7 @@ func GetGitDefaultRemoteForPush() string {
 // if present, or defaults to origin.
 func GetGitDefaultRemoteForPull() string {
 
-	remoteName, remoteBranch := GetGitUpstreamBranch(GetGitCurrentBranch())
+	remoteName, _ := GetGitUpstreamBranch(GetGitCurrentBranch())
 	if remoteName != "" {
 		return remoteName
 	}
