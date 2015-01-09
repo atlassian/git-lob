@@ -97,10 +97,10 @@ func WalkGitHistory(startSHA string, callback func(currentSHA, parentSHA string)
 	return callbackError
 }
 
-// Gets the default remote for the working dir
+// Gets the default push remote for the working dir
 // Determined from branch.*.remote configuration for the
 // current branch if present, or defaults to origin.
-func GetGitDefaultRemote() string {
+func GetGitDefaultRemoteForPush() string {
 
 	remote, ok := GlobalOptions.GitConfig[fmt.Sprintf("branch.%v.remote", GetGitCurrentBranch())]
 	if ok {
@@ -108,6 +108,18 @@ func GetGitDefaultRemote() string {
 	}
 	return "origin"
 
+}
+
+// Gets the default fetch remote for the working dir
+// Determined from tracking state of current branch
+// if present, or defaults to origin.
+func GetGitDefaultRemoteForPull() string {
+
+	remoteName, remoteBranch := GetGitUpstreamBranch(GetGitCurrentBranch())
+	if remoteName != "" {
+		return remoteName
+	}
+	return "origin"
 }
 
 var cachedCurrentBranch string

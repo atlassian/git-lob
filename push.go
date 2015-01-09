@@ -53,7 +53,7 @@ func cmdPush() int {
 		}
 
 	} else {
-		remoteName = GetGitDefaultRemote()
+		remoteName = GetGitDefaultRemoteForPush()
 	}
 
 	// check the remote config to make sure it's valid
