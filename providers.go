@@ -44,12 +44,11 @@ type BasicSyncProvider interface {
 	// Download the list of files (binary storage). The paths are relative and files should
 	// be placed relative to toDir. Ideally in-progress downloads should go to other locations
 	// and be moved to the final location on success, although git-lob will detect files
-	// on incorrect size.
-	// There is no need to check the presence of local files before downloading, the caller
-	// will have already done that (and if the file is already there, it means the caller
-	// wishes for it to be re-downloaded).
+	// of incorrect size.
+	// For each file, if the local copy already has this file and it's the same size, skip.
 	// Must only return nil if all files were successfully uploaded
-	Download(remoteName string, filenames []string, toDir string, callback SyncProgressCallback) error
+	// If force = true, files should be downloaded even if they're already there & the correct size
+	Download(remoteName string, filenames []string, toDir string, force bool, callback SyncProgressCallback) error
 }
 
 // Providers implementing this interface provide smary sync capabilities
