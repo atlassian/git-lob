@@ -132,6 +132,10 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 	// and eliminating duplicates.
 
 	if len(refspecs) == 0 {
+		if GlobalOptions.Verbose {
+			callback(&ProgressCallbackData{ProgressCalculate, "Calculating recent commits...",
+				int64(0), int64(1), 0, 0})
+		}
 		// Append HEAD commits first
 		headrefspec, err := GetGitRecentCommitRange("HEAD", GlobalOptions.RecentCommitsPeriodHEAD)
 		if err != nil {
@@ -159,19 +163,74 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 		}
 	}
 
+	var lobscombined []string
 	if len(refspecs) > 0 {
+
 		// OK, now we have a list of commit refspecs, which may be ranges, where we want to have binaries for
 		// all of the commits within them.
-		// For a single commit it's just an ls-tree, for a range it's an ls-tree on the start commit and
-		// a git log for changes in the range.
+		for i, refspec := range refspecs {
+			if GlobalOptions.Verbose {
+				callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf("Calculating data to fetch for %v", refspec),
+					int64(i), int64(len(refspecs)), 0, 0})
+			}
+			binaryshas, err := GetGitAllLOBsToCheckoutInRefSpec(refspec)
+			if err != nil {
+				return errors.New(fmt.Sprintf("Error determining LOBs to fetch for %v: %v", refspec, err.Error()))
+			}
+			// We could have duplicates here, but that's OK - when download is done it will skip duplicates
+			// unless force is used, and then it might duplicate; but really you shouldn't use force in this scenario
+			// Only add LOB SHAs which aren't already present if not forcing
+			var binaryCount int
+			if force {
+				lobscombined = append(lobscombined, binaryshas...)
+				binaryCount = len(binaryshas)
+			} else {
+				for _, sha := range binaryshas {
+					// Check each one to see if already present locally & valid (but don't recalc SHA)
+					// If using shared store, try to restore from shared
+					// If not, add to download
+					// Always check local first since should be linked
+					err := CheckLOBFilesForSHA(sha, GetLocalLOBRoot(), false)
+					if err != nil {
+						if isUsingSharedStorage() && recoverLocalLOBFilesFromSharedStore(sha) {
+							// then we're OK
+						} else {
+							lobscombined = append(lobscombined, sha)
+							binaryCount++
+						}
+					}
 
-		// TODO
+				}
+			}
+			if !GlobalOptions.Quiet {
+				callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf(" * %v: %d binaries to fetch", refspec, binaryCount),
+					int64(i), int64(len(refspecs)), 0, 0})
+			}
 
-		// WAIT WAIT WAIT!!
-		// Could I instead use ls-tree on the END of the range, then use git log with a date range and -G at the same time?
-		// thus cutting out an extra git log (would need one to identify start commit and another for the -G)
-		// Diffs would be backwards, we'd have to look for minus entries instead?
+		}
 
+		if len(lobscombined) == 0 {
+			if !GlobalOptions.Quiet {
+				callback(&ProgressCallbackData{ProgressCalculate, "No binaries to download.",
+					int64(len(refspecs)), int64(len(refspecs)), 0, 0})
+			}
+		} else if !dryRun {
+			// Download
+			/*
+				var baseDir string
+				if isUsingSharedStorage() {
+					baseDir = GetSharedLOBRoot()
+				} else {
+					baseDir = GetLocalLOBRoot()
+				}
+			*/
+			// For each SHA download the meta file to determine what other files we have to download
+			// download the meta files into a temp dir??
+
+			// After downloading, move meta file to final location
+			// Also if shared store, link into local
+
+		}
 	}
 
 	return nil
