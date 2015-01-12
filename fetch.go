@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 )
 
 // Fetch command line tool
@@ -61,46 +62,58 @@ func cmdFetch() int {
 		}
 	}
 
-	// TODO call Fetch implementation
-	_ = optDryRun && optForce && optPrune
+	// Do the actual fetching in a Goroutine, because we want to update the download rate & time estimates
+	// on a regular schedule, regardless of whether any actual callbacks are received
+	// If we only updated when callbacks happened (ie when data was transferred), if the data transfer halts
+	// then we'd never update the rates / time estimates.
+
+	var fetcherr error
+
+	// 100 items in the queue should be good enough, this means that it won't block
+	callbackChan := make(chan *ProgressCallbackData, 100)
+	go func(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dryRun, force, recheck bool,
+		progresschan chan<- *ProgressCallbackData) {
+
+		// Progress callback just passes the result back to the channel
+		progress := func(data *ProgressCallbackData) (abort bool) {
+			progresschan <- data
+
+			return false
+		}
+
+		err := Fetch(provider, remoteName, refspecs, dryRun, force, recheck, progress)
+
+		close(progresschan)
+
+		if err != nil {
+			fetcherr = err
+		}
+
+	}(provider, remoteName, refspecs, optDryRun, optForce, optPrune, callbackChan)
+
+	// Report progress on operation every 0.5s
+	ReportProgressToConsole(callbackChan, "Fetch", time.Millisecond*500)
+
+	if fetcherr != nil {
+		fmt.Fprintf(os.Stderr, "git-lob: fetch error - %v", err.Error())
+		return 12
+	}
+	if !GlobalOptions.Quiet {
+		if GlobalOptions.DryRun {
+			fmt.Println("Done, run again without --dry-run to perform real fetch")
+		} else {
+			// Because no newlines in progress reporting
+			fmt.Println()
+			fmt.Println("Successfully fetched binaries to", remoteName)
+		}
+	}
 
 	return 0
 }
 
-type FetchCallbackType int
-
-const (
-	// Fetch process is figuring out what to fetch
-	FetchCallbackCalculate FetchCallbackType = iota
-	// Fetch process is transferring data
-	FetchCallbackDownload FetchCallbackType = iota
-	// Fetch process is skipping data because it's already up to date
-	FetchCallbackSkip FetchCallbackType = iota
-)
-
-// Collected callback data for a fetch operation
-type FetchCallbackData struct {
-	// What stage of the fetch process this is for, preparing, downloading or skipping something
-	Type FetchCallbackType
-	// Either a general message or an item name (e.g. file name in download stage)
-	Desc string
-	// If applicable, how many bytes transferred for this item
-	ItemBytesDone int64
-	// If applicable, how many bytes comprise this item
-	ItemBytes int64
-	// The number of bytes transferred for all items
-	TotalBytesDone int64
-	// The number of bytes needed to transfer all of this task
-	TotalBytes int64
-}
-
-// Callback when progress is made during fetch
-// return true to abort the (entire) process
-type FetchCallback func(data *FetchCallbackData) (abort bool)
-
 // Implementation of fetch
 func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dryRun, force, prune bool,
-	callback FetchCallback) error {
+	callback ProgressCallback) error {
 	// We need to build a list of commits ranges at which we want to ensure binaries are present locally
 	// We can't build the list of binaries solely from the log, because  not all binaries needed may have been
 	// modified in the range. Therefore we need 'git ls-tree' at the base ancestor in each range, followed by
