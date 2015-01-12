@@ -54,6 +54,17 @@ func cmdFetch() int {
 		remoteName = GetGitDefaultRemoteForPull()
 	}
 
+	// check the remote config to make sure it's valid
+	provider, err := GetProviderForRemote(remoteName)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "git-lob: %v\n", err)
+		return 6
+	}
+	if err = provider.ValidateConfig(remoteName); err != nil {
+		fmt.Fprintf(os.Stderr, "git-lob: remote %v has configuration problems:\n%v\n", remoteName, err)
+		return 6
+	}
+
 	if !GlobalOptions.Quiet {
 		if len(refspecs) > 0 {
 			fmt.Println("Fetching binaries for", refspecs, "from", remoteName)
