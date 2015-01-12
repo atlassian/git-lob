@@ -122,7 +122,7 @@ var _ = Describe("Filesystem", func() {
 			}
 			return false
 		}
-		err := fsync.Download("origin", files, toDir, false, callback)
+		err := fsync.Download("origin", files, toDir, callback)
 		Expect(err).To(BeNil(), "Should not have error downloading")
 		Expect(filesDownloaded).To(Equal(files), "Callback should have seen all the files at 100%")
 		Expect(filesSkipped).To(BeEmpty(), "No files should be skipped")
@@ -138,18 +138,12 @@ var _ = Describe("Filesystem", func() {
 			Expect(remotestat.Size()).To(Equal(localstat.Size()), "Remote file should be the same size as local")
 		}
 
-		// Now check nothing is downloaded when we repeat without force
-		filesDownloaded = nil
+		// Now check that when we do it again with a subset of files it works
+		// (Download has no force, just downloads all requested files)
 		filesToDownload := []string{files[3], files[5], files[9], files[12]}
-		err = fsync.Download("origin", filesToDownload, toDir, false, callback)
-		Expect(err).To(BeNil(), "Should not have error uploading")
-		Expect(filesDownloaded).To(BeEmpty(), "No files should be uploaded a second time")
-		Expect(filesSkipped).To(Equal(filesToDownload), "All files should have been skipped")
-
-		// Now check that with force we do it over again
 		filesDownloaded = make([]string, 0, len(files))
 		filesSkipped = nil
-		err = fsync.Download("origin", filesToDownload, toDir, true, callback)
+		err = fsync.Download("origin", filesToDownload, toDir, callback)
 		Expect(err).To(BeNil(), "Should not have error downloading")
 		Expect(filesDownloaded).To(Equal(filesToDownload), "Correct files should be downloaded")
 		Expect(filesSkipped).To(BeEmpty(), "No files should be skipped")

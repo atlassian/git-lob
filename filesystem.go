@@ -206,7 +206,7 @@ func (self *FileSystemSyncProvider) Upload(remoteName string, filenames []string
 }
 
 func (*FileSystemSyncProvider) downloadSingleFile(remoteName, filename, fromDir, toDir string,
-	force bool, callback SyncProgressCallback) (errorList []string, abort bool) {
+	callback SyncProgressCallback) (errorList []string, abort bool) {
 	// Check to see if the file is already there, right size
 	srcfilename := filepath.Join(fromDir, filename)
 	srcfi, err := os.Stat(srcfilename)
@@ -219,21 +219,8 @@ func (*FileSystemSyncProvider) downloadSingleFile(remoteName, filename, fromDir,
 	}
 
 	destfilename := filepath.Join(toDir, filename)
-	if !force {
-		// Check existence & size before downloading
-		if destfi, err := os.Stat(destfilename); err == nil {
-			// File exists locally, check the size
-			if destfi.Size() == srcfi.Size() {
-				// File already present and correct size, skip
-				if callback != nil {
-					if callback(filename, true, srcfi.Size(), srcfi.Size()) {
-						return errorList, true
-					}
-				}
-				return errorList, false
-			}
-		}
-	}
+	// We ALWAYS download, unlike upload when we check existence & size
+	// caller will only request what it wants to be downloaded including overwrite
 
 	// Make sure dest dir exists
 	parentDir := filepath.Dir(destfilename)
@@ -313,7 +300,7 @@ func (*FileSystemSyncProvider) downloadSingleFile(remoteName, filename, fromDir,
 }
 
 func (self *FileSystemSyncProvider) Download(remoteName string, filenames []string, toDir string,
-	force bool, callback SyncProgressCallback) error {
+	callback SyncProgressCallback) error {
 	// Check config
 	srcpath, ok := GlobalOptions.GitConfig[fmt.Sprintf("remote.%v.git-lob-path", remoteName)]
 	if !ok {
@@ -332,7 +319,7 @@ func (self *FileSystemSyncProvider) Download(remoteName string, filenames []stri
 	var errorList []string
 	for _, filename := range filenames {
 		// Allow aborting
-		newerrs, abort := self.downloadSingleFile(remoteName, filename, srcpath, toDir, force, callback)
+		newerrs, abort := self.downloadSingleFile(remoteName, filename, srcpath, toDir, callback)
 		errorList = append(errorList, newerrs...)
 		if abort {
 			break
