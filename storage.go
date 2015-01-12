@@ -245,9 +245,10 @@ func recoverLocalLOBFilesFromSharedStore(sha string) bool {
 	}
 	for i := 0; i < info.NumChunks; i++ {
 		local := getLocalLOBChunkFilename(sha, i)
-		if !FileExists(local) {
+		expectedSize := getLOBExpectedChunkSize(info, i)
+		if !FileExistsAndIsOfSize(local, expectedSize) {
 			shared := getSharedLOBChunkFilename(sha, i)
-			if FileExists(shared) {
+			if FileExistsAndIsOfSize(shared, expectedSize) {
 				err := linkSharedLOBFilename(local)
 				if err != nil {
 					return false
@@ -731,4 +732,18 @@ func GetLOBFilenamesWithBaseDir(shas []string, check bool) (files []string, base
 		return ret, basedir, retSize, &IntegrityError{errorshas}
 	}
 	return ret, basedir, retSize, nil
+}
+
+// Get the correct size of a given chunk
+func getLOBExpectedChunkSize(info *LOBInfo, chunkIdx int) int64 {
+	if chunkIdx+1 < info.NumChunks {
+		return info.ChunkSize
+	} else {
+		if info.NumChunks == 1 {
+			return info.Size
+		} else {
+			return info.Size - (int64(info.NumChunks-1) * info.ChunkSize)
+		}
+	}
+
 }
