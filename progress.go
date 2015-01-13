@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"time"
@@ -122,19 +123,24 @@ func ReportProgressToConsole(callbackChan <-chan *ProgressCallbackData, op strin
 			transferRate.AddSample(bytesPerSecond)
 			avgRate := transferRate.Average()
 
-			if lastProgress.ItemBytes != 0 && lastProgress.TotalBytes != 0 {
-				itemPercent := int((100 * lastProgress.ItemBytesDone) / lastProgress.ItemBytes)
-				overallPercent := int((100 * lastProgress.TotalBytesDone) / lastProgress.TotalBytes)
-				bytesRemaining := lastProgress.TotalBytes - lastProgress.TotalBytesDone
-				secondsRemaining := bytesRemaining / avgRate
-				timeRemaining := time.Duration(secondsRemaining) * time.Second
-				var msg string
-				if GlobalOptions.Verbose {
-					msg = fmt.Sprintf("%ving: %v %d%% Overall: %d%% (%v ETA %v)", op, lastProgress.Desc, itemPercent,
-						overallPercent, FormatTransferRate(avgRate), timeRemaining)
-				} else {
-					msg = fmt.Sprintf("%ving: %d%% (%v ETA %v)", op, overallPercent, FormatTransferRate(avgRate), timeRemaining)
+			if lastProgress.ItemBytes != 0 || lastProgress.TotalBytes != 0 {
+				buf := bytes.NewBufferString(fmt.Sprintf("%ving: ", op))
+				if lastProgress.ItemBytes > 0 && GlobalOptions.Verbose {
+					itemPercent := int((100 * lastProgress.ItemBytesDone) / lastProgress.ItemBytes)
+					buf.WriteString(fmt.Sprintf("%v %d%%", lastProgress.Desc, itemPercent))
+					if lastProgress.TotalBytes != 0 {
+						buf.WriteString("Overall: ")
+					}
 				}
+				if lastProgress.TotalBytes > 0 {
+					overallPercent := int((100 * lastProgress.TotalBytesDone) / lastProgress.TotalBytes)
+					bytesRemaining := lastProgress.TotalBytes - lastProgress.TotalBytesDone
+					secondsRemaining := bytesRemaining / avgRate
+					timeRemaining := time.Duration(secondsRemaining) * time.Second
+
+					buf.WriteString(fmt.Sprintf("%d%% (%v ETA %v)", overallPercent, FormatTransferRate(avgRate), timeRemaining))
+				}
+				msg := buf.String()
 				OverwriteConsoleLine(msg, lastConsoleLineLen, os.Stdout)
 				lastConsoleLineLen = len(msg)
 			}
