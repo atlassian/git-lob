@@ -161,3 +161,23 @@ func OverwriteConsoleLine(newString string, lastLineLength int, iobuf io.Writer)
 	}
 
 }
+
+// Remove duplicates from a slice of strings (in place)
+// Linear to logarithmic time, doesn't change the ordering of the slice
+// allocates/frees a new map of up to the size of the slice though
+func StringRemoveDuplicates(s *[]string) {
+	if s == nil || *s == nil {
+		return
+	}
+	uniques := NewStringSet()
+	insertidx := 0
+	for _, x := range *s {
+		if !uniques.Contains(x) {
+			uniques.Add(x)
+			(*s)[insertidx] = x // could do this only when x != insertidx but prob wasteful compare
+			insertidx++
+		}
+	}
+	// If any were eliminated it will now be shorter
+	*s = (*s)[:insertidx]
+}

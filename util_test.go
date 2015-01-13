@@ -165,4 +165,51 @@ var _ = Describe("Util", func() {
 
 	})
 
+	Describe("StringRemoveDuplicates", func() {
+		It("Copes with empty & nil slice", func() {
+			// Just testing for lack of panic
+			StringRemoveDuplicates(nil)
+			StringRemoveDuplicates(&[]string{})
+		})
+		It("Leaves a slice with no duplicates alone", func() {
+			s := []string{
+				"aaa",
+				"bbb",
+				"zzz",
+				"fff",
+				"ggg",
+			}
+			orig := make([]string, len(s))
+			copy(orig, s)
+
+			StringRemoveDuplicates(&s)
+			Expect(s).To(Equal(orig), "Should not alter slice")
+
+		})
+		It("Removes duplicates", func() {
+			s := []string{
+				"aaa",
+				"bbb",
+				"zzz",
+				"fff",
+				"something/something",
+				"bbb",
+				"ggg",
+				"something/something",
+			}
+			dedupe := []string{
+				"aaa",
+				"bbb",
+				"zzz",
+				"fff",
+				"something/something",
+				"ggg",
+			}
+			StringRemoveDuplicates(&s)
+			Expect(s).To(Equal(dedupe), "Should remove duplicates")
+
+		})
+
+	})
+
 })
