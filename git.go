@@ -388,6 +388,14 @@ func GetGitUpstreamBranch(localbranch string) (remoteName, remoteBranch string) 
 // It is required that if both are supplied, 'from' is an ancestor of 'to'
 // Range is exclusive of 'from' and inclusive of 'to'
 func GetGitCommitsReferencingLOBsInRange(from, to string) ([]CommitLOBRef, error) {
+	// We want '+' lines
+	return getGitCommitsReferencingLOBsInRange(from, to, true, false)
+}
+
+// Returns list of commits which have LOB SHAs referenced in them, in a given commit range
+// Range is exclusive of 'from' and inclusive of 'to'
+// additions/removals controls whether we report only diffs with '+' lines of git-lob, '-' lines, or both
+func getGitCommitsReferencingLOBsInRange(from, to string, additions, removals bool) ([]CommitLOBRef, error) {
 
 	args := []string{"log", `--format=commitsha: %H`, "-p",
 		"--topo-order", "--first-parent",
@@ -423,7 +431,14 @@ func GetGitCommitsReferencingLOBsInRange(from, to string) ([]CommitLOBRef, error
 	// So it's important that we only pull git-lob SHAs with a '+' prefix
 
 	// Use 1 regex to capture all for speed
-	regex := regexp.MustCompile(`^(commitsha|\+git-lob): ([A-Fa-f0-9]{40})`)
+	var regex *regexp.Regexp
+	if additions && !removals {
+		regex = regexp.MustCompile(`^(commitsha|\+git-lob): ([A-Fa-f0-9]{40})`)
+	} else if removals && !additions {
+		regex = regexp.MustCompile(`^(commitsha|\-git-lob): ([A-Fa-f0-9]{40})`)
+	} else {
+		regex = regexp.MustCompile(`^(commitsha|[\+\-]git-lob): ([A-Fa-f0-9]{40})`)
+	}
 
 	cmd := exec.Command("git", args...)
 	outp, err := cmd.StdoutPipe()
