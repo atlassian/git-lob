@@ -74,6 +74,12 @@ func mainImpl() int {
 			return 0
 		}
 		return cmdCleanupShared()
+	case "fetch":
+		if GlobalOptions.HelpRequested {
+			cmdFetchHelp()
+			return 0
+		}
+		return cmdFetch()
 	case "filter-smudge":
 		if GlobalOptions.HelpRequested {
 			cmdSmudgeFilterHelp()
