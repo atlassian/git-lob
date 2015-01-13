@@ -129,10 +129,10 @@ func cmdPush() int {
 
 		var err error
 		switch p := provider.(type) {
-		case BasicSyncProvider:
-			err = PushBasic(p, remoteName, refspecs, dryRun, force, recheck, progress)
 		case SmartSyncProvider:
 			err = PushSmart(p, remoteName, refspecs, dryRun, force, recheck, progress)
+		default:
+			err = PushBasic(p, remoteName, refspecs, dryRun, force, recheck, progress)
 		}
 
 		close(progresschan)
@@ -172,7 +172,7 @@ type PushCommitContentDetails struct {
 	TotalBytes int64    // total bytes for all files in the list
 }
 
-func PushBasic(provider BasicSyncProvider, remoteName string, refspecs []*GitRefSpec, dryRun, force, recheck bool,
+func PushBasic(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dryRun, force, recheck bool,
 	callback ProgressCallback) error {
 
 	LogDebugf("Pushing to %v via %v\n", remoteName, provider.TypeID())

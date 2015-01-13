@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-// FileSystemSyncProvider implements the BasicSyncProvider interface
+// FileSystemSyncProvider implements the basic SyncProvider interface
 type FileSystemSyncProvider struct {
 }
 

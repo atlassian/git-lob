@@ -21,18 +21,6 @@ type SyncProvider interface {
 
 	// Return whether the configuration for a given remote is valid
 	ValidateConfig(remoteName string) error
-}
-
-// Callback when progress is made uploading / downloading
-// fileInProgress: relative path of file, isSkipped: whether file was up to date, bytesDone/totalBytes: progress for current file
-// return true to abort the process for this and all other files in the batch
-type SyncProgressCallback func(fileInProgress string, isSkipped bool, bytesDone, totalBytes int64) (abort bool)
-
-// Providers implementing this interface provide basic sync capabilities
-// These providers require no server-side processing, only simple file access
-// but are limited to a direct file-based representation of storage and are less efficent
-type BasicSyncProvider interface {
-	SyncProvider
 
 	// Upload a given list of files (binary storage). The paths are relative to fromDir and are provided
 	// like that to make it easier for the provider since it will likely use the same
@@ -44,15 +32,19 @@ type BasicSyncProvider interface {
 	// Download the list of files (binary storage). The paths are relative and files should
 	// be placed relative to toDir. Ideally in-progress downloads should go to other locations
 	// and be moved to the final location on success, although git-lob will detect files
-	// on incorrect size.
-	// There is no need to check the presence of local files before downloading, the caller
-	// will have already done that (and if the file is already there, it means the caller
-	// wishes for it to be re-downloaded).
+	// of incorrect size.
+	// For each file, if the local copy already has this file and it's the same size, skip.
 	// Must only return nil if all files were successfully uploaded
-	Download(remoteName string, filenames []string, toDir string, callback SyncProgressCallback) error
+	// If force = true, files should be downloaded even if they're already there & the correct size
+	Download(remoteName string, filenames []string, toDir string, force bool, callback SyncProgressCallback) error
 }
 
-// Providers implementing this interface provide smary sync capabilities
+// Callback when progress is made uploading / downloading
+// fileInProgress: relative path of file, isSkipped: whether file was up to date, bytesDone/totalBytes: progress for current file
+// return true to abort the process for this and all other files in the batch
+type SyncProgressCallback func(fileInProgress string, isSkipped bool, bytesDone, totalBytes int64) (abort bool)
+
+// Providers implementing this interface provide smart sync capabilities
 // These providers require server-side processing and are free to store data how they like
 // so long as they can fulfil the interface. Provides support for binary deltas to
 // speed up data transfers in both directions
@@ -70,14 +62,6 @@ var (
 // Must only be called from the main thread, not thread safe
 // Repeat calls for providers using the same TypeID will overrule previous
 func RegisterSyncProvider(p SyncProvider) error {
-	// Must implement dumb/smart protocol (or both)
-	_, basicok := p.(BasicSyncProvider)
-	_, smartok := p.(SmartSyncProvider)
-
-	if !basicok && !smartok {
-		return errors.New("Provider must implement at least one of BasicSyncProvider/SmartSyncProvider")
-	}
-
 	// Allow overwrite of previously registered
 	syncProviders[p.TypeID()] = p
 
