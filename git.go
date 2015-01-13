@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os/exec"
 	"regexp"
@@ -483,10 +484,122 @@ func getGitCommitsReferencingLOBsInRange(from, to string, additions, removals bo
 // a single commit, or any in a range (if the refspec is a range; only .. range operator allowed)
 // This means it will include any LOBs that were added in commits before the range, if they are still used,
 // while GetGitCommitsReferencingLOBsInRange wouldn't mention those.
-// Note that as usual git ranges are start exclusive, end inclusive.
+// Note that git ranges are start AND end inclusive in this case.
+// Note that duplicate SHAs are not eliminated for efficiency, you must do it if you need it
 func GetGitAllLOBsToCheckoutInRefSpec(refspec *GitRefSpec) ([]string, error) {
-	// TODO
-	return nil, nil
+
+	var snapshotref string
+	if refspec.IsRange() {
+		if refspec.RangeOp != ".." {
+			return []string{}, errors.New("Only '..' range operator allowed in GetGitAllLOBsToCheckoutInRefSpec")
+		}
+		// snapshot at end of range, then look at diffs later
+		snapshotref = refspec.Ref2
+	} else {
+		snapshotref = refspec.Ref1
+	}
+
+	ret, err := GetGitAllGitLOBsToCheckoutAtCommit(snapshotref)
+	if err != nil {
+		return ret, err
+	}
+
+	if refspec.IsRange() {
+		// Now we have all LOBs at the snapshot, find any extra ones earlier in the range
+		// to do this, we look for diffs in the commit range that start with "-git-lob:"
+		// because a removal means it was referenced before that commit therefore we need it
+		// to go back to that state
+		// git log is range start exclusive, but that's actually OK since a -git-lob diff line
+		// represents the state one commit earlier, giving us an inclusive start range
+		commits, err := getGitCommitsReferencingLOBsInRange(refspec.Ref1, refspec.Ref2, false, true)
+		if err != nil {
+			return ret, err
+		}
+		for _, commit := range commits {
+			// possible to end up with duplicates here if same SHA referenced more than once
+			// caller to resolve if they need uniques
+			ret = append(ret, commit.lobSHAs...)
+		}
+
+	}
+
+	return ret, nil
+
+}
+
+// Get all the LOB SHAs that you would need to check out at a given commit (not changed in that commit)
+func GetGitAllGitLOBsToCheckoutAtCommit(commit string) ([]string, error) {
+	// Snapshot using ls-tree
+	args := []string{"ls-tree",
+		"-r",          // recurse
+		"-l",          // report object size (we'll need this)
+		"--full-tree", // start at the root regardless of where we are in it
+		commit}
+
+	lstreecmd := exec.Command("git", args...)
+	outp, err := lstreecmd.StdoutPipe()
+	if err != nil {
+		return []string{}, errors.New(fmt.Sprintf("Unable to call git ls-tree: %v", err.Error()))
+	}
+	defer outp.Close()
+	lstreecmd.Start()
+	lstreescanner := bufio.NewScanner(outp)
+
+	// We will look for objects that are *exactly* the size of the git-lob line
+	regex := regexp.MustCompile(fmt.Sprintf(`^\d+\s+blob\s+([0-9a-zA-Z]{40})\s+%d\s+(.*)$`, SHALineLen))
+	// This will give us object SHAs of content which is exactly the right size, we must
+	// then use cat-file (in batch mode) to get the content & parse out anything that's really
+	// a git-lob reference.
+	// Start git cat-file in parallel and feed its stdin
+	catfilecmd := exec.Command("git", "cat-file", "--batch")
+	catout, err := catfilecmd.StdoutPipe()
+	if err != nil {
+		return []string{}, errors.New(fmt.Sprintf("Unable to call git cat-file: %v", err.Error()))
+	}
+	defer catout.Close()
+	catin, err := catfilecmd.StdinPipe()
+	if err != nil {
+		return []string{}, errors.New(fmt.Sprintf("Unable to call git cat-file: %v", err.Error()))
+	}
+	defer catin.Close()
+	catfilecmd.Start()
+	catscanner := bufio.NewScanner(catout)
+
+	var ret []string
+	for lstreescanner.Scan() {
+		line := lstreescanner.Text()
+		if match := regex.FindStringSubmatch(line); match != nil {
+			objsha := match[1]
+
+			// Now feed object sha to cat-file to get git-lob SHA if any
+			// remember we're already only finding files of exactly the right size (49 bytes)
+			_, err := catin.Write([]byte(objsha))
+			if err != nil {
+				return []string{}, errors.New(fmt.Sprintf("Unable to write to cat-file stream: %v", err.Error()))
+			}
+			_, err = catin.Write([]byte{'\n'})
+			if err != nil {
+				return []string{}, errors.New(fmt.Sprintf("Unable to write to cat-file stream: %v", err.Error()))
+			}
+
+			// Now read back response - first line is report of object sha, type & size
+			// second line is content in our case
+			if !catscanner.Scan() || !catscanner.Scan() {
+				return []string{}, errors.New(fmt.Sprintf("Couldn't read response from cat-file stream: %v", catscanner.Err()))
+			}
+
+			// object SHA is the last 40 characters, after the prefix
+			line := catscanner.Text()
+			if len(line) == SHALineLen {
+				lobsha := line[len(SHAPrefix):]
+				ret = append(ret, lobsha)
+			}
+
+		}
+	}
+
+	return ret, nil
+
 }
 
 // Get a list of refs (branches, tags) that have received commits in the last numdays

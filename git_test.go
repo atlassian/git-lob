@@ -315,20 +315,18 @@ var _ = Describe("Git", func() {
 
 	})
 
-	Describe("Query commit LOB references", func() {
+	Context("Commit LOB references", func() {
+
 		root := filepath.Join(os.TempDir(), "GitTest")
 		var oldwd string
+		lobshas := GetListOfRandomSHAsForTest(10)
+		var correctSHAs [][]string
+
 		BeforeEach(func() {
 			CreateGitRepoForTest(root)
 			oldwd, _ = os.Getwd()
 			os.Chdir(root)
-		})
-		AfterEach(func() {
-			os.Chdir(oldwd)
-			os.RemoveAll(root)
-		})
-		It("Retrieves LOB references", func() {
-			lobshas := GetListOfRandomSHAsForTest(10)
+
 			// Add a few files with some lob SHAs (fake content, no store)
 			ioutil.WriteFile(filepath.Join(root, "file1.txt"),
 				[]byte(fmt.Sprintf("git-lob: %v", lobshas[0])), 0644)
@@ -339,7 +337,7 @@ var _ = Describe("Git", func() {
 			// Tag at useful points
 			exec.Command("git", "tag", "tag1").Run()
 			// add another file & modify
-			ioutil.WriteFile(filepath.Join(root, "file2.txt"),
+			ioutil.WriteFile(filepath.Join(root, "file2.txt"), // replacement
 				[]byte(fmt.Sprintf("git-lob: %v", lobshas[2])), 0644)
 			ioutil.WriteFile(filepath.Join(root, "file3.txt"),
 				[]byte(fmt.Sprintf("git-lob: %v", lobshas[3])), 0644)
@@ -379,7 +377,7 @@ var _ = Describe("Git", func() {
 			// return to master
 			exec.Command("git", "checkout", "master").Run()
 
-			correctSHAs := [][]string{
+			correctSHAs = [][]string{
 				{lobshas[0], lobshas[1]}, // tag1, master & feature
 				{lobshas[2], lobshas[3]}, // tag2, master & feature
 				{lobshas[4]},             // tag3, master & feature
@@ -388,38 +386,67 @@ var _ = Describe("Git", func() {
 				{lobshas[7], lobshas[8]}, // feature only
 				{lobshas[9]},             // feature only
 			}
-			// Now let's retrieve LOBs
-			// Entire history on current branch
-			commitlobs, err := GetGitCommitsReferencingLOBsInRange("", "")
-			Expect(err).To(BeNil(), "Should not fail calling GetGitCommitsReferencingLOBsInRange")
-			// There are 6 commits on the master branch, but only 5 reference LOBs
-			Expect(commitlobs).To(HaveLen(5), "Master branch should have 5 commits referencing LOBs")
-			for i, commit := range commitlobs {
-				Expect(commit.lobSHAs).To(Equal(correctSHAs[i]), "Commit %d should have correct SHAs", i)
-			}
-			// Just feature branch
-			commitlobs, err = GetGitCommitsReferencingLOBsInRange("tag3", "feature/1")
-			Expect(err).To(BeNil(), "Should not fail calling GetGitCommitsReferencingLOBsInRange")
-			// 2 commits from tag3 to feature/1, excluding tag3 itself
-			Expect(commitlobs).To(HaveLen(2), "Feature branch should have 2 commits referencing LOBs")
-			Expect(commitlobs[0].lobSHAs).To(Equal(correctSHAs[5]), "Commit should have correct SHAs")
-			Expect(commitlobs[1].lobSHAs).To(Equal(correctSHAs[6]), "Commit should have correct SHAs")
-			// Now just 'from' (on master)
-			commitlobs, err = GetGitCommitsReferencingLOBsInRange("tag4", "")
-			Expect(err).To(BeNil(), "Should not fail calling GetGitCommitsReferencingLOBsInRange")
-			// 1 commit from tag4 to master, excluding tag4 itself
-			Expect(commitlobs).To(HaveLen(1), "tag4 onwards is only 1 commit")
-			Expect(commitlobs[0].lobSHAs).To(Equal(correctSHAs[4]), "Commit should have correct SHAs")
-			// Now just 'to' (on master)
-			commitlobs, err = GetGitCommitsReferencingLOBsInRange("", "tag2")
-			Expect(err).To(BeNil(), "Should not fail calling GetGitCommitsReferencingLOBsInRange")
-			// 2 commits up to tag2 to master, excluding tag4 itself
-			Expect(commitlobs).To(HaveLen(2), "tag4 onwards is only 1 commit")
-			Expect(commitlobs[0].lobSHAs).To(Equal(correctSHAs[0]), "Commit should have correct SHAs")
-			Expect(commitlobs[1].lobSHAs).To(Equal(correctSHAs[1]), "Commit should have correct SHAs")
+
+		})
+		AfterEach(func() {
+			os.Chdir(oldwd)
+			os.RemoveAll(root)
+		})
+
+		Describe("Query commit LOB references", func() {
+			It("Retrieves LOB references", func() {
+				// Now let's retrieve LOBs
+				// Entire history on current branch
+				commitlobs, err := GetGitCommitsReferencingLOBsInRange("", "")
+				Expect(err).To(BeNil(), "Should not fail calling GetGitCommitsReferencingLOBsInRange")
+				// There are 6 commits on the master branch, but only 5 reference LOBs
+				Expect(commitlobs).To(HaveLen(5), "Master branch should have 5 commits referencing LOBs")
+				for i, commit := range commitlobs {
+					Expect(commit.lobSHAs).To(Equal(correctSHAs[i]), "Commit %d should have correct SHAs", i)
+				}
+				// Just feature branch
+				commitlobs, err = GetGitCommitsReferencingLOBsInRange("tag3", "feature/1")
+				Expect(err).To(BeNil(), "Should not fail calling GetGitCommitsReferencingLOBsInRange")
+				// 2 commits from tag3 to feature/1, excluding tag3 itself
+				Expect(commitlobs).To(HaveLen(2), "Feature branch should have 2 commits referencing LOBs")
+				Expect(commitlobs[0].lobSHAs).To(Equal(correctSHAs[5]), "Commit should have correct SHAs")
+				Expect(commitlobs[1].lobSHAs).To(Equal(correctSHAs[6]), "Commit should have correct SHAs")
+				// Now just 'from' (on master)
+				commitlobs, err = GetGitCommitsReferencingLOBsInRange("tag4", "")
+				Expect(err).To(BeNil(), "Should not fail calling GetGitCommitsReferencingLOBsInRange")
+				// 1 commit from tag4 to master, excluding tag4 itself
+				Expect(commitlobs).To(HaveLen(1), "tag4 onwards is only 1 commit")
+				Expect(commitlobs[0].lobSHAs).To(Equal(correctSHAs[4]), "Commit should have correct SHAs")
+				// Now just 'to' (on master)
+				commitlobs, err = GetGitCommitsReferencingLOBsInRange("", "tag2")
+				Expect(err).To(BeNil(), "Should not fail calling GetGitCommitsReferencingLOBsInRange")
+				// 2 commits up to tag2 to master, excluding tag4 itself
+				Expect(commitlobs).To(HaveLen(2), "tag4 onwards is only 1 commit")
+				Expect(commitlobs[0].lobSHAs).To(Equal(correctSHAs[0]), "Commit should have correct SHAs")
+				Expect(commitlobs[1].lobSHAs).To(Equal(correctSHAs[1]), "Commit should have correct SHAs")
+
+			})
 
 		})
 
-	})
+		Describe("Get all LOBs at a commit and refspec range", func() {
 
+			It("Gets LOB references at varying ranges", func() {
+				// Get all LOBs referenced ever at master
+				shas, err := GetGitAllLOBsToCheckoutInRefSpec(&GitRefSpec{"tag1", "..", "master"})
+				// Because it's a range this will also include any which were later overwritten
+				Expect(err).To(BeNil(), "Should be no error")
+				Expect(shas).To(ConsistOf(lobshas[:7]), "Start to master should include first 7 file SHAs")
+
+				// At tag 2, file2.txt was overwritten with a different SHA so the previous SHA (lobshas[1]) should be missing
+				correct := lobshas[:1]
+				correct = append(correct, lobshas[2:7]...)
+				shas, err = GetGitAllLOBsToCheckoutInRefSpec(&GitRefSpec{"tag2", "..", "master"})
+				Expect(err).To(BeNil(), "Should be no error")
+				Expect(shas).To(ConsistOf(correct), "tag2 to master should include first 7 file SHAs minus one overwritten SHA")
+
+			})
+
+		})
+	})
 })
