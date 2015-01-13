@@ -179,8 +179,6 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 			if err != nil {
 				return errors.New(fmt.Sprintf("Error determining LOBs to fetch for %v: %v", refspec, err.Error()))
 			}
-			// We could have duplicates here, but that's OK - when download is done it will skip duplicates
-			// unless force is used, and then it might duplicate; but really you shouldn't use force in this scenario
 			// Only add LOB SHAs which aren't already present if not forcing
 			var binaryCount int
 			for _, sha := range binaryshas {
@@ -227,6 +225,13 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 				destDir = GetSharedLOBRoot()
 			} else {
 				destDir = GetLocalLOBRoot()
+			}
+
+			if force {
+				// Duplicates in lobscombined (and thus metafiles) are not eliminated by methods we call, for efficiency
+				// These would be handled in non-force mode, but in force mode we'd rather not duplicate
+				StringRemoveDuplicates(&lobscombined)
+				StringRemoveDuplicates(&metafilesToDownload)
 			}
 
 			// Download metafiles first
