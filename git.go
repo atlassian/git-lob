@@ -440,6 +440,8 @@ func getGitCommitsReferencingLOBsInRange(from, to string, additions, removals bo
 
 	ret := scanGitLogOutputForLOBReferences(outp, additions, removals)
 
+	cmd.Wait()
+
 	return ret, nil
 
 }
@@ -596,6 +598,7 @@ func GetGitAllLOBsToCheckoutAtCommitAndRecent(commit string, days int) ([]string
 		ret = append(ret, lobcommit.lobSHAs...)
 	}
 
+	cmd.Wait()
 	return ret, nil
 
 }
@@ -670,6 +673,8 @@ func GetGitAllGitLOBsToCheckoutAtCommit(commit string) ([]string, error) {
 
 		}
 	}
+	lstreecmd.Wait()
+	catfilecmd.Process.Kill()
 
 	return ret, nil
 
@@ -781,6 +786,7 @@ func GetGitRecentRefs(numdays int, includeRemoteBranches bool, remoteName string
 			ret = append(ret, ref)
 		}
 	}
+	cmd.Wait()
 
 	return ret, nil
 }
