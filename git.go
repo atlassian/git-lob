@@ -675,10 +675,22 @@ func GetGitAllGitLOBsToCheckoutAtCommit(commit string) ([]string, error) {
 
 }
 
+// Parse a Git date formatted in ISO 8601 format (%ci/%ai)
+func ParseGitDate(str string) (time.Time, error) {
+
+	// Unfortunately Go and Git don't overlap in their builtin date formats
+	// Go's time.RFC1123Z and Git's %cD are ALMOST the same, except that
+	// when the day is < 10 Git outputs a single digit, but Go expects a leading
+	// zero - this is enough to break the parsing. Sigh.
+
+	// Format is for 2 Jan 2006, 15:04:05 -7 UTC as per Go
+	return time.Parse("2006-01-02 15:04:05 -0700", str)
+}
+
 // Get summary information about a commit
 func GetGitCommitSummary(commit string) (*GitCommitSummary, error) {
 	cmd := exec.Command("git", "show", "-s",
-		"--format=%%H\u241E%%h\u241E%%aD\u241E%%cD\u241E%%ae\u241E%%an\u241E%%ce\u241E%%cn\u241E%%s", commit)
+		`--format=%H|%h|%ai|%ci|%ae|%an|%ce|%cn|%s`, commit)
 
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -687,7 +699,8 @@ func GetGitCommitSummary(commit string) (*GitCommitSummary, error) {
 		return nil, errors.New(msg)
 	}
 
-	fields := strings.Split(string(out), "\u241E")
+	// At most 9 substrings so subject line is not split on anything
+	fields := strings.SplitN(string(out), "|", 9)
 	// Cope with the case where subject is blank
 	if len(fields) >= 8 {
 		ret := &GitCommitSummary{}
@@ -695,8 +708,8 @@ func GetGitCommitSummary(commit string) (*GitCommitSummary, error) {
 		ret.SHA = fields[0]
 		ret.ShortSHA = fields[1]
 		// %aD & %cD (RFC2822) matches Go's RFC1123Z format
-		ret.AuthorDate, _ = time.Parse(time.RFC1123Z, fields[2])
-		ret.CommitDate, _ = time.Parse(time.RFC1123Z, fields[3])
+		ret.AuthorDate, _ = ParseGitDate(fields[2])
+		ret.CommitDate, _ = ParseGitDate(fields[3])
 		ret.AuthorEmail = fields[4]
 		ret.AuthorName = fields[5]
 		ret.CommitterEmail = fields[6]
