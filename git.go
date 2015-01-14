@@ -727,7 +727,60 @@ func GetGitCommitSummary(commit string) (*GitCommitSummary, error) {
 }
 
 // Get a list of refs (branches, tags) that have received commits in the last numdays
-func GetGitRecentRefs(numdays int) ([]string, error) {
-	// TODO
-	return nil, nil
+// remoteName is optional but if specified and includeRemoteBranches is true, will only include
+// remote branches on that remote
+func GetGitRecentRefs(numdays int, includeRemoteBranches bool, remoteName string) ([]string, error) {
+	cmd := exec.Command("git", "for-each-ref",
+		`--sort=-*committerdate`,
+		`--format=%(refname) %(objectname:short)`,
+		"refs")
+	outp, err := cmd.StdoutPipe()
+	if err != nil {
+		msg := fmt.Sprintf("Unable to call git for-each-ref: %v", err.Error())
+		LogError(msg)
+		return []string{}, errors.New(msg)
+	}
+	cmd.Start()
+	scanner := bufio.NewScanner(outp)
+
+	// Output is like this:
+	// refs/heads/master 22be911
+	// refs/remotes/origin/master fa392f7
+	// refs/tags/blah 34c653b
+	// We don't need the SHA
+
+	// Output is ordered by latest commit date first, so we can stop at the threshold
+	earliestDate := time.Now().AddDate(0, 0, -numdays)
+
+	regex := regexp.MustCompile(`^refs/([^/]+)/(\S)+`)
+
+	var ret []string
+	for scanner.Scan() {
+		line := scanner.Text()
+		if match := regex.FindStringSubmatch(line); match != nil {
+			reftype := match[1]
+			ref := match[2]
+			if reftype == "remotes" {
+				if !includeRemoteBranches {
+					continue
+				}
+				if remoteName != "" && !strings.HasPrefix(ref, remoteName+"/") {
+					continue
+				}
+			}
+			// This is aref we might use
+			// Check the date
+			commit, err := GetGitCommitSummary(ref)
+			if err != nil {
+				return ret, err
+			}
+			if commit.CommitDate.Before(earliestDate) {
+				// the end
+				break
+			}
+			ret = append(ret, ref)
+		}
+	}
+
+	return ret, nil
 }

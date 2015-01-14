@@ -150,8 +150,8 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 				0, 0, 0, 0})
 		}
 		lobsNeeded = headlobs
-		// Find recent other refs
-		recentrefs, err := GetGitRecentRefs(GlobalOptions.RecentRefsPeriodDays)
+		// Find recent other refs (only include remote branches for this remote)
+		recentrefs, err := GetGitRecentRefs(GlobalOptions.RecentRefsPeriodDays, true, remoteName)
 		if err != nil {
 			return errors.New(fmt.Sprintf("Error determining recent refs: %v", err.Error()))
 		}
