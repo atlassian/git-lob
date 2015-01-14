@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 var _ = Describe("Git", func() {
@@ -448,5 +449,70 @@ var _ = Describe("Git", func() {
 			})
 
 		})
+	})
+	Describe("Git commit summary", func() {
+
+		root := filepath.Join(os.TempDir(), "GitTest")
+		var oldwd string
+
+		BeforeEach(func() {
+			CreateGitRepoForTest(root)
+			oldwd, _ = os.Getwd()
+			os.Chdir(root)
+		})
+		AfterEach(func() {
+			os.Chdir(oldwd)
+			os.RemoveAll(root)
+		})
+
+		It("Correctly queries commit summaries", func() {
+			exec.Command("git",
+				"-c", "user.name=Joe Bloggs",
+				"-c", "user.email=joe@bloggs.com",
+				"commit", "--allow-empty", "-m", "This is a commit",
+				"--author=A N Author <author@something.com>",
+				"--date=2010-03-01T14:12:00+00:00",
+			).Run()
+			now := time.Now()
+
+			commit, err := GetGitCommitSummary("HEAD")
+			Expect(err).To(BeNil(), "Should not be error calling git show")
+			headsha, _ := GitRefToFullSHA("HEAD")
+			Expect(commit.SHA).To(Equal(headsha), "SHA should be correct")
+			Expect(commit.ShortSHA).To(Equal(headsha[0:7]), "Short SHA should be correct")
+			Expect(commit.AuthorName).To(Equal("A N Author"), "Author should be correct")
+			Expect(commit.AuthorEmail).To(Equal("author@something.com"), "Author email should be correct")
+			Expect(commit.CommitterName).To(Equal("Joe Bloggs"), "Committer should be correct")
+			Expect(commit.CommitterEmail).To(Equal("joe@bloggs.com"), "Committer email should be correct")
+			Expect(commit.Subject).To(Equal("This is a commit"), "Subject should be correct")
+			Expect(commit.CommitDate).To(BeTemporally("~", now, time.Second), "Commit date should be within a second of now")
+			Expect(commit.AuthorDate).To(BeTemporally("~", time.Date(2010, 03, 01, 14, 12, 0, 0, time.UTC), time.Millisecond), "Author date should be correct")
+
+		})
+		It("Correctly queries commit summaries when subject includes separator character", func() {
+			exec.Command("git",
+				"-c", "user.name=Joe Bloggs",
+				"-c", "user.email=joe@bloggs.com",
+				"commit", "--allow-empty", "-m", "This is |a commit|with pipes in it|",
+				"--author=A N Author <author@something.com>",
+				"--date=2010-03-01T14:12:00+00:00",
+			).Run()
+			now := time.Now()
+
+			commit, err := GetGitCommitSummary("HEAD")
+			Expect(err).To(BeNil(), "Should not be error calling git show")
+			headsha, _ := GitRefToFullSHA("HEAD")
+			Expect(commit.SHA).To(Equal(headsha), "SHA should be correct")
+			Expect(commit.ShortSHA).To(Equal(headsha[0:7]), "Short SHA should be correct")
+			Expect(commit.AuthorName).To(Equal("A N Author"), "Author should be correct")
+			Expect(commit.AuthorEmail).To(Equal("author@something.com"), "Author email should be correct")
+			Expect(commit.CommitterName).To(Equal("Joe Bloggs"), "Committer should be correct")
+			Expect(commit.CommitterEmail).To(Equal("joe@bloggs.com"), "Committer email should be correct")
+			Expect(commit.Subject).To(Equal("This is |a commit|with pipes in it|"), "Subject should be correct")
+			Expect(commit.CommitDate).To(BeTemporally("~", now, time.Second), "Commit date should be within a second of now")
+			Expect(commit.AuthorDate).To(BeTemporally("~", time.Date(2010, 03, 01, 14, 12, 0, 0, time.UTC), time.Millisecond), "Author date should be correct")
+
+		})
+
 	})
 })
