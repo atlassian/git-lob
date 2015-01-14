@@ -715,7 +715,7 @@ func GetGitCommitSummary(commit string) (*GitCommitSummary, error) {
 		ret.CommitterEmail = fields[6]
 		ret.CommitterName = fields[7]
 		if len(fields) > 8 {
-			ret.Subject = fields[8]
+			ret.Subject = strings.TrimRight(fields[8], "\n")
 		}
 		return ret, nil
 	} else {
