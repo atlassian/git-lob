@@ -4,10 +4,12 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"os/exec"
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 )
 
 // A git reference or reference range
@@ -19,6 +21,20 @@ type GitRefSpec struct {
 	RangeOp string
 	// Optional second ref
 	Ref2 string
+}
+
+// Some top level information about a commit (only first line of message)
+type GitCommitSummary struct {
+	SHA            string
+	ShortSHA       string
+	Parents        []string
+	CommitDate     time.Time
+	AuthorDate     time.Time
+	AuthorName     string
+	AuthorEmail    string
+	CommitterName  string
+	CommitterEmail string
+	Subject        string
 }
 
 // Returns whether a GitRefSpec is a range or not
@@ -414,6 +430,24 @@ func getGitCommitsReferencingLOBsInRange(from, to string, additions, removals bo
 		// if from & to are both blank, just use default behaviour of git log
 	}
 
+	cmd := exec.Command("git", args...)
+	outp, err := cmd.StdoutPipe()
+	if err != nil {
+		LogErrorf("Unable to call git-log: %v", err.Error())
+		return []CommitLOBRef{}, err
+	}
+	cmd.Start()
+
+	ret := scanGitLogOutputForLOBReferences(outp, additions, removals)
+
+	return ret, nil
+
+}
+
+// Internal utility for scanning git-log output for git-lob references
+// Log output must be formated like this: `--format=commitsha: %H`
+// outp must be output from a running git log task
+func scanGitLogOutputForLOBReferences(outp io.Reader, additions, removals bool) []CommitLOBRef {
 	// Sadly we still get more output than we actually need, but this is the minimum we can get
 	// For each commit we'll get something like this:
 	/*
@@ -429,7 +463,8 @@ func getGitCommitsReferencingLOBsInRange(from, to string, additions, removals bo
 	*/
 	// There can be multiple diffs per commit (multiple binaries)
 	// Also when a binary is changed the diff will include a '-' line for the old SHA
-	// So it's important that we only pull git-lob SHAs with a '+' prefix
+	// Depending on which direction in history the caller wants, they'll specify the
+	// parameters 'additions' and 'removals' to determine which get included
 
 	// Use 1 regex to capture all for speed
 	var regex *regexp.Regexp
@@ -441,13 +476,6 @@ func getGitCommitsReferencingLOBsInRange(from, to string, additions, removals bo
 		regex = regexp.MustCompile(`^(commitsha|[\+\-]git-lob): ([A-Fa-f0-9]{40})`)
 	}
 
-	cmd := exec.Command("git", args...)
-	outp, err := cmd.StdoutPipe()
-	if err != nil {
-		LogErrorf("Unable to call git-log: %v", err.Error())
-		return []CommitLOBRef{}, err
-	}
-	cmd.Start()
 	scanner := bufio.NewScanner(outp)
 
 	var currentCommit *CommitLOBRef
@@ -473,8 +501,7 @@ func getGitCommitsReferencingLOBsInRange(from, to string, additions, removals bo
 		currentCommit = nil
 	}
 
-	return ret, nil
-
+	return ret
 }
 
 // Gets a list of LOB SHAs for all binary files that are needed when checking out any of
@@ -521,6 +548,52 @@ func GetGitAllLOBsToCheckoutInRefSpec(refspec *GitRefSpec) ([]string, error) {
 			ret = append(ret, commit.lobSHAs...)
 		}
 
+	}
+
+	return ret, nil
+
+}
+
+// Get all the LOB SHAs that you would need to have available to check out a commit, and any other
+// ancestor of it within a number of days of that commit date (not today's date)
+// Note that if a LOB was modified to the same SHA more than once, duplicates may appear in the return
+// They are not routinely eliminated for performance, so perform your own dupe removal if you need it
+func GetGitAllLOBsToCheckoutAtCommitAndRecent(commit string, days int) ([]string, error) {
+	// All LOBs at the commit itself
+	shasAtCommit, err := GetGitAllGitLOBsToCheckoutAtCommit(commit)
+	if err != nil {
+		return []string{}, err
+	}
+	// get the commit date
+	commitDetails, err := GetGitCommitSummary(commit)
+	if err != nil {
+		return []string{}, err
+	}
+	sinceDate := commitDetails.CommitDate.AddDate(0, 0, -days)
+
+	// Now use git log to scan backwards
+	// We use git log from commit backwards, not commit^ (parent) because
+	// we're looking for *previous* SHAs, which means we're looking for diffs
+	// with a '-' line. So SHAs replaced in the latest commit are old versions too
+	// that we haven't included yet in shasAtCommit
+	args := []string{"log", `--format=commitsha: %H`, "-p",
+		fmt.Sprintf("--since=%v", sinceDate),
+		"-G", "^git-lob: [A-Fa-f0-9]{40}$",
+		commit}
+
+	cmd := exec.Command("git", args...)
+	outp, err := cmd.StdoutPipe()
+	if err != nil {
+		LogErrorf("Unable to call git-log: %v", err.Error())
+		return []string{}, err
+	}
+	cmd.Start()
+
+	// Looking backwards, so removals
+	commitsWithLOBs := scanGitLogOutputForLOBReferences(outp, false, true)
+	ret := shasAtCommit
+	for _, lobcommit := range commitsWithLOBs {
+		ret = append(ret, lobcommit.lobSHAs...)
 	}
 
 	return ret, nil
@@ -602,15 +675,46 @@ func GetGitAllGitLOBsToCheckoutAtCommit(commit string) ([]string, error) {
 
 }
 
+// Get summary information about a commit
+func GetGitCommitSummary(commit string) (*GitCommitSummary, error) {
+	cmd := exec.Command("git", "show", "-s",
+		"--format=%%H\u241E%%h\u241E%%aD\u241E%%cD\u241E%%ae\u241E%%an\u241E%%ce\u241E%%cn\u241E%%s", commit)
+
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		msg := fmt.Sprintf("Error calling git show: %v", err.Error())
+		LogError(msg)
+		return nil, errors.New(msg)
+	}
+
+	fields := strings.Split(string(out), "\u241E")
+	// Cope with the case where subject is blank
+	if len(fields) >= 8 {
+		ret := &GitCommitSummary{}
+		// Get SHAs from output, not commit input, so we can support symbolic refs
+		ret.SHA = fields[0]
+		ret.ShortSHA = fields[1]
+		// %aD & %cD (RFC2822) matches Go's RFC1123Z format
+		ret.AuthorDate, _ = time.Parse(time.RFC1123Z, fields[2])
+		ret.CommitDate, _ = time.Parse(time.RFC1123Z, fields[3])
+		ret.AuthorEmail = fields[4]
+		ret.AuthorName = fields[5]
+		ret.CommitterEmail = fields[6]
+		ret.CommitterName = fields[7]
+		if len(fields) > 8 {
+			ret.Subject = fields[8]
+		}
+		return ret, nil
+	} else {
+		msg := fmt.Sprintf("Unexpected output from git show: %v", out)
+		LogError(msg)
+		return nil, errors.New(msg)
+	}
+
+}
+
 // Get a list of refs (branches, tags) that have received commits in the last numdays
 func GetGitRecentRefs(numdays int) ([]string, error) {
 	// TODO
-	return nil, nil
-}
-
-// Get a refspec for a commit range representing all commits within numdays of when commit was made
-func GetGitRecentCommitRange(commit string, numdays int) (*GitRefSpec, error) {
-	// TODO
-	// NOTE: start commit probably needs to be returned as SHA^ since ranges are start-exclusive
 	return nil, nil
 }
