@@ -297,8 +297,9 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 			if isUsingSharedStorage() {
 				// filenames are relative (for download)
 				localfile := getLocalLOBMetaFilename(sha)
-				if force || !FileExists(localfile) {
-					linkSharedLOBFilename(localfile)
+				sharedfile := getSharedLOBMetaFilename(sha)
+				if (force || !FileExists(localfile)) && FileExists(sharedfile) {
+					linkSharedLOBFilename(sharedfile)
 				}
 			}
 			info, err := GetLOBInfo(sha)
@@ -364,8 +365,9 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 			for _, relfile := range files {
 				// filenames are relative (for download)
 				localfile := filepath.Join(GetLocalLOBRoot(), relfile)
-				if force || !FileExists(localfile) {
-					linkSharedLOBFilename(localfile)
+				sharedfile := filepath.Join(GetSharedLOBRoot(), relfile)
+				if (force || !FileExists(localfile)) && FileExists(sharedfile) {
+					linkSharedLOBFilename(sharedfile)
 				}
 			}
 		}
