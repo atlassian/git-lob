@@ -757,7 +757,7 @@ func GetGitRecentRefs(numdays int, includeRemoteBranches bool, remoteName string
 	// Output is ordered by latest commit date first, so we can stop at the threshold
 	earliestDate := time.Now().AddDate(0, 0, -numdays)
 
-	regex := regexp.MustCompile(`^refs/([^/]+)/(\S)+`)
+	regex := regexp.MustCompile(`^refs/([^/]+)/(\S+)`)
 
 	var ret []string
 	for scanner.Scan() {
