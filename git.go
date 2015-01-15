@@ -579,7 +579,7 @@ func GetGitAllLOBsToCheckoutAtCommitAndRecent(commit string, days int) ([]string
 	// with a '-' line. So SHAs replaced in the latest commit are old versions too
 	// that we haven't included yet in shasAtCommit
 	args := []string{"log", `--format=commitsha: %H`, "-p",
-		fmt.Sprintf("--since=%v", sinceDate),
+		fmt.Sprintf("--since=%v", FormatGitDate(sinceDate)),
 		"-G", "^git-lob: [A-Fa-f0-9]{40}$",
 		commit}
 
