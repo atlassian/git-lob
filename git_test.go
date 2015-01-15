@@ -625,6 +625,7 @@ var _ = Describe("Git", func() {
 			correctLOBsFeature1 = append(correctLOBsFeature1, lobshas[9])
 			// Also include unchanged file1.txt at this state and old state of file2.txt
 			correctLOBsFeature1 = append(correctLOBsFeature1, lobshas[2], lobshas[5])
+			exec.Command("git", "tag", "afeaturetag").Run()
 
 			// Back to master
 			exec.Command("git", "checkout", "master").Run()
@@ -666,6 +667,7 @@ var _ = Describe("Git", func() {
 			exec.Command("git", "add", "file5.txt").Run()
 			commitAtDate(headCommitsIncludedDate.Add(time.Hour*24*4), "Master penultimate commit")
 			correctLOBsMaster = append(correctLOBsMaster, lobshas[14])
+			exec.Command("git", "tag", "aheadtag").Run()
 
 			ioutil.WriteFile(filepath.Join(root, "file5.txt"),
 				[]byte(fmt.Sprintf("git-lob: %v", lobshas[15])), 0644) // included
@@ -673,7 +675,7 @@ var _ = Describe("Git", func() {
 			commitAtDate(latestHEADCommitDate, "Master tip commit")
 			correctLOBsMaster = append(correctLOBsMaster, lobshas[15])
 
-			correctRefs = []string{"master", "feature/1", "feature/2"}
+			correctRefs = []string{"master", "feature/1", "feature/2", "aheadtag", "afeaturetag"}
 
 		})
 		AfterEach(func() {
@@ -697,9 +699,6 @@ var _ = Describe("Git", func() {
 			Expect(err).To(BeNil(), "Should not error getting lobs")
 			Expect(lobs).To(ConsistOf(correctLOBsFeature2), fmt.Sprintf("LOBs on feature/2 should be correct; all LOBS were:\n%v", strings.Join(lobshas, "\n")))
 			// TODO remote branches
-			// TODO test tags
-
-			// TODO test LOBs
 
 		})
 
