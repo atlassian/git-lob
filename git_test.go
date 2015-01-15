@@ -681,9 +681,12 @@ var _ = Describe("Git", func() {
 			// This is a total hack so we don't have to create real remotes & push etc
 			mastersha, _ := exec.Command("git", "rev-parse", "master").CombinedOutput()
 			otherremotebranchsha, _ := exec.Command("git", "rev-parse", "aheadtag").CombinedOutput()
+			oldremotebranchsha, _ := exec.Command("git", "rev-parse", "start").CombinedOutput()
 			os.MkdirAll(filepath.Join(root, ".git", "refs", "remotes", "origin"), 0755)
 			ioutil.WriteFile(filepath.Join(root, ".git", "refs", "remotes", "origin", "master"),
 				[]byte(mastersha), 0644)
+			ioutil.WriteFile(filepath.Join(root, ".git", "refs", "remotes", "origin", "too_old"),
+				[]byte(oldremotebranchsha), 0644)
 			os.MkdirAll(filepath.Join(root, ".git", "refs", "remotes", "origin", "feature"), 0755)
 			ioutil.WriteFile(filepath.Join(root, ".git", "refs", "remotes", "origin", "feature", "remoteonly"),
 				[]byte(otherremotebranchsha), 0644)
