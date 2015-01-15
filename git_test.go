@@ -523,7 +523,9 @@ var _ = Describe("Git", func() {
 		root := filepath.Join(os.TempDir(), "GitTest")
 		var oldwd string
 		lobshas := GetListOfRandomSHAsForTest(16)
-		var correctRefs []string
+		var correctRefsNoRemotes []string
+		var correctRefsAll []string
+		var correctRefsOriginOnly []string
 		var correctLOBsMaster []string
 		var correctLOBsFeature1 []string
 		var correctLOBsFeature2 []string
@@ -675,7 +677,23 @@ var _ = Describe("Git", func() {
 			commitAtDate(latestHEADCommitDate, "Master tip commit")
 			correctLOBsMaster = append(correctLOBsMaster, lobshas[15])
 
-			correctRefs = []string{"master", "feature/1", "feature/2", "aheadtag", "afeaturetag"}
+			// Now create some remote branches for testing
+			// This is a total hack so we don't have to create real remotes & push etc
+			mastersha, _ := exec.Command("git", "rev-parse", "master").CombinedOutput()
+			otherremotebranchsha, _ := exec.Command("git", "rev-parse", "aheadtag").CombinedOutput()
+			os.MkdirAll(filepath.Join(root, ".git", "refs", "remotes", "origin"), 0755)
+			ioutil.WriteFile(filepath.Join(root, ".git", "refs", "remotes", "origin", "master"),
+				[]byte(mastersha), 0644)
+			os.MkdirAll(filepath.Join(root, ".git", "refs", "remotes", "origin", "feature"), 0755)
+			ioutil.WriteFile(filepath.Join(root, ".git", "refs", "remotes", "origin", "feature", "remoteonly"),
+				[]byte(otherremotebranchsha), 0644)
+			os.MkdirAll(filepath.Join(root, ".git", "refs", "remotes", "remote2"), 0755)
+			ioutil.WriteFile(filepath.Join(root, ".git", "refs", "remotes", "remote2", "master"),
+				[]byte(otherremotebranchsha), 0644)
+
+			correctRefsNoRemotes = []string{"master", "feature/1", "feature/2", "aheadtag", "afeaturetag"}
+			correctRefsAll = []string{"master", "feature/1", "feature/2", "aheadtag", "afeaturetag", "origin/master", "origin/feature/remoteonly", "remote2/master"}
+			correctRefsOriginOnly = []string{"master", "feature/1", "feature/2", "aheadtag", "afeaturetag", "origin/master", "origin/feature/remoteonly"}
 
 		})
 		AfterEach(func() {
@@ -685,7 +703,15 @@ var _ = Describe("Git", func() {
 		It("Retrieves recent git refs & LOBs", func() {
 			recentrefs, err := GetGitRecentRefs(GlobalOptions.RecentRefsPeriodDays, false, "")
 			Expect(err).To(BeNil(), "Should not error calling GetGitRecentRefs")
-			Expect(recentrefs).To(ConsistOf(correctRefs), "Recent refs should be correct")
+			Expect(recentrefs).To(ConsistOf(correctRefsNoRemotes), "Recent refs (local only) should be correct")
+
+			recentrefs, err = GetGitRecentRefs(GlobalOptions.RecentRefsPeriodDays, true, "")
+			Expect(err).To(BeNil(), "Should not error calling GetGitRecentRefs")
+			Expect(recentrefs).To(ConsistOf(correctRefsAll), "Recent refs (all) should be correct")
+
+			recentrefs, err = GetGitRecentRefs(GlobalOptions.RecentRefsPeriodDays, true, "origin")
+			Expect(err).To(BeNil(), "Should not error calling GetGitRecentRefs")
+			Expect(recentrefs).To(ConsistOf(correctRefsOriginOnly), "Recent refs (only origin remote) should be correct")
 
 			lobs, err := GetGitAllLOBsToCheckoutAtCommitAndRecent("master", GlobalOptions.RecentCommitsPeriodHEAD)
 			Expect(err).To(BeNil(), "Should not error getting lobs")
@@ -698,7 +724,6 @@ var _ = Describe("Git", func() {
 			lobs, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("feature/2", GlobalOptions.RecentCommitsPeriodOther)
 			Expect(err).To(BeNil(), "Should not error getting lobs")
 			Expect(lobs).To(ConsistOf(correctLOBsFeature2), fmt.Sprintf("LOBs on feature/2 should be correct; all LOBS were:\n%v", strings.Join(lobshas, "\n")))
-			// TODO remote branches
 
 		})
 
