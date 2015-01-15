@@ -522,9 +522,8 @@ var _ = Describe("Git", func() {
 
 		root := filepath.Join(os.TempDir(), "GitTest")
 		var oldwd string
-		lobshas := GetListOfRandomSHAsForTest(14)
+		lobshas := GetListOfRandomSHAsForTest(16)
 		var correctRefs []string
-		var correctLOBs []string
 		var correctLOBsMaster []string
 		var correctLOBsFeature1 []string
 		var correctLOBsFeature2 []string
@@ -570,11 +569,21 @@ var _ = Describe("Git", func() {
 			exec.Command("git", "add", "file1.txt", "file2.txt").Run()
 			// exclude commit 1
 			commitAtDate(headCommitsExcludedDate.Add(-time.Hour*24*30), "Initial")
+
+			ioutil.WriteFile(filepath.Join(root, "file1.txt"),
+				[]byte(fmt.Sprintf("git-lob: %v", lobshas[2])), 0644) // included
+			ioutil.WriteFile(filepath.Join(root, "file2.txt"),
+				[]byte(fmt.Sprintf("git-lob: %v", lobshas[3])), 0644) // included
+			exec.Command("git", "add", "file1.txt", "file2.txt").Run()
+			// commit 2 will be excluded, but its state will 'overlap' into the valid date range as a -ve diff
+			commitAtDate(headCommitsExcludedDate.Add(-time.Hour*24*15), "Second commit")
+			correctLOBsMaster = append(correctLOBsMaster, lobshas[2], lobshas[3])
+
 			exec.Command("git", "tag", "start").Run()
 			// Create a branch we're going to exclude
 			exec.Command("git", "checkout", "-b", "feature/3").Run()
 			ioutil.WriteFile(filepath.Join(root, "file20.txt"),
-				[]byte(fmt.Sprintf("git-lob: %v", lobshas[2])), 0644) // excluded
+				[]byte(fmt.Sprintf("git-lob: %v", lobshas[4])), 0644) // excluded
 			exec.Command("git", "add", "file20.txt").Run()
 			// We'll never see this commit or the branch
 			commitAtDate(latestFeature3CommitDate, "Feature 3 commit")
@@ -583,14 +592,13 @@ var _ = Describe("Git", func() {
 
 			// add another file & modify
 			ioutil.WriteFile(filepath.Join(root, "file2.txt"), // replacement
-				[]byte(fmt.Sprintf("git-lob: %v", lobshas[3])), 0644) // included
+				[]byte(fmt.Sprintf("git-lob: %v", lobshas[5])), 0644) // included
 			ioutil.WriteFile(filepath.Join(root, "file3.txt"),
-				[]byte(fmt.Sprintf("git-lob: %v", lobshas[4])), 0644) // included
+				[]byte(fmt.Sprintf("git-lob: %v", lobshas[6])), 0644) // included
 			exec.Command("git", "add", "file2.txt", "file3.txt").Run()
 			// include commit 2
-			commitAtDate(headCommitsIncludedDate.Add(time.Hour*24), "Second commit")
-			correctLOBs = append(correctLOBs, lobshas[3], lobshas[4])
-			correctLOBsMaster = append(correctLOBsMaster, lobshas[3], lobshas[4])
+			commitAtDate(headCommitsIncludedDate.Add(time.Hour*24), "Third commit")
+			correctLOBsMaster = append(correctLOBsMaster, lobshas[5], lobshas[6])
 			// Also include commit that references NO shas
 			commitAtDate(headCommitsIncludedDate.Add(time.Hour*48), "Non-LOB commit")
 
@@ -598,25 +606,25 @@ var _ = Describe("Git", func() {
 			exec.Command("git", "tag", "feature/1/start").Run()
 			exec.Command("git", "checkout", "-b", "feature/1").Run()
 			ioutil.WriteFile(filepath.Join(root, "file3.txt"),
-				[]byte(fmt.Sprintf("git-lob: %v", lobshas[5])), 0644) // excluded
+				[]byte(fmt.Sprintf("git-lob: %v", lobshas[7])), 0644) // excluded
 			exec.Command("git", "add", "file3.txt").Run()
 			// We'll never see this commit but we will see the branch (commit later)
 			commitAtDate(feature1CommitsIncludedDate.Add(-time.Hour*48), "Feature 1 excluded commit")
 			ioutil.WriteFile(filepath.Join(root, "file3.txt"),
-				[]byte(fmt.Sprintf("git-lob: %v", lobshas[6])), 0644) // included
+				[]byte(fmt.Sprintf("git-lob: %v", lobshas[8])), 0644) // included
 			exec.Command("git", "add", "file3.txt").Run()
 			// We'll see this commit because the next commit will be the tip & range will include it
-			commitAtDate(feature1CommitsIncludedDate.Add(time.Hour*24), "Feature 1 included commit")
-			correctLOBs = append(correctLOBs, lobshas[6])
-			correctLOBsFeature1 = append(correctLOBsFeature1, lobshas[6])
+			commitAtDate(feature1CommitsIncludedDate.Add(-time.Hour*4), "Feature 1 included commit")
+			correctLOBsFeature1 = append(correctLOBsFeature1, lobshas[8])
 
 			ioutil.WriteFile(filepath.Join(root, "file3.txt"),
-				[]byte(fmt.Sprintf("git-lob: %v", lobshas[7])), 0644) // included
+				[]byte(fmt.Sprintf("git-lob: %v", lobshas[9])), 0644) // included
 			exec.Command("git", "add", "file3.txt").Run()
 			// We'll see this commit because the next commit will be the tip & range will include it
 			commitAtDate(latestFeature1CommitDate, "Feature 1 tip commit")
-			correctLOBs = append(correctLOBs, lobshas[7])
-			correctLOBsFeature1 = append(correctLOBsFeature1, lobshas[7])
+			correctLOBsFeature1 = append(correctLOBsFeature1, lobshas[9])
+			// Also include unchanged file1.txt at this state and old state of file2.txt
+			correctLOBsFeature1 = append(correctLOBsFeature1, lobshas[2], lobshas[5])
 
 			// Back to master
 			exec.Command("git", "checkout", "master").Run()
@@ -625,46 +633,45 @@ var _ = Describe("Git", func() {
 			exec.Command("git", "tag", "feature/2/start").Run()
 			exec.Command("git", "checkout", "-b", "feature/2").Run()
 			ioutil.WriteFile(filepath.Join(root, "file4.txt"),
-				[]byte(fmt.Sprintf("git-lob: %v", lobshas[8])), 0644) // excluded
+				[]byte(fmt.Sprintf("git-lob: %v", lobshas[10])), 0644) // excluded
 			exec.Command("git", "add", "file4.txt").Run()
 			// We'll never see this commit but we will see the branch (commit later)
 			commitAtDate(feature2CommitsIncludedDate.Add(-time.Hour*24*3), "Feature 2 excluded commit")
-			ioutil.WriteFile(filepath.Join(root, "file2.txt"),
-				[]byte(fmt.Sprintf("git-lob: %v", lobshas[9])), 0644) // excluded
-			exec.Command("git", "add", "file2.txt").Run()
-			// We'll never see this commit but we will see the branch (commit later)
-			commitAtDate(feature2CommitsIncludedDate.Add(-time.Hour*24*2), "Feature 2 excluded commit")
-			ioutil.WriteFile(filepath.Join(root, "file1.txt"),
-				[]byte(fmt.Sprintf("git-lob: %v", lobshas[10])), 0644) // included
-			exec.Command("git", "add", "file1.txt").Run()
+			ioutil.WriteFile(filepath.Join(root, "file4.txt"),
+				[]byte(fmt.Sprintf("git-lob: %v", lobshas[11])), 0644) // included
+			exec.Command("git", "add", "file4.txt").Run()
 			// We'll see this commit because the next commit will be the tip & range will include it
+			commitAtDate(feature2CommitsIncludedDate.Add(-time.Hour*24*2), "Feature 2 excluded commit")
+			correctLOBsFeature2 = append(correctLOBsFeature2, lobshas[11])
+			ioutil.WriteFile(filepath.Join(root, "file4.txt"),
+				[]byte(fmt.Sprintf("git-lob: %v", lobshas[12])), 0644) // included
+			exec.Command("git", "add", "file4.txt").Run()
+			// We'll see this commit
 			commitAtDate(latestFeature2CommitDate, "Feature 2 tip commit")
-			correctLOBs = append(correctLOBs, lobshas[10])
-			correctLOBsFeature2 = append(correctLOBsFeature2, lobshas[7])
+			correctLOBsFeature2 = append(correctLOBsFeature2, lobshas[12])
+			// Also include unchanged files on this branch: file1-3.txt last state & included versions
+			correctLOBsFeature2 = append(correctLOBsFeature2, lobshas[5], lobshas[6], lobshas[2])
 
 			// Back to master to finish
 			exec.Command("git", "checkout", "master").Run()
 
 			ioutil.WriteFile(filepath.Join(root, "file6.txt"),
-				[]byte(fmt.Sprintf("git-lob: %v", lobshas[11])), 0644) // included
+				[]byte(fmt.Sprintf("git-lob: %v", lobshas[13])), 0644) // included
 			exec.Command("git", "add", "file6.txt").Run()
 			commitAtDate(headCommitsIncludedDate.Add(time.Hour*24*3), "Master commit")
-			correctLOBs = append(correctLOBs, lobshas[11])
-			correctLOBsMaster = append(correctLOBsMaster, lobshas[11])
+			correctLOBsMaster = append(correctLOBsMaster, lobshas[13])
 
 			ioutil.WriteFile(filepath.Join(root, "file5.txt"),
-				[]byte(fmt.Sprintf("git-lob: %v", lobshas[12])), 0644) // included
+				[]byte(fmt.Sprintf("git-lob: %v", lobshas[14])), 0644) // included
 			exec.Command("git", "add", "file5.txt").Run()
 			commitAtDate(headCommitsIncludedDate.Add(time.Hour*24*4), "Master penultimate commit")
-			correctLOBs = append(correctLOBs, lobshas[12])
-			correctLOBsMaster = append(correctLOBsMaster, lobshas[12])
+			correctLOBsMaster = append(correctLOBsMaster, lobshas[14])
 
 			ioutil.WriteFile(filepath.Join(root, "file5.txt"),
-				[]byte(fmt.Sprintf("git-lob: %v", lobshas[13])), 0644) // included
+				[]byte(fmt.Sprintf("git-lob: %v", lobshas[15])), 0644) // included
 			exec.Command("git", "add", "file5.txt").Run()
 			commitAtDate(latestHEADCommitDate, "Master tip commit")
-			correctLOBs = append(correctLOBs, lobshas[13])
-			correctLOBsMaster = append(correctLOBsMaster, lobshas[13])
+			correctLOBsMaster = append(correctLOBsMaster, lobshas[15])
 
 			correctRefs = []string{"master", "feature/1", "feature/2"}
 
@@ -678,6 +685,17 @@ var _ = Describe("Git", func() {
 			Expect(err).To(BeNil(), "Should not error calling GetGitRecentRefs")
 			Expect(recentrefs).To(ConsistOf(correctRefs), "Recent refs should be correct")
 
+			lobs, err := GetGitAllLOBsToCheckoutAtCommitAndRecent("master", GlobalOptions.RecentCommitsPeriodHEAD)
+			Expect(err).To(BeNil(), "Should not error getting lobs")
+			Expect(lobs).To(ConsistOf(correctLOBsMaster), fmt.Sprintf("LOBs on master should be correct; all LOBS were:\n%v", strings.Join(lobshas, "\n")))
+
+			// It's harder to visualise the feature branches because unchanged files from other branches are included
+			lobs, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("feature/1", GlobalOptions.RecentCommitsPeriodOther)
+			Expect(err).To(BeNil(), "Should not error getting lobs")
+			Expect(lobs).To(ConsistOf(correctLOBsFeature1), fmt.Sprintf("LOBs on feature/1 should be correct; all LOBS were:\n%v", strings.Join(lobshas, "\n")))
+			lobs, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("feature/2", GlobalOptions.RecentCommitsPeriodOther)
+			Expect(err).To(BeNil(), "Should not error getting lobs")
+			Expect(lobs).To(ConsistOf(correctLOBsFeature2), fmt.Sprintf("LOBs on feature/2 should be correct; all LOBS were:\n%v", strings.Join(lobshas, "\n")))
 			// TODO remote branches
 			// TODO test tags
 
