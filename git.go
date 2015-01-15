@@ -736,7 +736,7 @@ func GetGitCommitSummary(commit string) (*GitCommitSummary, error) {
 // remote branches on that remote
 func GetGitRecentRefs(numdays int, includeRemoteBranches bool, remoteName string) ([]string, error) {
 	cmd := exec.Command("git", "for-each-ref",
-		`--sort=-*committerdate`,
+		`--sort=-committerdate`,
 		`--format=%(refname) %(objectname:short)`,
 		"refs")
 	outp, err := cmd.StdoutPipe()
