@@ -107,7 +107,7 @@ func cmdFetch() int {
 	ReportProgressToConsole(callbackChan, "Fetch", time.Millisecond*500)
 
 	if fetcherr != nil {
-		fmt.Fprintf(os.Stderr, "git-lob: fetch error - %v", err.Error())
+		fmt.Fprintf(os.Stderr, "git-lob: fetch error - %v", fetcherr.Error())
 		return 12
 	}
 	if !GlobalOptions.Quiet {

@@ -148,7 +148,7 @@ func cmdPush() int {
 	ReportProgressToConsole(callbackChan, "Push", time.Millisecond*500)
 
 	if pusherr != nil {
-		fmt.Fprintf(os.Stderr, "git-lob: push error - %v", err.Error())
+		fmt.Fprintf(os.Stderr, "git-lob: push error - %v", pusherr.Error())
 		return 12
 	}
 	if !GlobalOptions.Quiet {
