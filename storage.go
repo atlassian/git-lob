@@ -230,7 +230,7 @@ func recoverLocalLOBFilesFromSharedStore(sha string) bool {
 	if !FileExists(metalocal) {
 		metashared := getSharedLOBMetaFilename(sha)
 		if FileExists(metashared) {
-			err := linkSharedLOBFilename(metalocal)
+			err := linkSharedLOBFilename(metashared)
 			if err != nil {
 				return false
 			}
@@ -249,7 +249,7 @@ func recoverLocalLOBFilesFromSharedStore(sha string) bool {
 		if !FileExistsAndIsOfSize(local, expectedSize) {
 			shared := getSharedLOBChunkFilename(sha, i)
 			if FileExistsAndIsOfSize(shared, expectedSize) {
-				err := linkSharedLOBFilename(local)
+				err := linkSharedLOBFilename(shared)
 				if err != nil {
 					return false
 				}
@@ -346,10 +346,10 @@ func RetrieveLOB(sha string, out io.Writer) (info *LOBInfo, err error) {
 // Link a file from shared storage into the local repo
 // The hard link means we only ever have one copy of the data
 // but it appears under each repo's git-lob folder
-// destFile should be a full path
-func linkSharedLOBFilename(destFile string) error {
+// destFile should be a full path of shared file location
+func linkSharedLOBFilename(destSharedFile string) error {
 	// Get path relative to shared store root, then translate it to local path
-	relPath, err := filepath.Rel(GlobalOptions.SharedStore, destFile)
+	relPath, err := filepath.Rel(GlobalOptions.SharedStore, destSharedFile)
 	if err != nil {
 		return err
 	}
@@ -359,9 +359,9 @@ func linkSharedLOBFilename(destFile string) error {
 	os.MkdirAll(filepath.Dir(linkPath), 0755)
 
 	os.Remove(linkPath)
-	err = CreateHardLink(destFile, linkPath)
+	err = CreateHardLink(destSharedFile, linkPath)
 	if err != nil {
-		LogErrorf("Error creating hard link from %v to %v: %v", linkPath, destFile, err)
+		LogErrorf("Error creating hard link from %v to %v: %v\n", linkPath, destSharedFile, err)
 		return err
 	}
 	return nil
