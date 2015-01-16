@@ -116,7 +116,7 @@ func cmdFetch() int {
 		} else {
 			// Because no newlines in progress reporting
 			fmt.Println()
-			fmt.Println("Successfully fetched binaries to", remoteName)
+			fmt.Println("Successfully fetched binaries from", remoteName)
 		}
 	}
 
