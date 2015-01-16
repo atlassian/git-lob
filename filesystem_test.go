@@ -40,9 +40,9 @@ var _ = Describe("Filesystem", func() {
 		// Record of callbacks for files
 		var filesUploaded []string = make([]string, 0, len(files))
 		var filesSkipped []string
-		callback := func(filename string, isSkipped bool, bytesDone, totalBytes int64) (abort bool) {
+		callback := func(filename string, progressType ProgressCallbackType, bytesDone, totalBytes int64) (abort bool) {
 			if bytesDone == totalBytes {
-				if isSkipped {
+				if progressType == ProgressSkip {
 					filesSkipped = append(filesSkipped, filename)
 				} else {
 					filesUploaded = append(filesUploaded, filename)
@@ -112,9 +112,9 @@ var _ = Describe("Filesystem", func() {
 		// Record of callbacks for files
 		var filesDownloaded []string = make([]string, 0, len(files))
 		var filesSkipped []string
-		callback := func(filename string, isSkipped bool, bytesDone, totalBytes int64) (abort bool) {
+		callback := func(filename string, progressType ProgressCallbackType, bytesDone, totalBytes int64) (abort bool) {
 			if bytesDone == totalBytes {
-				if isSkipped {
+				if progressType == ProgressSkip {
 					filesSkipped = append(filesSkipped, filename)
 				} else {
 					filesDownloaded = append(filesDownloaded, filename)

@@ -246,13 +246,14 @@ func PushBasic(provider SyncProvider, remoteName string, refspecs []*GitRefSpec,
 			// Upload now
 			var lastFilename string
 			var lastFileBytes int64
-			localcallback := func(fileInProgress string, isSkipped bool, bytesDone, totalBytes int64) (abort bool) {
+			localcallback := func(fileInProgress string, progressType ProgressCallbackType, bytesDone, totalBytes int64) (abort bool) {
 				if lastFilename != fileInProgress {
 					// New file, always callback
-					if isSkipped {
+					if progressType == ProgressSkip || progressType == ProgressNotFound {
+						// 'not found' will cause an error anyway so just pass through
 						filesdone++
 						bytesFromFilesDoneSoFar += totalBytes
-						callback(&ProgressCallbackData{ProgressSkip, fileInProgress, totalBytes, totalBytes,
+						callback(&ProgressCallbackData{progressType, fileInProgress, totalBytes, totalBytes,
 							bytesFromFilesDoneSoFar, allCommitsSize})
 					} else {
 						if lastFilename != "" {

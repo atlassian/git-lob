@@ -16,6 +16,8 @@ const (
 	ProgressTransferBytes ProgressCallbackType = iota
 	// Process is skipping data because it's already up to date
 	ProgressSkip ProgressCallbackType = iota
+	// Process did not find the requested data, moving on
+	ProgressNotFound ProgressCallbackType = iota
 )
 
 // Collected callback data for a progress operation
@@ -83,6 +85,12 @@ func ReportProgressToConsole(callbackChan <-chan *ProgressCallbackData, op strin
 					// Only print if verbose
 					if GlobalOptions.Verbose {
 						fmt.Println("Skipped:", data.Desc, "(Up to date)")
+					}
+				case ProgressNotFound:
+					finalDownloadProgress = nil
+					// Always print these if not quiet
+					if !GlobalOptions.Quiet {
+						fmt.Println("Not found:", data.Desc, "(Continuing)")
 					}
 				case ProgressTransferBytes:
 					// Print completion in verbose mode

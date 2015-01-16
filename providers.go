@@ -36,13 +36,15 @@ type SyncProvider interface {
 	// For each file, if the local copy already has this file and it's the same size, skip.
 	// Must only return nil if all files were successfully uploaded
 	// If force = true, files should be downloaded even if they're already there & the correct size
+	// Files not found should not cause an error, since we do not query presence beforehand. Instead,
+	// the callback should be called with ProgressNotFound and proceed to the next one.
 	Download(remoteName string, filenames []string, toDir string, force bool, callback SyncProgressCallback) error
 }
 
 // Callback when progress is made uploading / downloading
 // fileInProgress: relative path of file, isSkipped: whether file was up to date, bytesDone/totalBytes: progress for current file
 // return true to abort the process for this and all other files in the batch
-type SyncProgressCallback func(fileInProgress string, isSkipped bool, bytesDone, totalBytes int64) (abort bool)
+type SyncProgressCallback func(fileInProgress string, progressType ProgressCallbackType, bytesDone, totalBytes int64) (abort bool)
 
 // Providers implementing this interface provide smart sync capabilities
 // These providers require server-side processing and are free to store data how they like

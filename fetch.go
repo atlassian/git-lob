@@ -265,12 +265,13 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 		averageMetaSize := 100
 		metaTotalBytes := int64(len(metafilesToDownload) * averageMetaSize)
 		var metafilesDone int
-		metacallback := func(fileInProgress string, isSkipped bool, bytesDone, totalBytes int64) (abort bool) {
+		metacallback := func(fileInProgress string, progressType ProgressCallbackType, bytesDone, totalBytes int64) (abort bool) {
 			// Don't bother to track partial completion, only 100 bytes each
-			if isSkipped {
+			if progressType == ProgressSkip || progressType == ProgressNotFound {
 				metafilesDone++
-				callback(&ProgressCallbackData{ProgressSkip, fileInProgress, totalBytes, totalBytes,
+				callback(&ProgressCallbackData{progressType, fileInProgress, totalBytes, totalBytes,
 					int64(metafilesDone * averageMetaSize), metaTotalBytes})
+				// Remote did not have this file
 			} else {
 				if bytesDone == totalBytes {
 					// finished
@@ -306,8 +307,12 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 			}
 			info, err := GetLOBInfo(sha)
 			if err != nil {
-				// Abort!
-				return err
+				// If we could not get the lob data, it means that we could not download the meta file
+				// it's OK for this to happen since the remote may not have all the data we need (e.g.
+				// local branch with changes that actually came from somewhere else, or remote hasn't been
+				// fully updated yet)
+				// We notified earlier
+				continue
 			}
 			filesTotalBytes += info.Size
 			for i := 0; i < info.NumChunks; i++ {
@@ -323,12 +328,12 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 		var lastFilename string
 		var lastFileBytes int64
 		var bytesFromFilesDoneSoFar int64
-		contentcallback := func(fileInProgress string, isSkipped bool, bytesDone, totalBytes int64) (abort bool) {
+		contentcallback := func(fileInProgress string, progressType ProgressCallbackType, bytesDone, totalBytes int64) (abort bool) {
 			if lastFilename != fileInProgress {
 				// New file, always callback
-				if isSkipped {
+				if progressType == ProgressSkip || progressType == ProgressNotFound {
 					bytesFromFilesDoneSoFar += totalBytes
-					callback(&ProgressCallbackData{ProgressSkip, fileInProgress, totalBytes, totalBytes,
+					callback(&ProgressCallbackData{progressType, fileInProgress, totalBytes, totalBytes,
 						bytesFromFilesDoneSoFar, filesTotalBytes})
 				} else {
 					if lastFilename != "" {

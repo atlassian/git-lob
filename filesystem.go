@@ -67,6 +67,11 @@ func (*FileSystemSyncProvider) uploadSingleFile(remoteName, filename, fromDir, t
 	srcfilename := filepath.Join(fromDir, filename)
 	srcfi, err := os.Stat(srcfilename)
 	if err != nil {
+		if callback != nil {
+			if callback(filename, ProgressNotFound, 0, 0) {
+				return errorList, true
+			}
+		}
 		msg := fmt.Sprintf("Unable to stat %v: %v", srcfilename, err)
 		LogErrorf(msg)
 		errorList = append(errorList, msg)
@@ -82,7 +87,7 @@ func (*FileSystemSyncProvider) uploadSingleFile(remoteName, filename, fromDir, t
 			if destfi.Size() == srcfi.Size() {
 				// File already present and correct size, skip
 				if callback != nil {
-					if callback(filename, true, srcfi.Size(), srcfi.Size()) {
+					if callback(filename, ProgressSkip, srcfi.Size(), srcfi.Size()) {
 						return errorList, true
 					}
 				}
@@ -128,7 +133,7 @@ func (*FileSystemSyncProvider) uploadSingleFile(remoteName, filename, fromDir, t
 
 	// Initial callback
 	if callback != nil {
-		if callback(filename, false, 0, srcfi.Size()) {
+		if callback(filename, ProgressTransferBytes, 0, srcfi.Size()) {
 			return errorList, true
 		}
 	}
@@ -138,7 +143,7 @@ func (*FileSystemSyncProvider) uploadSingleFile(remoteName, filename, fromDir, t
 		n, err = io.CopyN(outf, inf, BUFSIZE)
 		copysize += n
 		if n > 0 && callback != nil && srcfi.Size() > 0 {
-			if callback(filename, false, copysize, srcfi.Size()) {
+			if callback(filename, ProgressTransferBytes, copysize, srcfi.Size()) {
 				return errorList, true
 			}
 		}
@@ -211,9 +216,15 @@ func (*FileSystemSyncProvider) downloadSingleFile(remoteName, filename, fromDir,
 	srcfilename := filepath.Join(fromDir, filename)
 	srcfi, err := os.Stat(srcfilename)
 	if err != nil {
-		msg := fmt.Sprintf("Unable to stat %v: %v", srcfilename, err)
-		LogErrorf(msg)
-		errorList = append(errorList, msg)
+		if callback != nil {
+			if callback(filename, ProgressNotFound, 0, 0) {
+				return errorList, true
+			}
+		}
+		// Note how we don't add an error to the returned error list
+		// As per provider docs, we simply tell callback it happened & treat it
+		// as a skipped item otherwise, since caller can only request files & not know
+		// if they're on the remote or not
 		// Keep going with other files
 		return errorList, false
 	}
@@ -226,7 +237,7 @@ func (*FileSystemSyncProvider) downloadSingleFile(remoteName, filename, fromDir,
 			if destfi.Size() == srcfi.Size() {
 				// File already present and correct size, skip
 				if callback != nil {
-					if callback(filename, true, srcfi.Size(), srcfi.Size()) {
+					if callback(filename, ProgressSkip, srcfi.Size(), srcfi.Size()) {
 						return errorList, true
 					}
 				}
@@ -271,7 +282,7 @@ func (*FileSystemSyncProvider) downloadSingleFile(remoteName, filename, fromDir,
 
 	// Initial callback
 	if callback != nil {
-		if callback(filename, false, 0, srcfi.Size()) {
+		if callback(filename, ProgressTransferBytes, 0, srcfi.Size()) {
 			return errorList, true
 		}
 	}
@@ -281,7 +292,7 @@ func (*FileSystemSyncProvider) downloadSingleFile(remoteName, filename, fromDir,
 		n, err = io.CopyN(outf, inf, BUFSIZE)
 		copysize += n
 		if n > 0 && callback != nil && srcfi.Size() > 0 {
-			if callback(filename, false, copysize, srcfi.Size()) {
+			if callback(filename, ProgressTransferBytes, copysize, srcfi.Size()) {
 				return errorList, true
 			}
 		}
