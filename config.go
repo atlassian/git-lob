@@ -123,19 +123,19 @@ func LoadConfig(opts *Options) {
 	if recentrefs := configmap["git-lob.recent-refs"]; recentrefs != "" {
 		n, err := strconv.ParseInt(recentrefs, 10, 0)
 		if err != nil {
-			GlobalOptions.RecentRefsPeriodDays = int(n)
+			opts.RecentRefsPeriodDays = int(n)
 		}
 	}
 	if recent := configmap["git-lob.recent-commits-head"]; recent != "" {
 		n, err := strconv.ParseInt(recent, 10, 0)
 		if err != nil {
-			GlobalOptions.RecentCommitsPeriodHEAD = int(n)
+			opts.RecentCommitsPeriodHEAD = int(n)
 		}
 	}
 	if recent := configmap["git-lob.recent-commits-other"]; recent != "" {
 		n, err := strconv.ParseInt(recent, 10, 0)
 		if err != nil {
-			GlobalOptions.RecentCommitsPeriodOther = int(n)
+			opts.RecentCommitsPeriodOther = int(n)
 		}
 	}
 
