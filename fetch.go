@@ -314,7 +314,7 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 			}
 		}
 		if !GlobalOptions.Quiet {
-			callback(&ProgressCallbackData{ProgressCalculate, "Metadata done, downloading content",
+			callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf("Metadata done, downloading content (%v)", FormatSize(filesTotalBytes)),
 				0, 0, 0, 0})
 		}
 		// Download content now
