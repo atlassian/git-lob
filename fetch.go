@@ -150,28 +150,30 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 				0, 0, 0, 0})
 		}
 		lobsNeeded = headlobs
-		// Find recent other refs (only include remote branches for this remote)
-		recentrefs, err := GetGitRecentRefs(GlobalOptions.RecentRefsPeriodDays, true, remoteName)
-		if err != nil {
-			return errors.New(fmt.Sprintf("Error determining recent refs: %v", err.Error()))
-		}
-		// Now each other ref, they should be in reverse date order from GetGitRecentRefs so we're doing
-		// things by priority, HEAD first then most recent
-		headSHA, _ := GitRefToFullSHA("HEAD")
-		for i, ref := range recentrefs {
-			// Don't duplicate HEAD commit though
-			if ref == headSHA {
-				continue
-			}
-			recentreflobs, err := GetGitAllLOBsToCheckoutAtCommitAndRecent(ref, GlobalOptions.RecentCommitsPeriodOther)
+		if GlobalOptions.RecentRefsPeriodDays > 0 {
+			// Find recent other refs (only include remote branches for this remote)
+			recentrefs, err := GetGitRecentRefs(GlobalOptions.RecentRefsPeriodDays, true, remoteName)
 			if err != nil {
-				return errors.New(fmt.Sprintf("Error determining recent commits on %v: %v", ref, err.Error()))
+				return errors.New(fmt.Sprintf("Error determining recent refs: %v", err.Error()))
 			}
-			if GlobalOptions.Verbose {
-				callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf(" * %v: %d binary references", ref, len(recentreflobs)),
-					int64(i), int64(len(refspecs)), 0, 0})
+			// Now each other ref, they should be in reverse date order from GetGitRecentRefs so we're doing
+			// things by priority, HEAD first then most recent
+			headSHA, _ := GitRefToFullSHA("HEAD")
+			for i, ref := range recentrefs {
+				// Don't duplicate HEAD commit though
+				if ref == headSHA {
+					continue
+				}
+				recentreflobs, err := GetGitAllLOBsToCheckoutAtCommitAndRecent(ref, GlobalOptions.RecentCommitsPeriodOther)
+				if err != nil {
+					return errors.New(fmt.Sprintf("Error determining recent commits on %v: %v", ref, err.Error()))
+				}
+				if GlobalOptions.Verbose {
+					callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf(" * %v: %d binary references", ref, len(recentreflobs)),
+						int64(i), int64(len(refspecs)), 0, 0})
+				}
+				lobsNeeded = append(lobsNeeded, recentreflobs...)
 			}
-			lobsNeeded = append(lobsNeeded, recentreflobs...)
 		}
 	} else {
 		// Get LOBs directly from specified refs/ranges

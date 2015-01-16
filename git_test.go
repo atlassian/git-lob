@@ -538,8 +538,7 @@ var _ = Describe("Git", func() {
 			// The setup:
 			// master, feature/1 and feature/2 are 'recent refs', 'feature/3' is not
 			// master has one commit excluded from its range, the rest are included
-			// feature/1 has one commit excluded and 2 included
-			// feature/2 has 2 commits excluded and 1 included
+			// feature/1 and feature/2 only have the tip included (default 0 days so no history)
 
 			// add one hour forward to the threshold date so we always create commits within time of test run
 			refsIncludedDate := time.Now().AddDate(0, 0, -GlobalOptions.RecentRefsPeriodDays).Add(time.Hour)
@@ -613,11 +612,9 @@ var _ = Describe("Git", func() {
 			// We'll never see this commit but we will see the branch (commit later)
 			commitAtDate(feature1CommitsIncludedDate.Add(-time.Hour*48), "Feature 1 excluded commit")
 			ioutil.WriteFile(filepath.Join(root, "file3.txt"),
-				[]byte(fmt.Sprintf("git-lob: %v", lobshas[8])), 0644) // included
+				[]byte(fmt.Sprintf("git-lob: %v", lobshas[8])), 0644) // excluded
 			exec.Command("git", "add", "file3.txt").Run()
-			// We'll see this commit because the next commit will be the tip & range will include it
 			commitAtDate(feature1CommitsIncludedDate.Add(-time.Hour*4), "Feature 1 included commit")
-			correctLOBsFeature1 = append(correctLOBsFeature1, lobshas[8])
 
 			ioutil.WriteFile(filepath.Join(root, "file3.txt"),
 				[]byte(fmt.Sprintf("git-lob: %v", lobshas[9])), 0644) // included
@@ -641,11 +638,9 @@ var _ = Describe("Git", func() {
 			// We'll never see this commit but we will see the branch (commit later)
 			commitAtDate(feature2CommitsIncludedDate.Add(-time.Hour*24*3), "Feature 2 excluded commit")
 			ioutil.WriteFile(filepath.Join(root, "file4.txt"),
-				[]byte(fmt.Sprintf("git-lob: %v", lobshas[11])), 0644) // included
+				[]byte(fmt.Sprintf("git-lob: %v", lobshas[11])), 0644) // excluded
 			exec.Command("git", "add", "file4.txt").Run()
-			// We'll see this commit because the next commit will be the tip & range will include it
 			commitAtDate(feature2CommitsIncludedDate.Add(-time.Hour*24*2), "Feature 2 excluded commit")
-			correctLOBsFeature2 = append(correctLOBsFeature2, lobshas[11])
 			ioutil.WriteFile(filepath.Join(root, "file4.txt"),
 				[]byte(fmt.Sprintf("git-lob: %v", lobshas[12])), 0644) // included
 			exec.Command("git", "add", "file4.txt").Run()

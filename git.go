@@ -566,40 +566,46 @@ func GetGitAllLOBsToCheckoutAtCommitAndRecent(commit string, days int) ([]string
 	if err != nil {
 		return []string{}, err
 	}
-	// get the commit date
-	commitDetails, err := GetGitCommitSummary(commit)
-	if err != nil {
-		return []string{}, err
+
+	// days == 0 means we only snapshot latest
+	if days == 0 {
+		return shasAtCommit, nil
+	} else {
+		// get the commit date
+		commitDetails, err := GetGitCommitSummary(commit)
+		if err != nil {
+			return []string{}, err
+		}
+		sinceDate := commitDetails.CommitDate.AddDate(0, 0, -days)
+		// Now use git log to scan backwards
+		// We use git log from commit backwards, not commit^ (parent) because
+		// we're looking for *previous* SHAs, which means we're looking for diffs
+		// with a '-' line. So SHAs replaced in the latest commit are old versions too
+		// that we haven't included yet in shasAtCommit
+		args := []string{"log", `--format=commitsha: %H`, "-p",
+			fmt.Sprintf("--since=%v", FormatGitDate(sinceDate)),
+			"-G", "^git-lob: [A-Fa-f0-9]{40}$",
+			commit}
+
+		cmd := exec.Command("git", args...)
+		outp, err := cmd.StdoutPipe()
+		if err != nil {
+			LogErrorf("Unable to call git-log: %v", err.Error())
+			return []string{}, err
+		}
+		cmd.Start()
+
+		// Looking backwards, so removals
+		commitsWithLOBs := scanGitLogOutputForLOBReferences(outp, false, true)
+		ret := shasAtCommit
+		for _, lobcommit := range commitsWithLOBs {
+			ret = append(ret, lobcommit.lobSHAs...)
+		}
+
+		cmd.Wait()
+
+		return ret, nil
 	}
-	sinceDate := commitDetails.CommitDate.AddDate(0, 0, -days)
-
-	// Now use git log to scan backwards
-	// We use git log from commit backwards, not commit^ (parent) because
-	// we're looking for *previous* SHAs, which means we're looking for diffs
-	// with a '-' line. So SHAs replaced in the latest commit are old versions too
-	// that we haven't included yet in shasAtCommit
-	args := []string{"log", `--format=commitsha: %H`, "-p",
-		fmt.Sprintf("--since=%v", FormatGitDate(sinceDate)),
-		"-G", "^git-lob: [A-Fa-f0-9]{40}$",
-		commit}
-
-	cmd := exec.Command("git", args...)
-	outp, err := cmd.StdoutPipe()
-	if err != nil {
-		LogErrorf("Unable to call git-log: %v", err.Error())
-		return []string{}, err
-	}
-	cmd.Start()
-
-	// Looking backwards, so removals
-	commitsWithLOBs := scanGitLogOutputForLOBReferences(outp, false, true)
-	ret := shasAtCommit
-	for _, lobcommit := range commitsWithLOBs {
-		ret = append(ret, lobcommit.lobSHAs...)
-	}
-
-	cmd.Wait()
-	return ret, nil
 
 }
 
