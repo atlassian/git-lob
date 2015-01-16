@@ -50,6 +50,10 @@ type Options struct {
 	RecentCommitsPeriodHEAD int
 	// 'Recent' window in days for commits on other branches/tags compared to latest commit date
 	RecentCommitsPeriodOther int
+	// List of paths to include when fetching
+	FetchIncludePaths []string
+	// List of paths to exclude when fetching
+	FetchExcludePaths []string
 	// Combination of root .gitconfig and repository config as map
 	GitConfig map[string]string
 }
@@ -63,12 +67,20 @@ func NewOptions() *Options {
 		ChunkSize:                32 * 1024 * 1024,
 		RecentRefsPeriodDays:     90,
 		RecentCommitsPeriodHEAD:  30,
-		RecentCommitsPeriodOther: 0}
+		RecentCommitsPeriodOther: 0,
+		FetchIncludePaths:        []string{},
+		FetchExcludePaths:        []string{},
+	}
 }
 
 // Load config from gitconfig and populate opts
 func LoadConfig(opts *Options) {
 	configmap := ReadConfig()
+	parseConfig(configmap, opts)
+}
+
+// Parse a loaded config map and populate opts
+func parseConfig(configmap map[string]string, opts *Options) {
 	opts.GitConfig = configmap
 
 	// Translate our settings to config
@@ -136,6 +148,20 @@ func LoadConfig(opts *Options) {
 		n, err := strconv.ParseInt(recent, 10, 0)
 		if err != nil {
 			opts.RecentCommitsPeriodOther = int(n)
+		}
+	}
+	if fetchincludes := configmap["git-lob.fetch-include"]; fetchincludes != "" {
+		// Split on comma
+		for _, inc := range strings.Split(fetchincludes, ",") {
+			inc = filepath.Clean(strings.TrimSpace(inc))
+			opts.FetchIncludePaths = append(opts.FetchIncludePaths, inc)
+		}
+	}
+	if fetchexcludes := configmap["git-lob.fetch-exclude"]; fetchexcludes != "" {
+		// Split on comma
+		for _, ex := range strings.Split(fetchexcludes, ",") {
+			ex = filepath.Clean(strings.TrimSpace(ex))
+			opts.FetchExcludePaths = append(opts.FetchExcludePaths, ex)
 		}
 	}
 

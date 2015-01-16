@@ -491,12 +491,12 @@ be in ~/.gitconfig or $REPO/.git/config.
 These 3 settings are used to control the meaning of 'recent commits', see
 RECENT COMMITS above.
 
-  git-lob.includepaths
-  git-lob.excludepaths
+  git-lob.fetch-include
+  git-lob.fetch-exclude
 
 These 2 settings you probably only want to define at the repo level. 
-includepaths limits the binaries downloaded to only matching paths, while
-excludepaths downloads everything except files matching these paths.
+fetch-include limits the binaries downloaded to only matching paths, while
+fetch-exclude downloads everything except files matching these paths.
 The contents of each are comma-separated paths with wildcard matching.
 
 `)

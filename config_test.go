@@ -171,7 +171,25 @@ var _ = Describe("Config", func() {
 
 			})
 		})
-		// TODO includes
+	})
+	Describe("Parsing multiple value options", func() {
+		It("Parses fetch include/exclude", func() {
+			configText := `[git-lob]
+    fetch-include=include/path/one,include/path/glob*, left/a/space 
+    fetch-exclude = wow/such/exclude  , something/something/dark-side, something with a space/inside it/here
+`
+			correctIncludes := []string{"include/path/one", "include/path/glob*", "left/a/space"}
+			correctExcludes := []string{"wow/such/exclude", "something/something/dark-side", "something with a space/inside it/here"}
+			in := bytes.NewBufferString(configText)
+			config, err := ReadConfigStream(in, "")
+			Expect(err).To(BeNil(), "Shouldn't encounter an error when reading config stream")
+			opts := NewOptions()
+			parseConfig(config, opts)
+			Expect(opts.FetchIncludePaths).To(Equal(correctIncludes), "Includes should be correct")
+			Expect(opts.FetchExcludePaths).To(Equal(correctExcludes), "Excludes should be correct")
+
+		})
+
 	})
 
 })
