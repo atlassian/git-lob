@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -180,4 +181,51 @@ func StringRemoveDuplicates(s *[]string) {
 	}
 	// If any were eliminated it will now be shorter
 	*s = (*s)[:insertidx]
+}
+
+// Return whether a given filename passes the include / exclude path filters
+// Only paths that are in includePaths and outside excludePaths are passed
+// If includePaths is empty that filter always passes and the same with excludePaths
+// Both path lists support wildcard matches
+func FilenamePassesIncludeExcludeFilter(filename string, includePaths, excludePaths []string) bool {
+	if len(includePaths) == 0 && len(excludePaths) == 0 {
+		return true
+	}
+
+	if len(includePaths) > 0 {
+		matched := false
+		for _, inc := range includePaths {
+			matched, _ = filepath.Match(inc, filename)
+			if !matched {
+				// Also support matching a parent directory without a wildcard
+				if strings.HasPrefix(filename, inc+string(filepath.Separator)) {
+					matched = true
+				}
+			}
+			if matched {
+				break
+			}
+
+		}
+		if !matched {
+			return false
+		}
+	}
+
+	if len(excludePaths) > 0 {
+		for _, ex := range includePaths {
+			matched, _ := filepath.Match(ex, filename)
+			if matched {
+				return false
+			}
+			// Also support matching a parent directory without a wildcard
+			if strings.HasPrefix(filename, ex+string(filepath.Separator)) {
+				return false
+			}
+
+		}
+	}
+
+	return true
+
 }
