@@ -398,7 +398,7 @@ var _ = Describe("Git", func() {
 			It("Retrieves LOB references", func() {
 				// Now let's retrieve LOBs
 				// Entire history on current branch
-				commitlobs, err := GetGitCommitsReferencingLOBsInRange("", "")
+				commitlobs, err := GetGitCommitsReferencingLOBsInRange("", "", nil, nil)
 				Expect(err).To(BeNil(), "Should not fail calling GetGitCommitsReferencingLOBsInRange")
 				// There are 6 commits on the master branch, but only 5 reference LOBs
 				Expect(commitlobs).To(HaveLen(5), "Master branch should have 5 commits referencing LOBs")
@@ -406,20 +406,20 @@ var _ = Describe("Git", func() {
 					Expect(commit.lobSHAs).To(Equal(correctSHAs[i]), "Commit %d should have correct SHAs", i)
 				}
 				// Just feature branch
-				commitlobs, err = GetGitCommitsReferencingLOBsInRange("tag3", "feature/1")
+				commitlobs, err = GetGitCommitsReferencingLOBsInRange("tag3", "feature/1", nil, nil)
 				Expect(err).To(BeNil(), "Should not fail calling GetGitCommitsReferencingLOBsInRange")
 				// 2 commits from tag3 to feature/1, excluding tag3 itself
 				Expect(commitlobs).To(HaveLen(2), "Feature branch should have 2 commits referencing LOBs")
 				Expect(commitlobs[0].lobSHAs).To(Equal(correctSHAs[5]), "Commit should have correct SHAs")
 				Expect(commitlobs[1].lobSHAs).To(Equal(correctSHAs[6]), "Commit should have correct SHAs")
 				// Now just 'from' (on master)
-				commitlobs, err = GetGitCommitsReferencingLOBsInRange("tag4", "")
+				commitlobs, err = GetGitCommitsReferencingLOBsInRange("tag4", "", nil, nil)
 				Expect(err).To(BeNil(), "Should not fail calling GetGitCommitsReferencingLOBsInRange")
 				// 1 commit from tag4 to master, excluding tag4 itself
 				Expect(commitlobs).To(HaveLen(1), "tag4 onwards is only 1 commit")
 				Expect(commitlobs[0].lobSHAs).To(Equal(correctSHAs[4]), "Commit should have correct SHAs")
 				// Now just 'to' (on master)
-				commitlobs, err = GetGitCommitsReferencingLOBsInRange("", "tag2")
+				commitlobs, err = GetGitCommitsReferencingLOBsInRange("", "tag2", nil, nil)
 				Expect(err).To(BeNil(), "Should not fail calling GetGitCommitsReferencingLOBsInRange")
 				// 2 commits up to tag2 to master, excluding tag4 itself
 				Expect(commitlobs).To(HaveLen(2), "tag4 onwards is only 1 commit")
@@ -434,7 +434,7 @@ var _ = Describe("Git", func() {
 
 			It("Gets LOB references at varying ranges", func() {
 				// Get all LOBs referenced ever at master
-				shas, err := GetGitAllLOBsToCheckoutInRefSpec(&GitRefSpec{"tag1", "..", "master"})
+				shas, err := GetGitAllLOBsToCheckoutInRefSpec(&GitRefSpec{"tag1", "..", "master"}, nil, nil)
 				// Because it's a range this will also include any which were later overwritten
 				Expect(err).To(BeNil(), "Should be no error")
 				Expect(shas).To(ConsistOf(lobshas[:7]), "Start to master should include first 7 file SHAs")
@@ -442,7 +442,7 @@ var _ = Describe("Git", func() {
 				// At tag 2, file2.txt was overwritten with a different SHA so the previous SHA (lobshas[1]) should be missing
 				correct := lobshas[:1]
 				correct = append(correct, lobshas[2:7]...)
-				shas, err = GetGitAllLOBsToCheckoutInRefSpec(&GitRefSpec{"tag2", "..", "master"})
+				shas, err = GetGitAllLOBsToCheckoutInRefSpec(&GitRefSpec{"tag2", "..", "master"}, nil, nil)
 				Expect(err).To(BeNil(), "Should be no error")
 				Expect(shas).To(ConsistOf(correct), "tag2 to master should include first 7 file SHAs minus one overwritten SHA")
 
@@ -711,19 +711,152 @@ var _ = Describe("Git", func() {
 			Expect(err).To(BeNil(), "Should not error calling GetGitRecentRefs")
 			Expect(recentrefs).To(ConsistOf(correctRefsOriginOnly), "Recent refs (only origin remote) should be correct")
 
-			lobs, err := GetGitAllLOBsToCheckoutAtCommitAndRecent("master", GlobalOptions.RecentCommitsPeriodHEAD)
+			lobs, err := GetGitAllLOBsToCheckoutAtCommitAndRecent("master", GlobalOptions.RecentCommitsPeriodHEAD, nil, nil)
 			Expect(err).To(BeNil(), "Should not error getting lobs")
 			Expect(lobs).To(ConsistOf(correctLOBsMaster), fmt.Sprintf("LOBs on master should be correct; all LOBS were:\n%v", strings.Join(lobshas, "\n")))
 
 			// It's harder to visualise the feature branches because unchanged files from other branches are included
-			lobs, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("feature/1", GlobalOptions.RecentCommitsPeriodOther)
+			lobs, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("feature/1", GlobalOptions.RecentCommitsPeriodOther, nil, nil)
 			Expect(err).To(BeNil(), "Should not error getting lobs")
 			Expect(lobs).To(ConsistOf(correctLOBsFeature1), fmt.Sprintf("LOBs on feature/1 should be correct; all LOBS were:\n%v", strings.Join(lobshas, "\n")))
-			lobs, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("feature/2", GlobalOptions.RecentCommitsPeriodOther)
+			lobs, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("feature/2", GlobalOptions.RecentCommitsPeriodOther, nil, nil)
 			Expect(err).To(BeNil(), "Should not error getting lobs")
 			Expect(lobs).To(ConsistOf(correctLOBsFeature2), fmt.Sprintf("LOBs on feature/2 should be correct; all LOBS were:\n%v", strings.Join(lobshas, "\n")))
 
 		})
 
 	})
+
+	Describe("Git include / exclude in LOB references", func() {
+		root := filepath.Join(os.TempDir(), "GitTest")
+		var oldwd string
+		filenames := []string{
+			filepath.Join("folder1", "test.dat"),
+			filepath.Join("folder1", "test2.dat"),
+			filepath.Join("folder1", "simple.jpg"),
+			filepath.Join("folder1", "advanced.png"),
+			filepath.Join("folder with spaces", "foo.bmp"),
+			filepath.Join("folder2", "nested1", "file1.jpg"),
+			filepath.Join("folder2", "nested1", "file2.png"),
+			filepath.Join("folder2", "nested1", "file3.mov"),
+			filepath.Join("folder2", "nested2", "file4.tiff"),
+			filepath.Join("folder2", "nested2", "file5.jpg"),
+		}
+		lobshas := GetListOfRandomSHAsForTest(len(filenames) * 2)
+
+		BeforeEach(func() {
+			CreateGitRepoForTest(root)
+			oldwd, _ = os.Getwd()
+			os.Chdir(root)
+
+			// We'll only commit to master here because we're only testing the ability to filter files
+			// All commits will be made on the same day so they'll all be included by date
+			// We'll therefore just loop to create the commits
+			// For simplicity of file/commit/lob mapping we'll have one file per commit
+			for i := 0; i < len(filenames); i++ {
+				filename := filenames[i]
+				sha := lobshas[i]
+				os.MkdirAll(filepath.Dir(filename), 0755)
+				ioutil.WriteFile(filename,
+					[]byte(fmt.Sprintf("git-lob: %v", sha)), 0644)
+				exec.Command("git", "add", filename).Run()
+				exec.Command("git", "commit", "-m", fmt.Sprintf("Commit %d", i)).Run()
+			}
+			// Now we'll do it again but modify each file too, to test that
+			for i := 0; i < len(filenames); i++ {
+				filename := filenames[i]
+				sha := lobshas[i+len(filenames)]
+				ioutil.WriteFile(filename,
+					[]byte(fmt.Sprintf("git-lob: %v", sha)), 0644)
+				exec.Command("git", "add", filename).Run()
+				exec.Command("git", "commit", "-m", fmt.Sprintf("Commit %d", i+len(filenames))).Run()
+			}
+
+		})
+		AfterEach(func() {
+			os.Chdir(oldwd)
+			os.RemoveAll(root)
+		})
+		It("Correctly filters based on include/exclude paths", func() {
+			// utility
+			shouldHaveLOBFiles := func(lobs []string, fileIdxs []int, historical bool, desc interface{}) {
+				var validContents []string
+				for _, i := range fileIdxs {
+					if historical {
+						validContents = append(validContents, lobshas[i])
+					}
+					// Second edit, the one we'll see at checkout
+					validContents = append(validContents, lobshas[i+len(filenames)])
+				}
+				Expect(lobs).To(ConsistOf(validContents), fmt.Sprintf("Should be valid contents based on filter %v", desc))
+			}
+			shouldHaveCommitsReferencingFiles := func(commits []CommitLOBRef, fileIdxs []int, desc interface{}) {
+				// Do a reverse lookup on each LOB SHA mentioned in a commit and make sure it's in the fileIdxs
+				for _, commit := range commits {
+					// Should only be 1 lob in each
+					sha := commit.lobSHAs[0]
+					for shaidx, origSHA := range lobshas {
+						if origSHA == sha {
+							// sha indexes correspond to files except files repeated twice
+							fileidx := shaidx % len(filenames)
+							Expect(fileIdxs).To(ContainElement(fileidx), fmt.Sprintf("File LOB referenced in commit should be expected: %v", desc))
+						}
+					}
+				}
+			}
+
+			// All
+			lobs, err := GetGitAllGitLOBsToCheckoutAtCommit("HEAD", nil, nil)
+			Expect(err).To(BeNil(), "Should not be error calling GetGitAllGitLOBsToCheckoutAtCommit")
+			Expect(lobs).To(HaveLen(len(filenames)), "All the most recent LOBs should be included")
+			lobs, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("HEAD", 10, nil, nil)
+			Expect(err).To(BeNil(), "Should not be error calling GetGitAllLOBsToCheckoutAtCommitAndRecent")
+			Expect(lobs).To(HaveLen(len(filenames)*2), "All LOBs including old versions should be included with no filtering")
+			commits, err := GetGitCommitsReferencingLOBsInRange("", "HEAD", nil, nil)
+			Expect(err).To(BeNil(), "Should not be error calling GetGitCommitsReferencingLOBsInRange")
+			Expect(commits).To(HaveLen(len(filenames)*2), "All commits should be included with no filtering")
+
+			// Include filtering, just dir
+			include := []string{"folder1", "folder with spaces"}
+			fileIdxs := []int{0, 1, 2, 3, 4}
+			lobs, err = GetGitAllGitLOBsToCheckoutAtCommit("HEAD", include, nil)
+			Expect(err).To(BeNil(), "Should not be error calling GetGitAllGitLOBsToCheckoutAtCommit")
+			shouldHaveLOBFiles(lobs, fileIdxs, false, include)
+			lobs, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("HEAD", 10, include, nil)
+			Expect(err).To(BeNil(), "Should not be error calling GetGitAllGitLOBsToCheckoutAtCommit")
+			shouldHaveLOBFiles(lobs, fileIdxs, true, include)
+			commits, err = GetGitCommitsReferencingLOBsInRange("", "HEAD", include, nil)
+			Expect(err).To(BeNil(), "Should not be error calling GetGitCommitsReferencingLOBsInRange")
+			Expect(commits).To(HaveLen(len(fileIdxs)*2), "Number of commits should be correct with filtering")
+			shouldHaveCommitsReferencingFiles(commits, fileIdxs, include)
+
+			// Include filtering, just wildcard at end, will match all
+			include = []string{"fold*"}
+			Expect(err).To(BeNil(), "Should not be error calling GetGitAllGitLOBsToCheckoutAtCommit")
+			Expect(lobs).To(HaveLen(len(filenames)), "All the most recent LOBs should be included")
+			lobs, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("HEAD", 10, nil, nil)
+			Expect(err).To(BeNil(), "Should not be error calling GetGitAllLOBsToCheckoutAtCommitAndRecent")
+			Expect(lobs).To(HaveLen(len(filenames)*2), "All LOBs including old versions should be included with no filtering")
+			commits, err = GetGitCommitsReferencingLOBsInRange("", "HEAD", nil, nil)
+			Expect(err).To(BeNil(), "Should not be error calling GetGitCommitsReferencingLOBsInRange")
+			Expect(commits).To(HaveLen(len(filenames)*2), "All commits should be included with no filtering")
+
+			// Include filtering, wildcard at start
+			// This doesn't work! filepath.Match at fault or different expectations TODO
+			include = []string{"*.jpg"}
+			fileIdxs = []int{2, 5, 9}
+			lobs, err = GetGitAllGitLOBsToCheckoutAtCommit("HEAD", include, nil)
+			Expect(err).To(BeNil(), "Should not be error calling GetGitAllGitLOBsToCheckoutAtCommit")
+			shouldHaveLOBFiles(lobs, fileIdxs, false, include)
+			lobs, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("HEAD", 10, include, nil)
+			Expect(err).To(BeNil(), "Should not be error calling GetGitAllGitLOBsToCheckoutAtCommit")
+			shouldHaveLOBFiles(lobs, fileIdxs, true, include)
+			commits, err = GetGitCommitsReferencingLOBsInRange("", "HEAD", include, nil)
+			Expect(err).To(BeNil(), "Should not be error calling GetGitCommitsReferencingLOBsInRange")
+			Expect(commits).To(HaveLen(len(fileIdxs)*2), "Number of commits should be correct with filtering")
+			shouldHaveCommitsReferencingFiles(commits, fileIdxs, include)
+
+		})
+	})
+
 })
