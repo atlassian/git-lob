@@ -841,9 +841,8 @@ var _ = Describe("Git", func() {
 			Expect(err).To(BeNil(), "Should not be error calling GetGitCommitsReferencingLOBsInRange")
 			Expect(commits).To(HaveLen(len(filenames)*2), "All commits should be included with no filtering")
 
-			// Include filtering, wildcard at start
-			// This doesn't work! filepath.Match at fault or different expectations TODO
-			include = []string{"*.jpg"}
+			// Include filtering, more wildcards
+			include = []string{filepath.Join("folder*", "*", "*.jpg"), filepath.Join("folder*", "*.jpg")}
 			fileIdxs = []int{2, 5, 9}
 			lobs, err = GetGitAllGitLOBsToCheckoutAtCommit("HEAD", include, nil)
 			Expect(err).To(BeNil(), "Should not be error calling GetGitAllGitLOBsToCheckoutAtCommit")

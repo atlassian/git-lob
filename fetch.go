@@ -499,7 +499,7 @@ RECENT COMMITS above.
 These 2 settings you probably only want to define at the repo level. 
 fetch-include limits the binaries downloaded to only matching paths, while
 fetch-exclude downloads everything except files matching these paths.
-The contents of each are comma-separated paths with wildcard matching.
-
+The contents of each are comma-separated paths with wildcard (*) matching.
+Note that wildcards do not match path separators, like gitignore.
 `)
 }
