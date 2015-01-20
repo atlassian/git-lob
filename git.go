@@ -557,7 +557,7 @@ func GetGitAllLOBsToCheckoutInRefSpec(refspec *GitRefSpec, includePaths, exclude
 		snapshotref = refspec.Ref1
 	}
 
-	ret, err := GetGitAllGitLOBsToCheckoutAtCommit(snapshotref, includePaths, excludePaths)
+	ret, err := GetGitAllLOBsToCheckoutAtCommit(snapshotref, includePaths, excludePaths)
 	if err != nil {
 		return ret, err
 	}
@@ -591,7 +591,7 @@ func GetGitAllLOBsToCheckoutInRefSpec(refspec *GitRefSpec, includePaths, exclude
 // They are not routinely eliminated for performance, so perform your own dupe removal if you need it
 func GetGitAllLOBsToCheckoutAtCommitAndRecent(commit string, days int, includePaths, excludePaths []string) ([]string, error) {
 	// All LOBs at the commit itself
-	shasAtCommit, err := GetGitAllGitLOBsToCheckoutAtCommit(commit, includePaths, excludePaths)
+	shasAtCommit, err := GetGitAllLOBsToCheckoutAtCommit(commit, includePaths, excludePaths)
 	if err != nil {
 		return []string{}, err
 	}
@@ -639,7 +639,7 @@ func GetGitAllLOBsToCheckoutAtCommitAndRecent(commit string, days int, includePa
 }
 
 // Get all the LOB SHAs that you would need to check out at a given commit (not changed in that commit)
-func GetGitAllGitLOBsToCheckoutAtCommit(commit string, includePaths, excludePaths []string) ([]string, error) {
+func GetGitAllLOBsToCheckoutAtCommit(commit string, includePaths, excludePaths []string) ([]string, error) {
 	// Snapshot using ls-tree
 	args := []string{"ls-tree",
 		"-r",          // recurse

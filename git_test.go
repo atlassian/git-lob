@@ -806,8 +806,8 @@ var _ = Describe("Git", func() {
 			}
 
 			// All
-			lobs, err := GetGitAllGitLOBsToCheckoutAtCommit("HEAD", nil, nil)
-			Expect(err).To(BeNil(), "Should not be error calling GetGitAllGitLOBsToCheckoutAtCommit")
+			lobs, err := GetGitAllLOBsToCheckoutAtCommit("HEAD", nil, nil)
+			Expect(err).To(BeNil(), "Should not be error calling GetGitAllLOBsToCheckoutAtCommit")
 			Expect(lobs).To(HaveLen(len(filenames)), "All the most recent LOBs should be included")
 			lobs, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("HEAD", 10, nil, nil)
 			Expect(err).To(BeNil(), "Should not be error calling GetGitAllLOBsToCheckoutAtCommitAndRecent")
@@ -819,20 +819,20 @@ var _ = Describe("Git", func() {
 			// Include filtering, just dir
 			include := []string{"folder1", "folder with spaces"}
 			fileIdxs := []int{0, 1, 2, 3, 4}
-			lobs, err = GetGitAllGitLOBsToCheckoutAtCommit("HEAD", include, nil)
-			Expect(err).To(BeNil(), "Should not be error calling GetGitAllGitLOBsToCheckoutAtCommit")
-			shouldHaveLOBFiles(lobs, fileIdxs, false, include)
+			lobs, err = GetGitAllLOBsToCheckoutAtCommit("HEAD", include, nil)
+			Expect(err).To(BeNil(), "Should not be error calling GetGitAllLOBsToCheckoutAtCommit")
+			shouldHaveLOBFiles(lobs, fileIdxs, false, fmt.Sprintf("GetGitAllLOBsToCheckoutAtCommit -> Include: %v", include))
 			lobs, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("HEAD", 10, include, nil)
-			Expect(err).To(BeNil(), "Should not be error calling GetGitAllGitLOBsToCheckoutAtCommit")
-			shouldHaveLOBFiles(lobs, fileIdxs, true, include)
+			Expect(err).To(BeNil(), "Should not be error calling GetGitAllLOBsToCheckoutAtCommitAndRecent")
+			shouldHaveLOBFiles(lobs, fileIdxs, true, fmt.Sprintf("GetGitAllLOBsToCheckoutAtCommitAndRecent -> Include: %v", include))
 			commits, err = GetGitCommitsReferencingLOBsInRange("", "HEAD", include, nil)
 			Expect(err).To(BeNil(), "Should not be error calling GetGitCommitsReferencingLOBsInRange")
 			Expect(commits).To(HaveLen(len(fileIdxs)*2), "Number of commits should be correct with filtering")
-			shouldHaveCommitsReferencingFiles(commits, fileIdxs, include)
+			shouldHaveCommitsReferencingFiles(commits, fileIdxs, fmt.Sprintf("GetGitCommitsReferencingLOBsInRange -> Include: %v", include))
 
 			// Include filtering, just wildcard at end, will match all
 			include = []string{"fold*"}
-			Expect(err).To(BeNil(), "Should not be error calling GetGitAllGitLOBsToCheckoutAtCommit")
+			Expect(err).To(BeNil(), "Should not be error calling GetGitAllLOBsToCheckoutAtCommit")
 			Expect(lobs).To(HaveLen(len(filenames)), "All the most recent LOBs should be included")
 			lobs, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("HEAD", 10, nil, nil)
 			Expect(err).To(BeNil(), "Should not be error calling GetGitAllLOBsToCheckoutAtCommitAndRecent")
@@ -844,16 +844,16 @@ var _ = Describe("Git", func() {
 			// Include filtering, more wildcards
 			include = []string{filepath.Join("folder*", "*", "*.jpg"), filepath.Join("folder*", "*.jpg")}
 			fileIdxs = []int{2, 5, 9}
-			lobs, err = GetGitAllGitLOBsToCheckoutAtCommit("HEAD", include, nil)
-			Expect(err).To(BeNil(), "Should not be error calling GetGitAllGitLOBsToCheckoutAtCommit")
-			shouldHaveLOBFiles(lobs, fileIdxs, false, include)
+			lobs, err = GetGitAllLOBsToCheckoutAtCommit("HEAD", include, nil)
+			Expect(err).To(BeNil(), "Should not be error calling GetGitAllLOBsToCheckoutAtCommit")
+			shouldHaveLOBFiles(lobs, fileIdxs, false, fmt.Sprintf("GetGitAllLOBsToCheckoutAtCommit -> Include: %v", include))
 			lobs, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("HEAD", 10, include, nil)
-			Expect(err).To(BeNil(), "Should not be error calling GetGitAllGitLOBsToCheckoutAtCommit")
-			shouldHaveLOBFiles(lobs, fileIdxs, true, include)
+			Expect(err).To(BeNil(), "Should not be error calling GetGitAllLOBsToCheckoutAtCommitAndRecent")
+			shouldHaveLOBFiles(lobs, fileIdxs, true, fmt.Sprintf("GetGitAllLOBsToCheckoutAtCommitAndRecent -> Include: %v", include))
 			commits, err = GetGitCommitsReferencingLOBsInRange("", "HEAD", include, nil)
 			Expect(err).To(BeNil(), "Should not be error calling GetGitCommitsReferencingLOBsInRange")
-			Expect(commits).To(HaveLen(len(fileIdxs)*2), "Number of commits should be correct with filtering")
-			shouldHaveCommitsReferencingFiles(commits, fileIdxs, include)
+			Expect(commits).To(HaveLen(len(fileIdxs)*2), "Number of commits should be correct with exclude filtering")
+			shouldHaveCommitsReferencingFiles(commits, fileIdxs, fmt.Sprintf("GetGitCommitsReferencingLOBsInRange -> Include: %v", include))
 
 		})
 	})
