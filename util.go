@@ -213,7 +213,7 @@ func FilenamePassesIncludeExcludeFilter(filename string, includePaths, excludePa
 	}
 
 	if len(excludePaths) > 0 {
-		for _, ex := range includePaths {
+		for _, ex := range excludePaths {
 			matched, _ := filepath.Match(ex, filename)
 			if matched {
 				return false
