@@ -354,7 +354,7 @@ Options:
                 already present on the remote. You shouldn't need this.
   --quiet, -q   Print less output
   --verbose, -v Print more output
-  --dry-run     Don't actually delete anything, just report
+  --dry-run     Don't actually push anything, just report
 
 REMOTES
 
