@@ -68,7 +68,8 @@ func Checkout(pathspecs []string, dryRun bool) error {
 	if err != nil {
 		return err
 	}
-	var filesWritten int
+	var filesOK int
+	var filesNotOK int
 	for _, filelob := range filelobs {
 		// Check each file, and if it's missing or contains the placeholder text, replace it with content
 		// Otherwise, assume it's been locally modified and leave it alone (user can override this with git reset/checkout if they want)
@@ -118,17 +119,24 @@ func Checkout(pathspecs []string, dryRun bool) error {
 				}
 
 			}
-			filesWritten++
+			filesOK++
 		}
 
 		if !GlobalOptions.Quiet {
 			if dryRun {
-				fmt.Println(filesWritten, "files need updating")
+				fmt.Println(filesOK, "files need updating")
 				fmt.Println("Run this command again without --dry-run to update these files.")
 			} else {
-				fmt.Println(filesWritten, "files were updated")
+				fmt.Println(filesOK, "files were updated")
+				if filesNotOK > 0 {
+					fmt.Println("WARNING:", filesNotOK, "failed to be updated, check errors above")
+				}
 			}
 		}
+	}
+
+	if filesNotOK > 0 {
+		return errors.New(fmt.Sprintf("%d files failed", filesNotOK))
 	}
 
 	return nil
