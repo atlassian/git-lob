@@ -12,7 +12,7 @@ import (
 // Fetch command line tool
 func cmdFetch() int {
 
-	// git-lob fetch [--all] [--prune] [--force] [<remote> [<ref>...]]
+	// git-lob fetch [--prune] [--force] [<remote> [<ref>...]]
 
 	// Validate custom options
 	errorList := validateCustomOptions(GlobalOptions, nil, []string{"prune", "force"})
