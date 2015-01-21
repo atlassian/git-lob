@@ -638,8 +638,36 @@ func GetGitAllLOBsToCheckoutAtCommitAndRecent(commit string, days int, includePa
 
 }
 
+// A filename & LOB SHA pair
+type FileLOB struct {
+	// Filename relative to repository root
+	Filename string
+	// LOB SHA
+	SHA string
+}
+
+// Get all the binary files & their LOB SHAs that you would need to check out at a given commit (not changed in that commit)
+func GetGitAllFilesAndLOBsToCheckoutAtCommit(commit string, includePaths, excludePaths []string) ([]FileLOB, error) {
+	var ret []FileLOB
+	err := WalkGitAllLOBsToCheckoutAtCommit(commit, includePaths, excludePaths, func(filelob *FileLOB) {
+		ret = append(ret, *filelob)
+	})
+	return ret, err
+}
+
 // Get all the LOB SHAs that you would need to check out at a given commit (not changed in that commit)
 func GetGitAllLOBsToCheckoutAtCommit(commit string, includePaths, excludePaths []string) ([]string, error) {
+	var ret []string
+	err := WalkGitAllLOBsToCheckoutAtCommit(commit, includePaths, excludePaths, func(filelob *FileLOB) {
+		ret = append(ret, filelob.SHA)
+	})
+	return ret, err
+}
+
+// Utility function to walk through all the LOBs which are present if checked out at a specific commit
+func WalkGitAllLOBsToCheckoutAtCommit(commit string, includePaths, excludePaths []string,
+	callback func(filelob *FileLOB)) error {
+
 	// Snapshot using ls-tree
 	args := []string{"ls-tree",
 		"-r",          // recurse
@@ -650,7 +678,7 @@ func GetGitAllLOBsToCheckoutAtCommit(commit string, includePaths, excludePaths [
 	lstreecmd := exec.Command("git", args...)
 	outp, err := lstreecmd.StdoutPipe()
 	if err != nil {
-		return []string{}, errors.New(fmt.Sprintf("Unable to call git ls-tree: %v", err.Error()))
+		return errors.New(fmt.Sprintf("Unable to call git ls-tree: %v", err.Error()))
 	}
 	defer outp.Close()
 	lstreecmd.Start()
@@ -665,18 +693,17 @@ func GetGitAllLOBsToCheckoutAtCommit(commit string, includePaths, excludePaths [
 	catfilecmd := exec.Command("git", "cat-file", "--batch")
 	catout, err := catfilecmd.StdoutPipe()
 	if err != nil {
-		return []string{}, errors.New(fmt.Sprintf("Unable to call git cat-file: %v", err.Error()))
+		return errors.New(fmt.Sprintf("Unable to call git cat-file: %v", err.Error()))
 	}
 	defer catout.Close()
 	catin, err := catfilecmd.StdinPipe()
 	if err != nil {
-		return []string{}, errors.New(fmt.Sprintf("Unable to call git cat-file: %v", err.Error()))
+		return errors.New(fmt.Sprintf("Unable to call git cat-file: %v", err.Error()))
 	}
 	defer catin.Close()
 	catfilecmd.Start()
 	catscanner := bufio.NewScanner(catout)
 
-	var ret []string
 	for lstreescanner.Scan() {
 		line := lstreescanner.Text()
 		if match := regex.FindStringSubmatch(line); match != nil {
@@ -691,24 +718,25 @@ func GetGitAllLOBsToCheckoutAtCommit(commit string, includePaths, excludePaths [
 			// remember we're already only finding files of exactly the right size (49 bytes)
 			_, err := catin.Write([]byte(objsha))
 			if err != nil {
-				return []string{}, errors.New(fmt.Sprintf("Unable to write to cat-file stream: %v", err.Error()))
+				return errors.New(fmt.Sprintf("Unable to write to cat-file stream: %v", err.Error()))
 			}
 			_, err = catin.Write([]byte{'\n'})
 			if err != nil {
-				return []string{}, errors.New(fmt.Sprintf("Unable to write to cat-file stream: %v", err.Error()))
+				return errors.New(fmt.Sprintf("Unable to write to cat-file stream: %v", err.Error()))
 			}
 
 			// Now read back response - first line is report of object sha, type & size
 			// second line is content in our case
 			if !catscanner.Scan() || !catscanner.Scan() {
-				return []string{}, errors.New(fmt.Sprintf("Couldn't read response from cat-file stream: %v", catscanner.Err()))
+				return errors.New(fmt.Sprintf("Couldn't read response from cat-file stream: %v", catscanner.Err()))
 			}
 
 			// object SHA is the last 40 characters, after the prefix
 			line := catscanner.Text()
 			if len(line) == SHALineLen {
 				lobsha := line[len(SHAPrefix):]
-				ret = append(ret, lobsha)
+				// call callback to process result
+				callback(&FileLOB{filename, lobsha})
 			}
 
 		}
@@ -716,7 +744,7 @@ func GetGitAllLOBsToCheckoutAtCommit(commit string, includePaths, excludePaths [
 	lstreecmd.Wait()
 	catfilecmd.Process.Kill()
 
-	return ret, nil
+	return nil
 
 }
 
