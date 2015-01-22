@@ -62,6 +62,12 @@ func mainImpl() int {
 	}
 
 	switch GlobalOptions.Command {
+	case "checkout":
+		if GlobalOptions.HelpRequested {
+			cmdCheckoutHelp()
+			return 0
+		}
+		return cmdCheckout()
 	case "cleanup":
 		if GlobalOptions.HelpRequested {
 			cmdCleanupHelp()
@@ -96,6 +102,12 @@ func mainImpl() int {
 		return cmdListProviders()
 	case "provider":
 		return cmdProviderDetails()
+	case "pull":
+		if GlobalOptions.HelpRequested {
+			cmdPullHelp()
+			return 0
+		}
+		return cmdPull()
 	case "push":
 		if GlobalOptions.HelpRequested {
 			cmdPushHelp()
