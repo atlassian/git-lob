@@ -112,6 +112,7 @@ func Checkout(pathspecs []string, dryRun bool) error {
 					continue
 				}
 				_, err = RetrieveLOB(filelob.SHA, f)
+				f.Close()
 				if err != nil {
 					// This is not fatal but log it
 					LogErrorf("ERROR: can't retrieve content for %v: %v", filelob.Filename, err.Error())
