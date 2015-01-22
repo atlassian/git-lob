@@ -34,7 +34,11 @@ func cmdCheckout() int {
 			filesFailed++
 		case ProgressTransferBytes:
 			if GlobalOptions.Verbose {
-				fmt.Println(" *", filelob.Filename, "->", filelob.SHA)
+				if optDryRun {
+					fmt.Println(filelob.Filename, "needs check out.")
+				} else {
+					fmt.Println(filelob.Filename, "checked out.")
+				}
 			}
 			filesCheckedOut++
 		}

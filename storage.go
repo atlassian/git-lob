@@ -337,7 +337,7 @@ func RetrieveLOB(sha string, out io.Writer) (info *LOBInfo, err error) {
 		return info, err
 	}
 
-	LogDebugf("Successfully retrieved LOB %v from %d chunks, total size %d", sha, info.NumChunks, totalBytesRead)
+	LogDebugf("Successfully retrieved LOB %v from %d chunks, total size %d\n", sha, info.NumChunks, totalBytesRead)
 
 	return info, nil
 
