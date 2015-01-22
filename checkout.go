@@ -106,7 +106,7 @@ func Checkout(pathspecs []string, dryRun bool) error {
 					filesNotOK++
 					continue
 				}
-				f, err := os.OpenFile(absfile, os.O_CREATE|os.O_TRUNC, 0644)
+				f, err := os.OpenFile(absfile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 				if err != nil {
 					// This is not fatal but log it
 					LogErrorf("ERROR: can't open %v for writing: %v", absfile, err.Error())
