@@ -82,7 +82,7 @@ func Checkout(pathspecs []string, dryRun bool) error {
 				// File existed and is right size for placeholder, so check contents
 				placeholderContent := getLOBPlaceholderContent(filelob.SHA)
 				filebytes, err := ioutil.ReadFile(absfile)
-				if err != nil && string(filebytes) == placeholderContent {
+				if err == nil && string(filebytes) == placeholderContent {
 					// File content is placeholder, so replace
 					replaceContent = true
 				}
