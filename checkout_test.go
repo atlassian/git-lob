@@ -145,8 +145,76 @@ var _ = Describe("Checkout", func() {
 
 	})
 	It("Respects pathspecs", func() {
-		// TODO
+		var filesDone []string
+		var filesSkipped int
+		var filesFailed int
+		testCallback := func(t ProgressCallbackType, filelob *FileLOB, err error) {
+			switch t {
+			case ProgressTransferBytes:
+				filesDone = append(filesDone, filelob.Filename)
+			case ProgressError:
+				filesFailed++
+			case ProgressSkip:
+				filesSkipped++
+			}
 
+		}
+		pathspecs := []string{
+			filepath.Join("some", "folder", "nested"),
+			filepath.Join("second", "folder", "*6.*"),
+		}
+		correctFiles := []string{
+			filepath.Join("some", "folder", "nested", "file3.dat"),
+			filepath.Join("some", "folder", "nested", "file31.dat"),
+			filepath.Join("some", "folder", "nested", "file32.dat"),
+			filepath.Join("second", "folder", "file6.dat"),
+		}
+		err := Checkout(pathspecs, false, testCallback)
+		Expect(err).To(BeNil(), "Shouldn't fail calling checkout with pathspecs")
+		Expect(filesDone).To(ConsistOf(correctFiles), "Files updated should match path specs")
+		Expect(filesSkipped).To(BeEquivalentTo(0), "No files should be skipped")
+		Expect(filesFailed).To(BeEquivalentTo(0), "No files should have failed")
+
+	})
+	Describe("Changed working dir", func() {
+		BeforeEach(func() {
+			// Change to a subfolder
+			os.Chdir(filepath.Join(root, "some", "folder"))
+		})
+		AfterEach(func() {
+			os.Chdir(root)
+		})
+		It("Checks out with path specs relative to current dir", func() {
+			var filesDone []string
+			var filesSkipped int
+			var filesFailed int
+			testCallback := func(t ProgressCallbackType, filelob *FileLOB, err error) {
+				switch t {
+				case ProgressTransferBytes:
+					filesDone = append(filesDone, filelob.Filename)
+				case ProgressError:
+					filesFailed++
+				case ProgressSkip:
+					filesSkipped++
+				}
+
+			}
+			pathspecs := []string{
+				"*211.dat",
+				"nested",
+			}
+			correctFiles := []string{
+				filepath.Join("some", "folder", "file211.dat"),
+				filepath.Join("some", "folder", "nested", "file3.dat"),
+				filepath.Join("some", "folder", "nested", "file31.dat"),
+				filepath.Join("some", "folder", "nested", "file32.dat"),
+			}
+			err := Checkout(pathspecs, false, testCallback)
+			Expect(err).To(BeNil(), "Shouldn't fail calling checkout with pathspecs")
+			Expect(filesDone).To(ConsistOf(correctFiles), "Files updated should match path specs")
+			Expect(filesSkipped).To(BeEquivalentTo(0), "No files should be skipped")
+			Expect(filesFailed).To(BeEquivalentTo(0), "No files should have failed")
+		})
 	})
 
 })
