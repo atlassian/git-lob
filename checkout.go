@@ -126,15 +126,15 @@ func Checkout(pathspecs []string, dryRun bool) error {
 			filesOK++
 		}
 
-		if !GlobalOptions.Quiet {
-			if dryRun {
-				fmt.Println(filesOK, "files need updating")
-				fmt.Println("Run this command again without --dry-run to update these files.")
-			} else {
-				fmt.Println(filesOK, "files were updated")
-				if filesNotOK > 0 {
-					fmt.Println("WARNING:", filesNotOK, "failed to be updated, check errors above")
-				}
+	}
+	if !GlobalOptions.Quiet {
+		if dryRun {
+			fmt.Println(filesOK, "files need updating")
+			fmt.Println("Run this command again without --dry-run to update these files.")
+		} else {
+			fmt.Println(filesOK, "files were updated")
+			if filesNotOK > 0 {
+				fmt.Println("WARNING:", filesNotOK, "failed to be updated, check errors above")
 			}
 		}
 	}
