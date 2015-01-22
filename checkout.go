@@ -17,7 +17,7 @@ func cmdCheckout() int {
 
 	// All extra arguments must be <pathspec>
 	var pathspecs []string
-	for _, arg := range GlobalOptions.Args[1:] {
+	for _, arg := range GlobalOptions.Args {
 		p := filepath.Clean(arg)
 		pathspecs = append(pathspecs, p)
 	}
