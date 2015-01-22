@@ -98,7 +98,23 @@ var _ = Describe("Checkout", func() {
 			}
 
 		}
-		err := Checkout(nil, false, testCallback)
+		// Dry run test
+		err := Checkout(nil, true, testCallback)
+		Expect(err).To(BeNil(), "Shouldn't fail calling checkout")
+		Expect(filesOK).To(BeEquivalentTo(len(filenames)), "All files should need to be updated")
+		Expect(filesSkipped).To(BeEquivalentTo(0), "No files should be skipped")
+		Expect(filesFailed).To(BeEquivalentTo(0), "No files should have failed")
+		for _, file := range filenames {
+			// All should be unchanged, still placeholders
+			stat, err := os.Stat(file)
+			Expect(err).To(BeNil(), fmt.Sprintf("File %v should still exist", file))
+			Expect(stat.Size()).To(BeEquivalentTo(SHALineLen), fmt.Sprintf("File %v should be unchanged", file))
+		}
+		// Now the real call
+		filesOK = 0
+		filesSkipped = 0
+		filesFailed = 0
+		err = Checkout(nil, false, testCallback)
 		Expect(err).To(BeNil(), "Shouldn't fail calling checkout")
 		Expect(filesOK).To(BeEquivalentTo(len(filenames)), "All files should be updated")
 		Expect(filesSkipped).To(BeEquivalentTo(0), "No files should be skipped")
@@ -126,6 +142,10 @@ var _ = Describe("Checkout", func() {
 			Expect(err).To(BeNil(), fmt.Sprintf("File %v should exist", file))
 			Expect(stat.Size()).To(BeEquivalentTo(sz), fmt.Sprintf("File %v should be checked out & correct size", file))
 		}
+
+	})
+	It("Respects pathspecs", func() {
+		// TODO
 
 	})
 
