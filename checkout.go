@@ -130,12 +130,7 @@ func Checkout(pathspecs []string, dryRun bool, callback CheckoutCallback) error 
 		}
 
 		if replaceContent {
-			if dryRun {
-				if GlobalOptions.Verbose {
-					fmt.Println("Checkout:", filelob.Filename)
-				}
-
-			} else {
+			if !dryRun {
 				err = os.MkdirAll(filepath.Dir(absfile), 0755)
 				if err != nil {
 					// This is not fatal but log it
