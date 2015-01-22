@@ -52,7 +52,9 @@ func cmdCheckout() int {
 	if !GlobalOptions.Quiet {
 		if optDryRun {
 			fmt.Println(filesCheckedOut, "files need updating")
-			fmt.Println("Run this command again without --dry-run to update these files.")
+			if filesCheckedOut > 0 {
+				fmt.Println("Run this command again without --dry-run to update these files.")
+			}
 		} else {
 			fmt.Println(filesCheckedOut, "files were updated")
 			if filesFailed > 0 {
