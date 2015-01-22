@@ -95,6 +95,10 @@ func cmdListProviders() int {
 }
 
 func cmdProviderDetails() int {
+	if len(GlobalOptions.Args) == 0 {
+		return cmdListProviders()
+	}
+
 	fmt.Println()
 	// Potentially list many
 	ret := 0
