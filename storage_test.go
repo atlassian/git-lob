@@ -17,13 +17,13 @@ var _ = Describe("Storage", func() {
 	separateGitDir := path.Join(os.TempDir(), "StorageTestGitDir")
 	sharedStore := path.Join(os.TempDir(), "StorageTest_SharedStore")
 	folders := []string{
-		path.Join(root, "folder1"),
-		path.Join(root, "folder2"),
-		path.Join(root, "folder3"),
-		path.Join(root, "folder1/sub1"),
-		path.Join(root, "folder1/sub2"),
-		path.Join(root, "folder1/sub1/subsub1"),
-		path.Join(root, "folder1/a/b/c/d/e/f/g/h/i/j/k/l")}
+		filepath.Join(root, "folder1"),
+		filepath.Join(root, "folder2"),
+		filepath.Join(root, "folder3"),
+		filepath.Join(root, "folder1", "sub1"),
+		filepath.Join(root, "folder1", "sub2"),
+		filepath.Join(root, "folder1", "sub1", "subsub1"),
+		filepath.Join(root, "folder1", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l")}
 
 	Describe("Identifying git repo root", func() {
 		Context("Valid git repo", func() {
