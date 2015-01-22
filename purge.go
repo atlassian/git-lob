@@ -117,7 +117,7 @@ func lobReferenceFromDiffLine(line string) string {
 // Returns a list of SHAs that were deleted (unless dryRun = true)
 func PurgeUnreferenced(dryRun bool) ([]string, error) {
 	// Purging requires full git on the command line, no way around this really
-	cmd := exec.Command("git", "log", "--all", "--no-color", "--oneline", "-p", "-G", "^git-lob: [A-Fa-f0-9]{40}$")
+	cmd := exec.Command("git", "log", "--all", "--no-color", "--oneline", "-p", "-G", SHALineRegex)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return make([]string, 0), errors.New("Unable to query git log for binary references: " + err.Error())
@@ -139,7 +139,7 @@ func PurgeUnreferenced(dryRun bool) ([]string, error) {
 	cmd.Wait()
 
 	// Must also not purge anything that's added but uncommitted
-	cmd = exec.Command("git", "diff", "--cached", "--no-color", "-G", "^git-lob: [A-Fa-f0-9]{40}$")
+	cmd = exec.Command("git", "diff", "--cached", "--no-color", "-G", SHALineRegex)
 	stdout, err = cmd.StdoutPipe()
 	if err != nil {
 		return make([]string, 0), errors.New("Unable to query git index for binary references: " + err.Error())

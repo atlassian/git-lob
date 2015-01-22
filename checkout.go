@@ -80,7 +80,7 @@ func Checkout(pathspecs []string, dryRun bool) error {
 			// File existed, check content (smoke test on size)
 			if stat.Size() == int64(SHALineLen) {
 				// File existed and is right size for placeholder, so check contents
-				placeholderContent := fmt.Sprintf("git-lob: %v", filelob.SHA)
+				placeholderContent := getLOBPlaceholderContent(filelob.SHA)
 				filebytes, err := ioutil.ReadFile(absfile)
 				if err != nil && string(filebytes) == placeholderContent {
 					// File content is placeholder, so replace

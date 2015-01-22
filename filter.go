@@ -13,7 +13,11 @@ import (
 const SHAPrefix = "git-lob: "
 const SHALen = 40
 const SHALineLen = len(SHAPrefix) + SHALen
+const SHALineRegex = "^git-lob: [A-Fa-f0-9]{40}$"
 
+func getLOBPlaceholderContent(sha string) string {
+	return SHAPrefix + sha
+}
 func cmdSmudgeFilter() int {
 	return SmudgeFilterWithReaderWriter(os.Stdin, os.Stdout)
 }
@@ -86,7 +90,7 @@ func CleanFilterWithReaderWriter(in io.Reader, out io.Writer) int {
 	}
 
 	// Write SHA code to output
-	shaLine := SHAPrefix + lobinfo.SHA
+	shaLine := getLOBPlaceholderContent(lobinfo.SHA)
 	_, err = io.WriteString(out, shaLine)
 	if err != nil {
 		LogErrorf("Error writing LOB SHA to index in clean filter: %v\n", err)

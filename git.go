@@ -417,7 +417,7 @@ func getGitCommitsReferencingLOBsInRange(from, to string, additions, removals bo
 	args := []string{"log", `--format=commitsha: %H`, "-p",
 		"--topo-order", "--first-parent",
 		"--reverse", // we want to list them in ascending order
-		"-G", "^git-lob: [A-Fa-f0-9]{40}$"}
+		"-G", SHALineRegex}
 
 	if from != "" && to != "" {
 		args = append(args, fmt.Sprintf("%v..%v", from, to))
@@ -613,7 +613,7 @@ func GetGitAllLOBsToCheckoutAtCommitAndRecent(commit string, days int, includePa
 		// that we haven't included yet in shasAtCommit
 		args := []string{"log", `--format=commitsha: %H`, "-p",
 			fmt.Sprintf("--since=%v", FormatGitDate(sinceDate)),
-			"-G", "^git-lob: [A-Fa-f0-9]{40}$",
+			"-G", SHALineRegex,
 			commit}
 
 		cmd := exec.Command("git", args...)
