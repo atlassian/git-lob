@@ -18,6 +18,8 @@ const (
 	ProgressSkip ProgressCallbackType = iota
 	// Process did not find the requested data, moving on
 	ProgressNotFound ProgressCallbackType = iota
+	// Non-fatal error
+	ProgressError ProgressCallbackType = iota
 )
 
 // Collected callback data for a progress operation

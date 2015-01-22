@@ -22,18 +22,57 @@ func cmdCheckout() int {
 		pathspecs = append(pathspecs, p)
 	}
 
-	err := Checkout(pathspecs, optDryRun)
+	var filesCheckedOut int
+	var filesFailed int
+	var filesUpToDate int
+	callback := func(t ProgressCallbackType, filelob *FileLOB, err error) {
+		switch t {
+		case ProgressSkip:
+			filesUpToDate++
+		case ProgressError:
+			fmt.Println("ERROR:", err.Error())
+			filesFailed++
+		case ProgressTransferBytes:
+			if GlobalOptions.Verbose {
+				fmt.Println(" *", filelob.Filename, "->", filelob.SHA)
+			}
+			filesCheckedOut++
+		}
+
+	}
+
+	err := Checkout(pathspecs, optDryRun, callback)
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "git-lob: checkout error - %v", err.Error())
 		return 7
 	}
 
+	// Report fina
+	if !GlobalOptions.Quiet {
+		if optDryRun {
+			fmt.Println(filesCheckedOut, "files need updating")
+			fmt.Println("Run this command again without --dry-run to update these files.")
+		} else {
+			fmt.Println(filesCheckedOut, "files were updated")
+			if filesFailed > 0 {
+				fmt.Println("WARNING:", filesFailed, "failed to be updated, check errors above")
+			}
+		}
+	}
+
+	if filesFailed > 0 {
+		// non-zero error code when failures happened
+		return 10
+	}
 	return 0
 }
 
+// Callback can report skip,transfer (on complete), error
+type CheckoutCallback func(t ProgressCallbackType, filelob *FileLOB, err error)
+
 // Populate local placeholders with real content, if available. Do entire working copy unless limited to pathspecs
-func Checkout(pathspecs []string, dryRun bool) error {
+func Checkout(pathspecs []string, dryRun bool, callback CheckoutCallback) error {
 	// We're going to scan for missing git-lob content not just by checking the working copy, but
 	// getting the expected content from git first. This is in case the working copy has had files
 	// deleted for example. We still check the content of the working copy if the file IS there
@@ -68,8 +107,6 @@ func Checkout(pathspecs []string, dryRun bool) error {
 	if err != nil {
 		return err
 	}
-	var filesOK int
-	var filesNotOK int
 	for _, filelob := range filelobs {
 		// Check each file, and if it's missing or contains the placeholder text, replace it with content
 		// Otherwise, assume it's been locally modified and leave it alone (user can override this with git reset/checkout if they want)
@@ -102,45 +139,31 @@ func Checkout(pathspecs []string, dryRun bool) error {
 				err = os.MkdirAll(filepath.Dir(absfile), 0755)
 				if err != nil {
 					// This is not fatal but log it
-					LogErrorf("ERROR: can't create parent directory of %v: %v\n", absfile, err.Error())
-					filesNotOK++
+					callback(ProgressError, &filelob,
+						errors.New(fmt.Sprintf("Can't create parent directory of %v: %v\n", absfile, err.Error())))
 					continue
 				}
 				f, err := os.OpenFile(absfile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 				if err != nil {
 					// This is not fatal but log it
-					LogErrorf("ERROR: can't open %v for writing: %v", absfile, err.Error())
-					filesNotOK++
+					callback(ProgressError, &filelob,
+						errors.New(fmt.Sprintf("Can't open %v for writing: %v", absfile, err.Error())))
 					continue
 				}
 				_, err = RetrieveLOB(filelob.SHA, f)
 				f.Close()
 				if err != nil {
 					// This is not fatal but log it
-					LogErrorf("ERROR: can't retrieve content for %v: %v", filelob.Filename, err.Error())
-					filesNotOK++
+					callback(ProgressError, &filelob,
+						errors.New(fmt.Sprintf("Can't retrieve content for %v: %v", filelob.Filename, err.Error())))
 					continue
 				}
-
 			}
-			filesOK++
-		}
-
-	}
-	if !GlobalOptions.Quiet {
-		if dryRun {
-			fmt.Println(filesOK, "files need updating")
-			fmt.Println("Run this command again without --dry-run to update these files.")
+			callback(ProgressTransferBytes, &filelob, nil)
 		} else {
-			fmt.Println(filesOK, "files were updated")
-			if filesNotOK > 0 {
-				fmt.Println("WARNING:", filesNotOK, "failed to be updated, check errors above")
-			}
+			callback(ProgressSkip, &filelob, nil)
 		}
-	}
 
-	if filesNotOK > 0 {
-		return errors.New(fmt.Sprintf("%d files failed", filesNotOK))
 	}
 
 	return nil
