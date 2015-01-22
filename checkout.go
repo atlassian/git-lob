@@ -103,12 +103,14 @@ func Checkout(pathspecs []string, dryRun bool) error {
 				if err != nil {
 					// This is not fatal but log it
 					LogErrorf("ERROR: can't create parent directory of %v: %v\n", absfile, err.Error())
+					filesNotOK++
 					continue
 				}
 				f, err := os.OpenFile(absfile, os.O_CREATE|os.O_TRUNC, 0644)
 				if err != nil {
 					// This is not fatal but log it
 					LogErrorf("ERROR: can't open %v for writing: %v", absfile, err.Error())
+					filesNotOK++
 					continue
 				}
 				_, err = RetrieveLOB(filelob.SHA, f)
@@ -116,6 +118,7 @@ func Checkout(pathspecs []string, dryRun bool) error {
 				if err != nil {
 					// This is not fatal but log it
 					LogErrorf("ERROR: can't retrieve content for %v: %v", filelob.Filename, err.Error())
+					filesNotOK++
 					continue
 				}
 
