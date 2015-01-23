@@ -201,7 +201,7 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 			callback(&ProgressCallbackData{ProgressCalculate, "No binaries to download.",
 				int64(len(refspecs)), int64(len(refspecs)), 0, 0})
 		}
-	} else if !dryRun {
+	} else {
 
 		var lobsToDownload []string
 		var metafilesToDownload []string
@@ -233,23 +233,6 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 			}
 
 		}
-
-		if len(lobsToDownload) == 0 {
-			if !GlobalOptions.Quiet {
-				callback(&ProgressCallbackData{ProgressCalculate, "No binaries to download.",
-					int64(len(refspecs)), int64(len(refspecs)), 0, 0})
-			}
-			return nil
-		}
-
-		// Download to shared if using shared area (we link later)
-		var destDir string
-		if isUsingSharedStorage() {
-			destDir = GetSharedLOBRoot()
-		} else {
-			destDir = GetLocalLOBRoot()
-		}
-
 		if force {
 			// Duplicates in lobscombined (and thus metafiles) are not eliminated by methods we call, for efficiency
 			// These would be handled in non-force mode, but in force mode we'd rather not duplicate
@@ -257,130 +240,151 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 			StringRemoveDuplicates(&metafilesToDownload)
 		}
 
-		// Download metafiles first
-		// This will allow us to estimate the time required
-		if !GlobalOptions.Quiet {
-			callback(&ProgressCallbackData{ProgressCalculate, "Downloading metadata",
-				0, 0, 0, 0})
+		if len(lobsToDownload) == 0 {
+			if !GlobalOptions.Quiet {
+				callback(&ProgressCallbackData{ProgressCalculate, "No binaries to download.",
+					int64(len(refspecs)), int64(len(refspecs)), 0, 0})
+			}
+			return nil
+		} else {
+			if !GlobalOptions.Quiet {
+				callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf("%d binaries to download.", len(lobsToDownload)),
+					int64(len(refspecs)), int64(len(refspecs)), 0, 0})
+			}
 		}
-		// Use average metafile bytes as estimate of download, usually around 100 bytes of JSON
-		averageMetaSize := 100
-		metaTotalBytes := int64(len(metafilesToDownload) * averageMetaSize)
-		var metafilesDone int
-		metacallback := func(fileInProgress string, progressType ProgressCallbackType, bytesDone, totalBytes int64) (abort bool) {
-			// Don't bother to track partial completion, only 100 bytes each
-			if progressType == ProgressSkip || progressType == ProgressNotFound {
-				metafilesDone++
-				callback(&ProgressCallbackData{progressType, fileInProgress, totalBytes, totalBytes,
-					int64(metafilesDone * averageMetaSize), metaTotalBytes})
-				// Remote did not have this file
+		if !dryRun {
+			// Download to shared if using shared area (we link later)
+			var destDir string
+			if isUsingSharedStorage() {
+				destDir = GetSharedLOBRoot()
 			} else {
-				if bytesDone == totalBytes {
-					// finished
+				destDir = GetLocalLOBRoot()
+			}
+
+			// Download metafiles first
+			// This will allow us to estimate the time required
+			if !GlobalOptions.Quiet {
+				callback(&ProgressCallbackData{ProgressCalculate, "Downloading metadata",
+					0, 0, 0, 0})
+			}
+			// Use average metafile bytes as estimate of download, usually around 100 bytes of JSON
+			averageMetaSize := 100
+			metaTotalBytes := int64(len(metafilesToDownload) * averageMetaSize)
+			var metafilesDone int
+			metacallback := func(fileInProgress string, progressType ProgressCallbackType, bytesDone, totalBytes int64) (abort bool) {
+				// Don't bother to track partial completion, only 100 bytes each
+				if progressType == ProgressSkip || progressType == ProgressNotFound {
 					metafilesDone++
-					callback(&ProgressCallbackData{ProgressTransferBytes, fileInProgress, totalBytes, totalBytes,
+					callback(&ProgressCallbackData{progressType, fileInProgress, totalBytes, totalBytes,
 						int64(metafilesDone * averageMetaSize), metaTotalBytes})
+					// Remote did not have this file
+				} else {
+					if bytesDone == totalBytes {
+						// finished
+						metafilesDone++
+						callback(&ProgressCallbackData{ProgressTransferBytes, fileInProgress, totalBytes, totalBytes,
+							int64(metafilesDone * averageMetaSize), metaTotalBytes})
+					}
+				}
+				return false
+			}
+			// Download all meta files
+			err := provider.Download(remoteName, metafilesToDownload, destDir, force, metacallback)
+			if err != nil {
+				return err
+			}
+
+			// So now we have all the metadata available locally, we can know what files to download
+			var filesTotalBytes int64
+			var files []string
+			if !GlobalOptions.Quiet {
+				callback(&ProgressCallbackData{ProgressCalculate, "Calculating content files to download",
+					0, 0, 0, 0})
+			}
+			for _, sha := range lobsToDownload {
+				// Also if shared store, link meta into local
+				if isUsingSharedStorage() {
+					// filenames are relative (for download)
+					localfile := getLocalLOBMetaFilename(sha)
+					sharedfile := getSharedLOBMetaFilename(sha)
+					if (force || !FileExists(localfile)) && FileExists(sharedfile) {
+						linkSharedLOBFilename(sharedfile)
+					}
+				}
+				info, err := GetLOBInfo(sha)
+				if err != nil {
+					// If we could not get the lob data, it means that we could not download the meta file
+					// it's OK for this to happen since the remote may not have all the data we need (e.g.
+					// local branch with changes that actually came from somewhere else, or remote hasn't been
+					// fully updated yet)
+					// We notified earlier
+					continue
+				}
+				filesTotalBytes += info.Size
+				for i := 0; i < info.NumChunks; i++ {
+					// get relative filename for download purposes
+					files = append(files, getLOBRelChunkFilename(sha, i))
 				}
 			}
-			return false
-		}
-		// Download all meta files
-		err := provider.Download(remoteName, metafilesToDownload, destDir, force, metacallback)
-		if err != nil {
-			return err
-		}
-
-		// So now we have all the metadata available locally, we can know what files to download
-		var filesTotalBytes int64
-		var files []string
-		if !GlobalOptions.Quiet {
-			callback(&ProgressCallbackData{ProgressCalculate, "Calculating content files to download",
-				0, 0, 0, 0})
-		}
-		for _, sha := range lobsToDownload {
+			if !GlobalOptions.Quiet {
+				callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf("Metadata done, downloading content (%v)", FormatSize(filesTotalBytes)),
+					0, 0, 0, 0})
+			}
+			// Download content now
+			var lastFilename string
+			var lastFileBytes int64
+			var bytesFromFilesDoneSoFar int64
+			contentcallback := func(fileInProgress string, progressType ProgressCallbackType, bytesDone, totalBytes int64) (abort bool) {
+				if lastFilename != fileInProgress {
+					// New file, always callback
+					if progressType == ProgressSkip || progressType == ProgressNotFound {
+						bytesFromFilesDoneSoFar += totalBytes
+						callback(&ProgressCallbackData{progressType, fileInProgress, totalBytes, totalBytes,
+							bytesFromFilesDoneSoFar, filesTotalBytes})
+					} else {
+						if lastFilename != "" {
+							// we obviously never got a 100% call for previous file
+							bytesFromFilesDoneSoFar += lastFileBytes
+							callback(&ProgressCallbackData{ProgressTransferBytes, lastFilename, lastFileBytes, lastFileBytes,
+								bytesFromFilesDoneSoFar, filesTotalBytes})
+						}
+						// Start new file
+						callback(&ProgressCallbackData{ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
+							bytesFromFilesDoneSoFar + bytesDone, filesTotalBytes})
+					}
+					lastFilename = fileInProgress
+					lastFileBytes = totalBytes
+				} else {
+					if bytesDone == totalBytes {
+						// finished
+						bytesFromFilesDoneSoFar += totalBytes
+						callback(&ProgressCallbackData{ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
+							bytesFromFilesDoneSoFar, filesTotalBytes})
+						lastFilename = ""
+					} else {
+						// Otherwise this is a progress callback
+						return callback(&ProgressCallbackData{ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
+							bytesFromFilesDoneSoFar + bytesDone, filesTotalBytes})
+					}
+				}
+				return false
+			}
+			err = provider.Download(remoteName, files, destDir, force, contentcallback)
+			if err != nil {
+				return err
+			}
 			// Also if shared store, link meta into local
 			if isUsingSharedStorage() {
-				// filenames are relative (for download)
-				localfile := getLocalLOBMetaFilename(sha)
-				sharedfile := getSharedLOBMetaFilename(sha)
-				if (force || !FileExists(localfile)) && FileExists(sharedfile) {
-					linkSharedLOBFilename(sharedfile)
-				}
-			}
-			info, err := GetLOBInfo(sha)
-			if err != nil {
-				// If we could not get the lob data, it means that we could not download the meta file
-				// it's OK for this to happen since the remote may not have all the data we need (e.g.
-				// local branch with changes that actually came from somewhere else, or remote hasn't been
-				// fully updated yet)
-				// We notified earlier
-				continue
-			}
-			filesTotalBytes += info.Size
-			for i := 0; i < info.NumChunks; i++ {
-				// get relative filename for download purposes
-				files = append(files, getLOBRelChunkFilename(sha, i))
-			}
-		}
-		if !GlobalOptions.Quiet {
-			callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf("Metadata done, downloading content (%v)", FormatSize(filesTotalBytes)),
-				0, 0, 0, 0})
-		}
-		// Download content now
-		var lastFilename string
-		var lastFileBytes int64
-		var bytesFromFilesDoneSoFar int64
-		contentcallback := func(fileInProgress string, progressType ProgressCallbackType, bytesDone, totalBytes int64) (abort bool) {
-			if lastFilename != fileInProgress {
-				// New file, always callback
-				if progressType == ProgressSkip || progressType == ProgressNotFound {
-					bytesFromFilesDoneSoFar += totalBytes
-					callback(&ProgressCallbackData{progressType, fileInProgress, totalBytes, totalBytes,
-						bytesFromFilesDoneSoFar, filesTotalBytes})
-				} else {
-					if lastFilename != "" {
-						// we obviously never got a 100% call for previous file
-						bytesFromFilesDoneSoFar += lastFileBytes
-						callback(&ProgressCallbackData{ProgressTransferBytes, lastFilename, lastFileBytes, lastFileBytes,
-							bytesFromFilesDoneSoFar, filesTotalBytes})
+				for _, relfile := range files {
+					// filenames are relative (for download)
+					localfile := filepath.Join(GetLocalLOBRoot(), relfile)
+					sharedfile := filepath.Join(GetSharedLOBRoot(), relfile)
+					if (force || !FileExists(localfile)) && FileExists(sharedfile) {
+						linkSharedLOBFilename(sharedfile)
 					}
-					// Start new file
-					callback(&ProgressCallbackData{ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
-						bytesFromFilesDoneSoFar + bytesDone, filesTotalBytes})
-				}
-				lastFilename = fileInProgress
-				lastFileBytes = totalBytes
-			} else {
-				if bytesDone == totalBytes {
-					// finished
-					bytesFromFilesDoneSoFar += totalBytes
-					callback(&ProgressCallbackData{ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
-						bytesFromFilesDoneSoFar, filesTotalBytes})
-					lastFilename = ""
-				} else {
-					// Otherwise this is a progress callback
-					return callback(&ProgressCallbackData{ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
-						bytesFromFilesDoneSoFar + bytesDone, filesTotalBytes})
-				}
-			}
-			return false
-		}
-		err = provider.Download(remoteName, files, destDir, force, contentcallback)
-		if err != nil {
-			return err
-		}
-		// Also if shared store, link meta into local
-		if isUsingSharedStorage() {
-			for _, relfile := range files {
-				// filenames are relative (for download)
-				localfile := filepath.Join(GetLocalLOBRoot(), relfile)
-				sharedfile := filepath.Join(GetSharedLOBRoot(), relfile)
-				if (force || !FileExists(localfile)) && FileExists(sharedfile) {
-					linkSharedLOBFilename(sharedfile)
 				}
 			}
 		}
-
 	}
 
 	return nil
