@@ -126,7 +126,7 @@ func GetProviderNameForRemote(remoteName string) string {
 func GetProviderForRemote(remoteName string) (SyncProvider, error) {
 	providerName := GetProviderNameForRemote(remoteName)
 	if providerName == "" {
-		return nil, fmt.Errorf("Configuration remote.%v.git-lob-provider is missing", remoteName)
+		return nil, fmt.Errorf("Config parameter 'git-lob-provider' is missing from remote '%v'", remoteName)
 	}
 	provider, err := GetSyncProvider(providerName)
 	if err != nil {
