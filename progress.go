@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"os"
 	"time"
 )
 
@@ -78,31 +77,23 @@ func ReportProgressToConsole(callbackChan <-chan *ProgressCallbackData, op strin
 				switch data.Type {
 				case ProgressCalculate:
 					finalDownloadProgress = nil
-					// Always print these if not quiet
-					if !GlobalOptions.Quiet {
-						fmt.Println(data.Desc)
-					}
+					LogConsole(data.Desc)
 				case ProgressSkip:
 					finalDownloadProgress = nil
 					// Only print if verbose
-					if GlobalOptions.Verbose {
-						fmt.Println("Skipped:", data.Desc, "(Up to date)")
-					}
+					LogConsoleDebugf("Skipped: %v (Up to date)\n", data.Desc)
 				case ProgressNotFound:
 					finalDownloadProgress = nil
-					// Always print these if not quiet
-					if !GlobalOptions.Quiet {
-						fmt.Println("Not found:", data.Desc, "(Continuing)")
-					}
+					LogConsolef("Not found: %v (Continuing)\n", data.Desc)
 				case ProgressTransferBytes:
 					// Print completion in verbose mode
 					if data.ItemBytesDone == data.ItemBytes && GlobalOptions.Verbose {
 						msg := fmt.Sprintf("%ved: %v 100%%", op, data.Desc)
-						OverwriteConsoleLine(msg, lastConsoleLineLen, os.Stdout)
+						LogOverwriteConsole(msg, lastConsoleLineLen)
 						lastConsoleLineLen = len(msg)
 						// Clear line on completion in verbose mode
 						// Don't do this as \n in string above since we need to clear spaces after
-						fmt.Println()
+						LogConsole("")
 					} else if !GlobalOptions.Quiet {
 						// Otherwise we only really want to display the last one
 						finalDownloadProgress = data
@@ -139,7 +130,7 @@ func ReportProgressToConsole(callbackChan <-chan *ProgressCallbackData, op strin
 					itemPercent := int((100 * lastProgress.ItemBytesDone) / lastProgress.ItemBytes)
 					buf.WriteString(fmt.Sprintf("%v %d%%", lastProgress.Desc, itemPercent))
 					if lastProgress.TotalBytes != 0 {
-						buf.WriteString("Overall: ")
+						buf.WriteString(" Overall: ")
 					}
 				}
 				if lastProgress.TotalBytes > 0 {
@@ -151,7 +142,7 @@ func ReportProgressToConsole(callbackChan <-chan *ProgressCallbackData, op strin
 					buf.WriteString(fmt.Sprintf("%d%% (%v ETA %v)", overallPercent, FormatTransferRate(avgRate), timeRemaining))
 				}
 				msg := buf.String()
-				OverwriteConsoleLine(msg, lastConsoleLineLen, os.Stdout)
+				LogOverwriteConsole(msg, lastConsoleLineLen)
 				lastConsoleLineLen = len(msg)
 			}
 		}

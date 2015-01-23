@@ -9,6 +9,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime/debug"
+	"strings"
 )
 
 var (
@@ -107,6 +108,46 @@ func Log(msg string) {
 		if outputLog != nil {
 			outputLog.Println(msg)
 		}
+	}
+}
+
+// Write an informational message to the console with newline (if not quiet), and not the log
+func LogConsole(msg string) {
+	if !GlobalOptions.Quiet {
+		fmt.Fprintln(consoleOut, msg)
+	}
+}
+
+// Overwrite the current line in the console (e.g. for progressive update), if not quiet
+// Requires the previous line length so that it can clear it with spaces
+// Does not add a newline after writing
+func LogOverwriteConsole(newString string, lastLineLength int) {
+	if len(newString) < lastLineLength {
+		LogConsolef("\r%v%v", newString, strings.Repeat(" ", lastLineLength-len(newString)))
+	} else {
+		LogConsolef("\r%v", newString)
+	}
+
+}
+
+// Write an informational message to the console (if not quiet), and not the log
+func LogConsolef(format string, v ...interface{}) {
+	if !GlobalOptions.Quiet {
+		fmt.Fprintf(consoleOut, format, v...)
+	}
+}
+
+// Write a debug message to the console with newline (if verbose), and not the log
+func LogConsoleDebug(msg string) {
+	if GlobalOptions.Verbose {
+		fmt.Fprintln(consoleOut, msg)
+	}
+}
+
+// Write a debug message to the console (if verbose), and not the log
+func LogConsoleDebugf(format string, v ...interface{}) {
+	if GlobalOptions.Verbose {
+		fmt.Fprintf(consoleOut, format, v...)
 	}
 }
 
