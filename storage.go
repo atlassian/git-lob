@@ -36,6 +36,10 @@ func (i *IntegrityError) Error() string {
 	return fmt.Sprintf("One or more SHAs failed integrity: %v", i.FailedSHAs)
 }
 
+var cachedRepoRoot string
+var cachedRepoRootIsSeparate bool
+var cachedRepoRootWorkingDir string
+
 // Gets the root folder of this git repository (the one containing .git)
 func GetRepoRoot() (path string, isSeparateGitDir bool) {
 	// We could call 'git rev-parse --git-dir' but this requires shelling out = slow, especially on Windows
@@ -46,9 +50,19 @@ func GetRepoRoot() (path string, isSeparateGitDir bool) {
 		LogErrorf("Getwd failed: %v\n", err)
 		return "", false
 	}
+	origCurDir := curDir
+	// Use the cached value if known
+	if cachedRepoRootWorkingDir == curDir && cachedRepoRoot != "" {
+		return cachedRepoRoot, cachedRepoRootIsSeparate
+	}
+
 	for {
 		exists, isDir := FileOrDirExists(filepath.Join(curDir, ".git"))
 		if exists {
+			// Store in cache to speed up
+			cachedRepoRoot = curDir
+			cachedRepoRootWorkingDir = origCurDir
+			cachedRepoRootIsSeparate = !isDir
 			return curDir, !isDir
 		}
 		curDir = filepath.Dir(curDir)
