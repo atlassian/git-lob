@@ -5,8 +5,19 @@ import (
 )
 
 func cmdPull() int {
-	// TODO
-	return 0
+	fetchret := cmdFetch()
+	if fetchret != 0 {
+		// Fetch failed, abort
+		return fetchret
+	}
+	// Now run checkout but with no args
+	oldArgs := GlobalOptions.Args
+	GlobalOptions.Args = []string{}
+	ret := cmdCheckout()
+	GlobalOptions.Args = oldArgs
+
+	return ret
+
 }
 
 func cmdPullHelp() {
