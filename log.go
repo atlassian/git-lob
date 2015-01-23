@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/user"
@@ -11,8 +12,9 @@ import (
 )
 
 var (
-	// Console output (can be disabled by changing)
-	consoleOut io.Writer = os.Stderr
+	// Console output (can be overridden by changing)
+	consoleErr io.Writer = os.Stderr
+	consoleOut io.Writer = os.Stdout
 	// Loggers for file output
 	debugLog  *log.Logger
 	errorLog  *log.Logger
@@ -20,9 +22,25 @@ var (
 	logFile   *os.File
 )
 
-// Log error with format (no implicit newline)
+// Always send all console output to stderr, including info/debug messages
+// This is mostly useful when stdout is reserved for piping content
+func LogAllConsoleOutputToStdErr() {
+	consoleOut = os.Stderr
+	consoleErr = os.Stderr
+}
+
+// Suppress all console output
+func LogSuppressAllConsoleOutput() {
+	consoleOut = ioutil.Discard
+	consoleErr = ioutil.Discard
+	errorLog = log.New(ioutil.Discard, "", 0)
+	debugLog = log.New(ioutil.Discard, "", 0)
+	outputLog = log.New(ioutil.Discard, "", 0)
+}
+
+// Log error to console and log with format (no implicit newline)
 func LogErrorf(format string, v ...interface{}) {
-	fmt.Fprintf(consoleOut, format, v...)
+	fmt.Fprintf(consoleErr, format, v...)
 
 	if errorLog != nil {
 		errorLog.Printf(format, v...)
@@ -31,7 +49,7 @@ func LogErrorf(format string, v ...interface{}) {
 	}
 }
 
-// Log debug message with format (if verbose)
+// Log debug message to console and log with format (if verbose)
 func LogDebugf(format string, v ...interface{}) {
 	if GlobalOptions.Verbose {
 		fmt.Fprintf(consoleOut, format, v...)
@@ -45,7 +63,7 @@ func LogDebugf(format string, v ...interface{}) {
 
 }
 
-// Log output message with format (if not quiet)
+// Log output message to console and log with format (if not quiet)
 func Logf(format string, v ...interface{}) {
 	if !GlobalOptions.Quiet {
 		fmt.Fprintf(consoleOut, format, v...)
@@ -56,9 +74,9 @@ func Logf(format string, v ...interface{}) {
 	}
 }
 
-// Log error message with newline
+// Log error message to console and log with newline
 func LogError(msg string) {
-	fmt.Fprintln(consoleOut, msg)
+	fmt.Fprintln(consoleErr, msg)
 
 	if errorLog != nil {
 		errorLog.Println(msg)
@@ -68,7 +86,7 @@ func LogError(msg string) {
 
 }
 
-// Log debug message with newline (if verbose)
+// Log debug message to console and log with newline (if verbose)
 func LogDebug(msg string) {
 	if GlobalOptions.Verbose {
 		fmt.Fprintln(consoleOut, msg)
@@ -81,7 +99,7 @@ func LogDebug(msg string) {
 	}
 }
 
-// Log output message with newline (if not quiet)
+// Log output message to console and log with newline (if not quiet)
 func Log(msg string) {
 	if !GlobalOptions.Quiet {
 		fmt.Fprintln(consoleOut, msg)

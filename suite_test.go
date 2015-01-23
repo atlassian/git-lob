@@ -10,7 +10,6 @@ import (
 	. "github.com/onsi/gomega"
 	"io"
 	"io/ioutil"
-	"log"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -28,10 +27,7 @@ func TestAll(t *testing.T) {
 	loggingOff := true
 	//loggingOff = false
 	if loggingOff {
-		consoleOut = ioutil.Discard
-		errorLog = log.New(ioutil.Discard, "", 0)
-		debugLog = log.New(ioutil.Discard, "", 0)
-		outputLog = log.New(ioutil.Discard, "", 0)
+		LogSuppressAllConsoleOutput()
 	}
 
 	// Run everything
