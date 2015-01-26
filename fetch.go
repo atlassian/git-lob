@@ -192,10 +192,8 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 	}
 
 	if len(lobsNeeded) == 0 {
-		if !GlobalOptions.Quiet {
-			callback(&ProgressCallbackData{ProgressCalculate, "No binaries to download.",
-				int64(len(refspecs)), int64(len(refspecs)), 0, 0})
-		}
+		callback(&ProgressCallbackData{ProgressCalculate, "No binaries to download.",
+			int64(len(refspecs)), int64(len(refspecs)), 0, 0})
 	} else {
 
 		var lobsToDownload []string
@@ -236,16 +234,12 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 		}
 
 		if len(lobsToDownload) == 0 {
-			if !GlobalOptions.Quiet {
-				callback(&ProgressCallbackData{ProgressCalculate, "No binaries to download.",
-					int64(len(refspecs)), int64(len(refspecs)), 0, 0})
-			}
+			callback(&ProgressCallbackData{ProgressCalculate, "No binaries to download.",
+				int64(len(refspecs)), int64(len(refspecs)), 0, 0})
 			return nil
 		} else {
-			if !GlobalOptions.Quiet {
-				callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf("%d binaries to download.", len(lobsToDownload)),
-					int64(len(refspecs)), int64(len(refspecs)), 0, 0})
-			}
+			callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf("%d binaries to download.", len(lobsToDownload)),
+				int64(len(refspecs)), int64(len(refspecs)), 0, 0})
 		}
 		if !dryRun {
 			// Download to shared if using shared area (we link later)
@@ -258,10 +252,8 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 
 			// Download metafiles first
 			// This will allow us to estimate the time required
-			if !GlobalOptions.Quiet {
-				callback(&ProgressCallbackData{ProgressCalculate, "Downloading metadata",
-					0, 0, 0, 0})
-			}
+			callback(&ProgressCallbackData{ProgressCalculate, "Downloading metadata",
+				0, 0, 0, 0})
 			// Use average metafile bytes as estimate of download, usually around 100 bytes of JSON
 			averageMetaSize := 100
 			metaTotalBytes := int64(len(metafilesToDownload) * averageMetaSize)
@@ -292,10 +284,8 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 			// So now we have all the metadata available locally, we can know what files to download
 			var filesTotalBytes int64
 			var files []string
-			if !GlobalOptions.Quiet {
-				callback(&ProgressCallbackData{ProgressCalculate, "Calculating content files to download",
-					0, 0, 0, 0})
-			}
+			callback(&ProgressCallbackData{ProgressCalculate, "Calculating content files to download",
+				0, 0, 0, 0})
 			for _, sha := range lobsToDownload {
 				// Also if shared store, link meta into local
 				if isUsingSharedStorage() {
@@ -321,10 +311,8 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 					files = append(files, getLOBRelChunkFilename(sha, i))
 				}
 			}
-			if !GlobalOptions.Quiet {
-				callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf("Metadata done, downloading content (%v)", FormatSize(filesTotalBytes)),
-					0, 0, 0, 0})
-			}
+			callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf("Metadata done, downloading content (%v)", FormatSize(filesTotalBytes)),
+				0, 0, 0, 0})
 			// Download content now
 			var lastFilename string
 			var lastFileBytes int64

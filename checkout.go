@@ -50,18 +50,16 @@ func cmdCheckout() int {
 		return 7
 	}
 
-	// Report fina
-	if !GlobalOptions.Quiet {
-		if optDryRun {
-			LogConsole(filesCheckedOut, "files need updating")
-			if filesCheckedOut > 0 {
-				LogConsole("Run this command again without --dry-run to update these files.")
-			}
-		} else {
-			LogConsole(filesCheckedOut, "files were updated")
-			if filesFailed > 0 {
-				LogConsole("WARNING:", filesFailed, "failed to be updated, check errors above")
-			}
+	// Report final state
+	if optDryRun {
+		LogConsole(filesCheckedOut, "files need updating")
+		if filesCheckedOut > 0 {
+			LogConsole("Run this command again without --dry-run to update these files.")
+		}
+	} else {
+		LogConsole(filesCheckedOut, "files were updated")
+		if filesFailed > 0 {
+			LogConsole("WARNING:", filesFailed, "failed to be updated, check errors above")
 		}
 	}
 
