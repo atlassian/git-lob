@@ -19,6 +19,8 @@ func getLOBPlaceholderContent(sha string) string {
 	return SHAPrefix + sha
 }
 func cmdSmudgeFilter() int {
+	// Make sure we never write log output to stdout, filter uses it for content
+	LogAllConsoleOutputToStdErr()
 	return SmudgeFilterWithReaderWriter(os.Stdin, os.Stdout)
 }
 
@@ -55,6 +57,8 @@ func SmudgeFilterWithReaderWriter(in io.Reader, out io.Writer) int {
 }
 
 func cmdCleanFilter() int {
+	// Make sure we never write log output to stdout, filter uses it for content
+	LogAllConsoleOutputToStdErr()
 	return CleanFilterWithReaderWriter(os.Stdin, os.Stdout)
 }
 

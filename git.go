@@ -519,8 +519,6 @@ func scanGitLogOutputForLOBReferences(outp io.Reader, additions, removals bool, 
 			// Use filename context to include/exclude if paths were used
 			if currentFileIncluded {
 				currentCommit.lobSHAs = append(currentCommit.lobSHAs, sha)
-			} else {
-				LogDebugf("Skipping %v because of include/exclude filter\n", currentFilename)
 			}
 		}
 	}
@@ -711,7 +709,6 @@ func WalkGitAllLOBsToCheckoutAtCommit(commit string, includePaths, excludePaths 
 			filename := match[2]
 			// Apply filter
 			if !FilenamePassesIncludeExcludeFilter(filename, includePaths, excludePaths) {
-				LogDebugf("Skipping %v because of include/exclude filter\n", filename)
 				continue
 			}
 			// Now feed object sha to cat-file to get git-lob SHA if any
