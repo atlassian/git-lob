@@ -52,8 +52,8 @@ type SyncProgressCallback func(fileInProgress string, progressType ProgressCallb
 // speed up data transfers in both directions
 type SmartSyncProvider interface {
 	SyncProvider
-
-	// TODO
+	// Just to make this different
+	PlaceholderTODO()
 }
 
 var (
