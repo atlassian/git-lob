@@ -24,12 +24,12 @@ Coding Conventions
    control how much is output, the '--quiet' and '--verbose' options.
 
    In order to work with these most easily, you should never output directly
-   to any console streams. Instead, use the following utilities:
+   to any console streams. You should also never need to check the verbose
+   and quiet options yourself. Instead, use the following utilities.
 
    For simultaneous log & console output:
 
      You should use these for any messages that are useful in the log as well. 
-     Errors always classify for this.
 
      Errors: LogError, LogErrorf
              For significant errors, always reported to both log and console.
@@ -44,6 +44,7 @@ Coding Conventions
      You should use these for messages that should only go to the console because
      they're only useful for an interactive user. 
 
+     Errors: LogConsoleError, LogConsoleErrorf
      Info:   LogConsole, LogConsolef
      Debug:  LogConsoleDebug, LogConsoleDebugf
      Progress: LogConsoleOverwrite

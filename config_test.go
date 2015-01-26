@@ -10,9 +10,6 @@ import (
 	"os"
 )
 
-// hide unused error
-var _ = fmt.Println
-
 var _ = Describe("Config", func() {
 	Describe("Reading .gitconfig", func() {
 		Context("Self-contained config", func() {
@@ -72,7 +69,6 @@ var _ = Describe("Config", func() {
 			It("correctly reads well formatted simple sections", func() {
 				in := bytes.NewBufferString(configText)
 				config, err := ReadConfigStream(in, "")
-				//fmt.Println(config)
 				Expect(err).To(BeNil(), "Shouldn't encounter an error when reading config stream")
 				Expect(len(config)).To(BeEquivalentTo(27), "Should be 27 leaf config nodes")
 				Expect(config["difftool.sourcetree.path"]).To(Equal(""), "difftool.sourcetree.path")
@@ -152,7 +148,6 @@ var _ = Describe("Config", func() {
 				fulltext := pretext + includetext + posttext
 				in := bytes.NewBufferString(fulltext)
 				config, err := ReadConfigStream(in, "")
-				//fmt.Println(config)
 				Expect(err).To(BeNil(), "Shouldn't encounter an error when reading config stream")
 				// unchanged items from pretext
 				Expect(config["http.sslcainfo"]).To(Equal("/Users/steve/.gitcertificates/lancelot.pem"), "http.sslcainfo - lower case conversion")

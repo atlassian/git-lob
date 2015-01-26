@@ -85,12 +85,12 @@ func InitCoreProviders() {
 }
 
 func cmdListProviders() int {
-	fmt.Println()
-	fmt.Println("Available remote providers:")
+	LogConsole()
+	LogConsole("Available remote providers:")
 	for _, p := range syncProviders {
-		fmt.Println(" *", p.HelpTextSummary())
+		LogConsole(" *", p.HelpTextSummary())
 	}
-	fmt.Println()
+	LogConsole()
 	return 0
 }
 
@@ -99,17 +99,17 @@ func cmdProviderDetails() int {
 		return cmdListProviders()
 	}
 
-	fmt.Println()
+	LogConsole()
 	// Potentially list many
 	ret := 0
 	for _, arg := range GlobalOptions.Args {
 		p, err := GetSyncProvider(arg)
 		if err != nil {
-			fmt.Println(err)
+			LogConsole(err)
 			ret++
 		} else {
-			fmt.Println(p.HelpTextDetail())
-			fmt.Println()
+			LogConsole(p.HelpTextDetail())
+			LogConsole()
 		}
 
 	}

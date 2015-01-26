@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -17,7 +16,7 @@ func cmdFetch() int {
 	// Validate custom options
 	errorList := validateCustomOptions(GlobalOptions, nil, []string{"prune", "force"})
 	if len(errorList) > 0 {
-		fmt.Fprintf(os.Stderr, strings.Join(errorList, "\n"))
+		LogConsoleError(strings.Join(errorList, "\n"))
 		return 9
 	}
 
@@ -41,10 +40,10 @@ func cmdFetch() int {
 
 				// Only allow .. range for fetch, not ...
 				if r.RangeOp == "..." {
-					fmt.Fprintf(os.Stderr, "git-lob: '...' range operator is not supported for fetch, only '..'\n")
+					LogConsoleError("git-lob: '...' range operator is not supported for fetch, only '..'")
 					return 7
 				} else if r.IsRange() && r.IsEmptyRange() {
-					fmt.Fprintf(os.Stderr, "Warning: %v is an empty range, did you mean to use %v^..%v ?\n", r, r.Ref1, r.Ref2)
+					LogConsoleErrorf("Warning: %v is an empty range, did you mean to use %v^..%v ?\n", r, r.Ref1, r.Ref2)
 				}
 
 				refspecs = append(refspecs, r)
@@ -58,20 +57,18 @@ func cmdFetch() int {
 	// check the remote config to make sure it's valid
 	provider, err := GetProviderForRemote(remoteName)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "git-lob: %v\n", err)
+		LogConsoleErrorf("git-lob: %v\n", err)
 		return 6
 	}
 	if err = provider.ValidateConfig(remoteName); err != nil {
-		fmt.Fprintf(os.Stderr, "git-lob: remote %v has configuration problems:\n%v\n", remoteName, err)
+		LogConsoleErrorf("git-lob: remote %v has configuration problems:\n%v\n", remoteName, err)
 		return 6
 	}
 
-	if !GlobalOptions.Quiet {
-		if len(refspecs) > 0 {
-			fmt.Println("Fetching binaries for", refspecs, "from", remoteName)
-		} else {
-			fmt.Println("Fetching recent binaries from", remoteName)
-		}
+	if len(refspecs) > 0 {
+		LogConsole("Fetching binaries for", refspecs, "from", remoteName)
+	} else {
+		LogConsole("Fetching recent binaries from", remoteName)
 	}
 
 	// Do the actual fetching in a Goroutine, because we want to update the download rate & time estimates
@@ -107,17 +104,15 @@ func cmdFetch() int {
 	ReportProgressToConsole(callbackChan, "Fetch", time.Millisecond*500)
 
 	if fetcherr != nil {
-		fmt.Fprintf(os.Stderr, "git-lob: fetch error - %v", fetcherr.Error())
+		LogConsoleError("git-lob: fetch error - %v", fetcherr.Error())
 		return 12
 	}
-	if !GlobalOptions.Quiet {
-		if GlobalOptions.DryRun {
-			fmt.Println("Done, run again without --dry-run to perform real fetch")
-		} else {
-			// Because no newlines in progress reporting
-			fmt.Println()
-			fmt.Println("Successfully fetched binaries from", remoteName)
-		}
+	if GlobalOptions.DryRun {
+		LogConsole("Done, run again without --dry-run to perform real fetch")
+	} else {
+		// Because no newlines in progress reporting
+		LogConsole()
+		LogConsole("Successfully fetched binaries from", remoteName)
 	}
 
 	return 0
@@ -197,10 +192,8 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 	}
 
 	if len(lobsNeeded) == 0 {
-		if !GlobalOptions.Quiet {
-			callback(&ProgressCallbackData{ProgressCalculate, "No binaries to download.",
-				int64(len(refspecs)), int64(len(refspecs)), 0, 0})
-		}
+		callback(&ProgressCallbackData{ProgressCalculate, "No binaries to download.",
+			int64(len(refspecs)), int64(len(refspecs)), 0, 0})
 	} else {
 
 		var lobsToDownload []string
@@ -241,16 +234,12 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 		}
 
 		if len(lobsToDownload) == 0 {
-			if !GlobalOptions.Quiet {
-				callback(&ProgressCallbackData{ProgressCalculate, "No binaries to download.",
-					int64(len(refspecs)), int64(len(refspecs)), 0, 0})
-			}
+			callback(&ProgressCallbackData{ProgressCalculate, "No binaries to download.",
+				int64(len(refspecs)), int64(len(refspecs)), 0, 0})
 			return nil
 		} else {
-			if !GlobalOptions.Quiet {
-				callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf("%d binaries to download.", len(lobsToDownload)),
-					int64(len(refspecs)), int64(len(refspecs)), 0, 0})
-			}
+			callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf("%d binaries to download.", len(lobsToDownload)),
+				int64(len(refspecs)), int64(len(refspecs)), 0, 0})
 		}
 		if !dryRun {
 			// Download to shared if using shared area (we link later)
@@ -263,10 +252,8 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 
 			// Download metafiles first
 			// This will allow us to estimate the time required
-			if !GlobalOptions.Quiet {
-				callback(&ProgressCallbackData{ProgressCalculate, "Downloading metadata",
-					0, 0, 0, 0})
-			}
+			callback(&ProgressCallbackData{ProgressCalculate, "Downloading metadata",
+				0, 0, 0, 0})
 			// Use average metafile bytes as estimate of download, usually around 100 bytes of JSON
 			averageMetaSize := 100
 			metaTotalBytes := int64(len(metafilesToDownload) * averageMetaSize)
@@ -297,10 +284,8 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 			// So now we have all the metadata available locally, we can know what files to download
 			var filesTotalBytes int64
 			var files []string
-			if !GlobalOptions.Quiet {
-				callback(&ProgressCallbackData{ProgressCalculate, "Calculating content files to download",
-					0, 0, 0, 0})
-			}
+			callback(&ProgressCallbackData{ProgressCalculate, "Calculating content files to download",
+				0, 0, 0, 0})
 			for _, sha := range lobsToDownload {
 				// Also if shared store, link meta into local
 				if isUsingSharedStorage() {
@@ -326,10 +311,8 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 					files = append(files, getLOBRelChunkFilename(sha, i))
 				}
 			}
-			if !GlobalOptions.Quiet {
-				callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf("Metadata done, downloading content (%v)", FormatSize(filesTotalBytes)),
-					0, 0, 0, 0})
-			}
+			callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf("Metadata done, downloading content (%v)", FormatSize(filesTotalBytes)),
+				0, 0, 0, 0})
 			// Download content now
 			var lastFilename string
 			var lastFileBytes int64
@@ -392,7 +375,7 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 }
 
 func cmdFetchHelp() {
-	fmt.Println(`Usage: git-lob fetch [options] [<remote> [<ref>...]]
+	LogConsole(`Usage: git-lob fetch [options] [<remote> [<ref>...]]
 
   Download binaries from a remote, retrieving only the binaries referenced
   by recent commits visible in the git repo. The definition of 'recent' depends

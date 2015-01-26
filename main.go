@@ -56,7 +56,7 @@ func mainImpl() int {
 	defer ShutDownLogging()
 
 	if len(errors) > 0 {
-		fmt.Fprintf(os.Stderr, "%v\n", strings.Join(errors, "\n"))
+		LogConsoleError(strings.Join(errors, "\n"))
 		printUsage()
 		return 1
 	}
@@ -119,17 +119,22 @@ func mainImpl() int {
 			printHelp()
 			return 0
 		}
-		fmt.Fprintf(os.Stderr, "git-lob: unknown command '%v'\n", GlobalOptions.Command)
+		LogConsoleErrorf("git-lob: unknown command '%v'\n", GlobalOptions.Command)
 		return 1
 	}
 
 	return -1
 }
 func printUsage() {
-	fmt.Fprintf(os.Stderr, usageTxt)
+	// For safety, these always go to stderr not stdout
+	// That's because this is before the command has been chosen and therefore has not
+	// had the chanced to call LogAllConsoleOutputToStdErr. A poorly
+	// configured filter shouldn't be allowed to corrupt file output
+	LogConsoleError(usageTxt)
 }
 func printHelp() {
-	fmt.Fprintf(os.Stderr, helpTxt)
+	// See above for why this is stderr not stdout
+	LogConsoleError(helpTxt)
 }
 
 const usageTxt = `Usage: git-lob [command] [options] [file...]

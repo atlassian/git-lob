@@ -75,12 +75,12 @@ func Logf(format string, v ...interface{}) {
 	}
 }
 
-// Log error message to console and log with newline
-func LogError(msg string) {
-	fmt.Fprintln(consoleErr, msg)
+// Log error message to console and log with newline & spaces in between
+func LogError(msgs ...interface{}) {
+	fmt.Fprintln(consoleErr, msgs...)
 
 	if errorLog != nil {
-		errorLog.Println(msg)
+		errorLog.Println(msgs...)
 		// Also dump stack trace to log
 		errorLog.Println(debug.Stack())
 	}
@@ -88,33 +88,33 @@ func LogError(msg string) {
 }
 
 // Log debug message to console and log with newline (if verbose)
-func LogDebug(msg string) {
+func LogDebug(msgs ...interface{}) {
 	if GlobalOptions.Verbose {
-		fmt.Fprintln(consoleOut, msg)
+		fmt.Fprintln(consoleOut, msgs...)
 	}
 
 	if GlobalOptions.Verbose || GlobalOptions.VerboseLog {
 		if debugLog != nil {
-			debugLog.Println(msg)
+			debugLog.Println(msgs...)
 		}
 	}
 }
 
 // Log output message to console and log with newline (if not quiet)
-func Log(msg string) {
+func Log(msgs ...interface{}) {
 	if !GlobalOptions.Quiet {
-		fmt.Fprintln(consoleOut, msg)
+		fmt.Fprintln(consoleOut, msgs...)
 
 		if outputLog != nil {
-			outputLog.Println(msg)
+			outputLog.Println(msgs...)
 		}
 	}
 }
 
 // Write an informational message to the console with newline (if not quiet), and not the log
-func LogConsole(msg string) {
+func LogConsole(msgs ...interface{}) {
 	if !GlobalOptions.Quiet {
-		fmt.Fprintln(consoleOut, msg)
+		fmt.Fprintln(consoleOut, msgs...)
 	}
 }
 
@@ -137,10 +137,20 @@ func LogConsolef(format string, v ...interface{}) {
 	}
 }
 
+// Write an error message to the console with newline and not the log
+func LogConsoleError(msgs ...interface{}) {
+	fmt.Fprintln(consoleErr, msgs...)
+}
+
+// Write an error message to the console and not the log
+func LogConsoleErrorf(format string, v ...interface{}) {
+	fmt.Fprintf(consoleErr, format, v...)
+}
+
 // Write a debug message to the console with newline (if verbose), and not the log
-func LogConsoleDebug(msg string) {
+func LogConsoleDebug(msgs ...interface{}) {
 	if GlobalOptions.Verbose {
-		fmt.Fprintln(consoleOut, msg)
+		fmt.Fprintln(consoleOut, msgs...)
 	}
 }
 

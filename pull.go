@@ -1,9 +1,5 @@
 package main
 
-import (
-	"fmt"
-)
-
 func cmdPull() int {
 	fetchret := cmdFetch()
 	if fetchret != 0 {
@@ -21,7 +17,7 @@ func cmdPull() int {
 }
 
 func cmdPullHelp() {
-	fmt.Println(`Usage: git-lob pull [options] [<remote> [<ref>...]]
+	LogConsole(`Usage: git-lob pull [options] [<remote> [<ref>...]]
 
   Run the 'git lob fetch' command with the same parameters to download binaries
   from a remote store, followed by 'git lob checkout' to populate the working 
