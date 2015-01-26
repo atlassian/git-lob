@@ -175,6 +175,8 @@ func PushBasic(provider SyncProvider, remoteName string, refspecs []*GitRefSpec,
 	// First, build up details of what it is we need to push so we can estimate %
 	var allCommitsSize int64
 	var commitsToPush []*PushCommitContentDetails
+	// for use when --force used
+	filesUploaded := NewStringSet()
 	for i, refspec := range refspecs {
 		if GlobalOptions.Verbose {
 			callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf("Calculating data to push for %v", refspec),
@@ -280,7 +282,28 @@ func PushBasic(provider SyncProvider, remoteName string, refspecs []*GitRefSpec,
 				}
 				return false
 			}
-			err := provider.Upload(remoteName, commit.Files, commit.BaseDir, force, localcallback)
+			var err error
+			if force {
+				// We can end up duplicating uploads when in force mode because the underlying provider will not
+				// stop the upload in force mode if it's already there. So instead, make sure we only upload each
+				// file at most once
+				commitFilesSet := NewStringSetFromSlice(commit.Files)
+				newFilesSet := commitFilesSet.Difference(filesUploaded)
+				if len(newFilesSet) > 0 {
+					newFiles := make([]string, 0, len(newFilesSet))
+					for f := range newFilesSet {
+						newFiles = append(newFiles, f)
+					}
+					err = provider.Upload(remoteName, newFiles, commit.BaseDir, force, localcallback)
+					if err == nil {
+						for f := range newFilesSet {
+							filesUploaded.Add(f)
+						}
+					}
+				}
+			} else {
+				err = provider.Upload(remoteName, commit.Files, commit.BaseDir, force, localcallback)
+			}
 			if err != nil {
 				// Stop at commit we can't upload
 				return err
