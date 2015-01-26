@@ -137,6 +137,16 @@ func LogConsolef(format string, v ...interface{}) {
 	}
 }
 
+// Write an error message to the console with newline and not the log
+func LogConsoleError(msgs ...interface{}) {
+	fmt.Fprintln(consoleErr, msgs...)
+}
+
+// Write an error message to the console and not the log
+func LogConsoleErrorf(format string, v ...interface{}) {
+	fmt.Fprintf(consoleErr, format, v...)
+}
+
 // Write a debug message to the console with newline (if verbose), and not the log
 func LogConsoleDebug(msgs ...interface{}) {
 	if GlobalOptions.Verbose {
