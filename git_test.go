@@ -662,7 +662,7 @@ var _ = Describe("Git", func() {
 			ioutil.WriteFile(filepath.Join(root, "file5.txt"),
 				[]byte(fmt.Sprintf("git-lob: %v", lobshas[14])), 0644) // included
 			exec.Command("git", "add", "file5.txt").Run()
-			commitAtDate(headCommitsIncludedDate.Add(time.Hour*24*4), "Master penultimate commit")
+			commitAtDate(refsIncludedDate.Add(time.Hour*5), "Master penultimate commit")
 			correctLOBsMaster = append(correctLOBsMaster, lobshas[14])
 			exec.Command("git", "tag", "aheadtag").Run()
 
