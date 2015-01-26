@@ -1,0 +1,61 @@
+Coding Conventions
+------------------
+
+1. gofmt
+   
+   Always run gofmt after saving to format your code to standard Go 
+   convention. It is recommended that you use a plugin to your
+   text editor that does this automatically, e.g. GoSublime
+
+2. Command line entry points
+   
+   When implementing a new command:
+   a. Implement it in <command>.go
+   b. The main entry point should be a function called cmdCommand()
+   c. Use this to validate input & parse arguments, then call an implementation
+      function called Command(), passing in the parsed arguments
+   d. Implement a function called cmdCommandHelp() to display the --help output
+   e. Modify main.go and add a new command entry in the switch
+
+3. Output messages and logging
+
+   There are 2 sets of output - the console and optionally a log file, if
+   configured by the user. In addition there are 2 run-time options which 
+   control how much is output, the '--quiet' and '--verbose' options.
+
+   In order to work with these most easily, you should never output directly
+   to any console streams. Instead, use the following utilities:
+
+   For simultaneous log & console output:
+
+     You should use these for any messages that are useful in the log as well. 
+     Errors always classify for this.
+
+     Errors: LogError, LogErrorf
+             For significant errors, always reported to both log and console.
+     Info:   Log, Logf 
+             Informational messages, displayed to the console and log unless --quiet
+     Debug:  LogDebug, LogDebugf
+             Debug messages that are displayed to the console if --verbose and to the
+             log if git-lob.logverbose
+   
+   For console output only:
+
+     You should use these for messages that should only go to the console because
+     they're only useful for an interactive user. 
+
+     Info:   LogConsole, LogConsolef
+     Debug:  LogConsoleDebug, LogConsoleDebugf
+     Progress: LogConsoleOverwrite
+
+   stdout/stderr
+
+     You should never output to these directly, use the methods above. Note that
+     all error messages go to stderr, and all other messages go to stdout UNLESS
+     you have called LogAllConsoleOutputToStdErr(), in which case all subsequent
+     output goes to stderr. Commands that are piping output to stdout (such as
+     the filters) always output user messages to stderr to avoid corrupting the
+     piped output. The user can also effectively suppress stdout using --quiet,
+     since only errors are output and those always go to stderr.
+
+
