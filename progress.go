@@ -89,7 +89,7 @@ func ReportProgressToConsole(callbackChan <-chan *ProgressCallbackData, op strin
 					// Print completion in verbose mode
 					if data.ItemBytesDone == data.ItemBytes && GlobalOptions.Verbose {
 						msg := fmt.Sprintf("%ved: %v 100%%", op, data.Desc)
-						LogOverwriteConsole(msg, lastConsoleLineLen)
+						LogConsoleOverwrite(msg, lastConsoleLineLen)
 						lastConsoleLineLen = len(msg)
 						// Clear line on completion in verbose mode
 						// Don't do this as \n in string above since we need to clear spaces after
@@ -142,7 +142,7 @@ func ReportProgressToConsole(callbackChan <-chan *ProgressCallbackData, op strin
 					buf.WriteString(fmt.Sprintf("%d%% (%v ETA %v)", overallPercent, FormatTransferRate(avgRate), timeRemaining))
 				}
 				msg := buf.String()
-				LogOverwriteConsole(msg, lastConsoleLineLen)
+				LogConsoleOverwrite(msg, lastConsoleLineLen)
 				lastConsoleLineLen = len(msg)
 			}
 		}

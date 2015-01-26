@@ -121,7 +121,7 @@ func LogConsole(msg string) {
 // Overwrite the current line in the console (e.g. for progressive update), if not quiet
 // Requires the previous line length so that it can clear it with spaces
 // Does not add a newline after writing
-func LogOverwriteConsole(newString string, lastLineLength int) {
+func LogConsoleOverwrite(newString string, lastLineLength int) {
 	if len(newString) < lastLineLength {
 		LogConsolef("\r%v%v", newString, strings.Repeat(" ", lastLineLength-len(newString)))
 	} else {
