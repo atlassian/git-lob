@@ -94,6 +94,8 @@ func ReportProgressToConsole(callbackChan <-chan *ProgressCallbackData, op strin
 						// Clear line on completion in verbose mode
 						// Don't do this as \n in string above since we need to clear spaces after
 						LogConsole("")
+						finalDownloadProgress = nil
+						lastProgress = nil
 					} else {
 						// Otherwise we only really want to display the last one
 						finalDownloadProgress = data
