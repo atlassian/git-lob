@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"os"
 	"regexp"
@@ -107,7 +106,7 @@ func CleanFilterWithReaderWriter(in io.Reader, out io.Writer) int {
 }
 
 func cmdSmudgeFilterHelp() {
-	fmt.Println(`Usage: git-lob filter-smudge [options]
+	LogConsole(`Usage: git-lob filter-smudge [options]
 
   The smudge filter converts a file stored in git to a file in the working
   directory. In this case we look for files containing the git-lob marker
@@ -123,7 +122,7 @@ Options:
 `)
 }
 func cmdCleanFilterHelp() {
-	fmt.Println(`Usage: git-lob filter-clean [options]
+	LogConsole(`Usage: git-lob filter-clean [options]
 
   The clean filter converts a file in the working directory to a form which
   will be stored in git. In this case we calculate the SHA-1 of the binary

@@ -30,15 +30,13 @@ func cmdCheckout() int {
 		case ProgressSkip:
 			filesUpToDate++
 		case ProgressError:
-			fmt.Println("ERROR:", err.Error())
+			LogConsoleError("ERROR:", err.Error())
 			filesFailed++
 		case ProgressTransferBytes:
-			if GlobalOptions.Verbose {
-				if optDryRun {
-					fmt.Println(filelob.Filename, "needs check out.")
-				} else {
-					fmt.Println(filelob.Filename, "checked out.")
-				}
+			if optDryRun {
+				LogConsoleDebug(filelob.Filename, "needs check out.")
+			} else {
+				LogConsoleDebug(filelob.Filename, "checked out.")
 			}
 			filesCheckedOut++
 		}
@@ -48,21 +46,21 @@ func cmdCheckout() int {
 	err := Checkout(pathspecs, optDryRun, callback)
 
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "git-lob: checkout error - %v", err.Error())
+		LogConsoleErrorf("git-lob: checkout error - %v\n", err.Error())
 		return 7
 	}
 
 	// Report fina
 	if !GlobalOptions.Quiet {
 		if optDryRun {
-			fmt.Println(filesCheckedOut, "files need updating")
+			LogConsole(filesCheckedOut, "files need updating")
 			if filesCheckedOut > 0 {
-				fmt.Println("Run this command again without --dry-run to update these files.")
+				LogConsole("Run this command again without --dry-run to update these files.")
 			}
 		} else {
-			fmt.Println(filesCheckedOut, "files were updated")
+			LogConsole(filesCheckedOut, "files were updated")
 			if filesFailed > 0 {
-				fmt.Println("WARNING:", filesFailed, "failed to be updated, check errors above")
+				LogConsole("WARNING:", filesFailed, "failed to be updated, check errors above")
 			}
 		}
 	}
@@ -172,7 +170,7 @@ func Checkout(pathspecs []string, dryRun bool, callback CheckoutCallback) error 
 }
 
 func cmdCheckoutHelp() {
-	fmt.Println(`Usage: git-lob checkout [options] [<pathspec>...]
+	LogConsole(`Usage: git-lob checkout [options] [<pathspec>...]
 
   Populate files in the working copy with binary content where they
   currently just have placeholder content, because the real content wasn't

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -12,11 +11,11 @@ func cmdCleanup() int {
 		return 3
 	}
 	if GlobalOptions.DryRun {
-		fmt.Println("LOBs which would have been deleted:")
-		fmt.Println(strings.Join(files, "\n"))
+		LogConsole("LOBs which would have been deleted:")
+		LogConsole(strings.Join(files, "\n"))
 	} else {
-		LogDebug("Deleted LOBs:")
-		LogDebug(strings.Join(files, "\n"))
+		LogConsoleDebug("Deleted LOBs:")
+		LogConsoleDebug(strings.Join(files, "\n"))
 	}
 	return 0
 
@@ -29,17 +28,17 @@ func cmdCleanupShared() int {
 		return 3
 	}
 	if GlobalOptions.DryRun {
-		fmt.Println("LOBs which would have been deleted:")
-		fmt.Println(strings.Join(files, "\n"))
+		LogConsole("LOBs which would have been deleted:")
+		LogConsole(strings.Join(files, "\n"))
 	} else {
-		LogDebug("Deleted LOBs:")
-		LogDebug(strings.Join(files, "\n"))
+		LogConsoleDebug("Deleted LOBs:")
+		LogConsoleDebug(strings.Join(files, "\n"))
 	}
 	return 0
 }
 
 func cmdCleanupHelp() {
-	fmt.Println(`Usage: git-lob cleanup [options]
+	LogConsole(`Usage: git-lob cleanup [options]
 
   Removes binaries unreferenced by any commit or the index from the local repo
   binary store (and shared if no other usage).
@@ -60,7 +59,7 @@ Options:
 }
 
 func cmdCleanupSharedHelp() {
-	fmt.Println(`Usage: git-lob cleanup-shared [options]
+	LogConsole(`Usage: git-lob cleanup-shared [options]
 
   Removes binaries from the shared store which are no longer linked to by any
   repo. 

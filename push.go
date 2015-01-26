@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"strings"
 	"time"
 )
@@ -15,7 +14,7 @@ func cmdPush() int {
 	// Validate custom options
 	errorList := validateCustomOptions(GlobalOptions, nil, []string{"all", "recheck", "force"})
 	if len(errorList) > 0 {
-		fmt.Fprintf(os.Stderr, strings.Join(errorList, "\n"))
+		LogConsoleError(strings.Join(errorList, "\n"))
 		return 9
 	}
 
@@ -35,17 +34,17 @@ func cmdPush() int {
 		if len(GlobalOptions.Args) > 1 {
 			// Not valid if --all
 			if optAll {
-				fmt.Fprintf(os.Stderr, "git-lob: Too many arguments; cannot include refspec when using --all\n")
+				LogConsoleError("git-lob: Too many arguments; cannot include refspec when using --all")
 				return 7
 			}
 			for _, arg := range GlobalOptions.Args[1:] {
 				r := ParseGitRefSpec(arg)
 				// Only allow .. range for push, not ...
 				if r.RangeOp == "..." {
-					fmt.Fprintf(os.Stderr, "git-lob: '...' range operator is not supported for push, only '..'\n")
+					LogConsoleError("git-lob: '...' range operator is not supported for push, only '..'")
 					return 7
 				} else if r.IsRange() && r.IsEmptyRange() {
-					fmt.Fprintf(os.Stderr, "Warning: %v is an empty range, did you mean to use %v^..%v ?\n", r, r.Ref1, r.Ref2)
+					LogConsoleErrorf("Warning: %v is an empty range, did you mean to use %v^..%v ?\n", r, r.Ref1, r.Ref2)
 				}
 
 				refspecs = append(refspecs, r)
@@ -59,11 +58,11 @@ func cmdPush() int {
 	// check the remote config to make sure it's valid
 	provider, err := GetProviderForRemote(remoteName)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "git-lob: %v\n", err)
+		LogConsoleErrorf("git-lob: %v\n", err)
 		return 6
 	}
 	if err = provider.ValidateConfig(remoteName); err != nil {
-		fmt.Fprintf(os.Stderr, "git-lob: remote %v has configuration problems:\n%v\n", remoteName, err)
+		LogConsoleErrorf("git-lob: remote %v has configuration problems:\n%v\n", remoteName, err)
 		return 6
 	}
 
@@ -72,7 +71,7 @@ func cmdPush() int {
 		if optAll {
 			branches, err := GetGitLocalBranches()
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "git-lob: unable to get local branch list - %v\n", err)
+				LogConsoleErrorf("git-lob: unable to get local branch list - %v\n", err)
 				return 7
 			}
 			for _, branch := range branches {
@@ -97,15 +96,13 @@ func cmdPush() int {
 		}
 	}
 
-	if !GlobalOptions.Quiet {
-		fmt.Println("Pushing binaries for", refspecs, "to", remoteName)
-	}
+	LogConsole("Pushing binaries for", refspecs, "to", remoteName)
 
 	// Warn about long calculation processes
 	if optRecheck {
-		fmt.Println("Re-checking all history as requested, this may take a while on large repos")
+		LogConsole("Re-checking all history as requested, this may take a while on large repos")
 	} else if !HasPushedBinaryState(remoteName) {
-		fmt.Println("No cached state for this remote, first time may take a while on large repos")
+		LogConsole("No cached state for this remote, first time may take a while on large repos")
 	}
 
 	// Do the actual pushing in Goroutine, because we want to update the download rate & time estimates
@@ -148,17 +145,15 @@ func cmdPush() int {
 	ReportProgressToConsole(callbackChan, "Push", time.Millisecond*500)
 
 	if pusherr != nil {
-		fmt.Fprintf(os.Stderr, "git-lob: push error - %v", pusherr.Error())
+		LogConsoleErrorf("git-lob: push error - %v", pusherr.Error())
 		return 12
 	}
-	if !GlobalOptions.Quiet {
-		if GlobalOptions.DryRun {
-			fmt.Println("Done, run again without --dry-run to perform real push")
-		} else {
-			// Because no newlines in progress reporting
-			fmt.Println()
-			fmt.Println("Successfully pushed binaries to", remoteName)
-		}
+	if GlobalOptions.DryRun {
+		LogConsole("Done, run again without --dry-run to perform real push")
+	} else {
+		// Because no newlines in progress reporting
+		LogConsole()
+		LogConsole("Successfully pushed binaries to", remoteName)
 	}
 
 	return 0
@@ -310,7 +305,7 @@ func PushSmart(provider SmartSyncProvider, remoteName string, refspecs []*GitRef
 }
 
 func cmdPushHelp() {
-	fmt.Println(`Usage: git-lob push [options] [<remote> [<ref>...]]
+	LogConsole(`Usage: git-lob push [options] [<remote> [<ref>...]]
 
   Uploads binaries to a remote, sending only binaries required to ensure 
   that remote has the binary resources referenced at a set of commits.

@@ -24,7 +24,8 @@ Coding Conventions
    control how much is output, the '--quiet' and '--verbose' options.
 
    In order to work with these most easily, you should never output directly
-   to any console streams. Instead, use the following utilities:
+   to any console streams. You should also never need to check the verbose
+   and quiet options yourself. Instead, use the following utilities.
 
    For simultaneous log & console output:
 
