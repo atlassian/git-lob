@@ -318,39 +318,40 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 			var lastFileBytes int64
 			var bytesFromFilesDoneSoFar int64
 			contentcallback := func(fileInProgress string, progressType ProgressCallbackType, bytesDone, totalBytes int64) (abort bool) {
-				if lastFilename != fileInProgress {
-					// New file, always callback
-					if progressType == ProgressSkip || progressType == ProgressNotFound {
-						bytesFromFilesDoneSoFar += totalBytes
-						callback(&ProgressCallbackData{progressType, fileInProgress, totalBytes, totalBytes,
-							bytesFromFilesDoneSoFar, filesTotalBytes})
-					} else {
-						if lastFilename != "" {
-							// we obviously never got a 100% call for previous file
-							bytesFromFilesDoneSoFar += lastFileBytes
-							callback(&ProgressCallbackData{ProgressTransferBytes, lastFilename, lastFileBytes, lastFileBytes,
-								bytesFromFilesDoneSoFar, filesTotalBytes})
-						}
-						// Start new file
-						callback(&ProgressCallbackData{ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
-							bytesFromFilesDoneSoFar + bytesDone, filesTotalBytes})
-					}
-					lastFilename = fileInProgress
-					lastFileBytes = totalBytes
+
+				var ret bool
+				if progressType == ProgressSkip || progressType == ProgressNotFound {
+					bytesFromFilesDoneSoFar += totalBytes
+					ret = callback(&ProgressCallbackData{progressType, fileInProgress, totalBytes, totalBytes,
+						bytesFromFilesDoneSoFar, filesTotalBytes})
 				} else {
+
+					if lastFilename != fileInProgress && lastFilename != "" {
+						// we obviously never got a 100% call for previous file
+						bytesFromFilesDoneSoFar += lastFileBytes
+						ret = callback(&ProgressCallbackData{ProgressTransferBytes, lastFilename, lastFileBytes, lastFileBytes,
+							bytesFromFilesDoneSoFar, filesTotalBytes})
+						lastFilename = ""
+					}
+
 					if bytesDone == totalBytes {
 						// finished
 						bytesFromFilesDoneSoFar += totalBytes
-						callback(&ProgressCallbackData{ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
+						ret = callback(&ProgressCallbackData{ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
 							bytesFromFilesDoneSoFar, filesTotalBytes})
 						lastFilename = ""
 					} else {
-						// Otherwise this is a progress callback
-						return callback(&ProgressCallbackData{ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
+						// partly progressed file
+						lastFilename = fileInProgress
+						lastFileBytes = totalBytes
+						ret = callback(&ProgressCallbackData{ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
 							bytesFromFilesDoneSoFar + bytesDone, filesTotalBytes})
+
 					}
+
 				}
-				return false
+
+				return ret
 			}
 			err = provider.Download(remoteName, files, destDir, force, contentcallback)
 			if err != nil {
