@@ -225,11 +225,10 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 			}
 
 		}
-		if force {
-			// Duplicates are not eliminated by methods we call, for efficiency
-			// These would be handled in non-force mode, but in force mode we'd rather not duplicate
-			StringRemoveDuplicates(&lobsToDownload)
-		}
+		// Duplicates are not eliminated by methods we call, for efficiency
+		// We need to remove them though because otherwise we can report much higher download requirements
+		// than necessary when multiple refs include the same SHA
+		StringRemoveDuplicates(&lobsToDownload)
 
 		if len(lobsToDownload) == 0 {
 			callback(&ProgressCallbackData{ProgressCalculate, "No binaries to download.",
