@@ -12,7 +12,7 @@ var _ = Describe("Util", func() {
 
 			var str string
 			str = FormatSize(55)
-			Expect(str).To(Equal("55"))
+			Expect(str).To(Equal("55B"))
 			str = FormatSize(1024)
 			Expect(str).To(Equal("1KB"))
 			str = FormatSize(2000)
