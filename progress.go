@@ -125,6 +125,7 @@ func ReportProgressToConsole(callbackChan <-chan *ProgressCallbackData, op strin
 			// Calculate transfer rate
 			transferRate.AddSample(bytesPerSecond)
 			avgRate := transferRate.Average()
+			lastTime = time.Now()
 
 			if lastProgress.ItemBytes != 0 || lastProgress.TotalBytes != 0 {
 				buf := bytes.NewBufferString(fmt.Sprintf("%ving: ", op))
