@@ -98,7 +98,7 @@ func FormatSize(sz int64) string {
 	case sz >= (1 << 10):
 		return fmt.Sprintf("%.3gKB", float32(sz)/float32(1<<10))
 	default:
-		return fmt.Sprintf("%d", sz)
+		return fmt.Sprintf("%dB", sz)
 	}
 }
 
