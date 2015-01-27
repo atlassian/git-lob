@@ -712,10 +712,32 @@ func GetLOBFilesForSHA(sha, basedir string, check bool, checkHash bool) (files [
 // Check the integrity of the files for a given sha in the attached basedir
 // If checkHash = true, reads all the data in the files and re-calculates
 // the SHA for a deep validation of content (slower but complete)
-// If ccheckHash = false, just checks the presence & size of all files (quick & most likely correct)
+// If checkHash = false, just checks the presence & size of all files (quick & most likely correct)
 func CheckLOBFilesForSHA(sha, basedir string, checkHash bool) error {
 	_, _, err := GetLOBFilesForSHA(sha, basedir, true, checkHash)
 	return err
+}
+
+// Check the presence & integrity of the files for a given list of shas in this repo
+// and return a list of those which failed the check
+// If checkHash = true, reads all the data in the files and re-calculates
+// the SHA for a deep validation of content (slower but complete)
+// If checkHash = false, just checks the presence & size of all files (quick & most likely correct)
+func GetMissingLOBs(lobshas []string, checkHash bool) []string {
+	localroot := GetLocalLOBRoot()
+	var missing []string
+	for _, sha := range lobshas {
+		err := CheckLOBFilesForSHA(sha, localroot, false)
+		if err != nil {
+			// Recover from shared storage if possible
+			if isUsingSharedStorage() && recoverLocalLOBFilesFromSharedStore(sha) {
+				// then we're OK
+			} else {
+				missing = append(missing, sha)
+			}
+		}
+	}
+	return missing
 }
 
 // Retrieve the list of local/shared filenames backing the list of LOB SHAs passed in

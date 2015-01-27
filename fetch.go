@@ -198,37 +198,18 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 			int64(len(refspecs)), int64(len(refspecs)), 0, 0})
 	} else {
 
-		var lobsToDownload []string
-
-		// Smoke test SHAs to eliminate ones we already know we have in full & avoid doing anything extra
-		var binaryCount int
-		for _, sha := range lobsNeeded {
-			// Check each one to see if already present locally & valid (but don't recalc SHA)
-			// If using shared store, try to restore from shared
-			// If not, add to download
-			// Always check local first since should be linked
-			download := force
-			if !force {
-				err := CheckLOBFilesForSHA(sha, GetLocalLOBRoot(), false)
-				if err != nil {
-					if isUsingSharedStorage() && recoverLocalLOBFilesFromSharedStore(sha) {
-						// then we're OK
-					} else {
-						download = true
-					}
-				}
-			}
-
-			if download {
-				lobsToDownload = append(lobsToDownload, sha)
-				binaryCount++
-			}
-
-		}
 		// Duplicates are not eliminated by methods we call, for efficiency
 		// We need to remove them though because otherwise we can report much higher download requirements
 		// than necessary when multiple refs include the same SHA
-		StringRemoveDuplicates(&lobsToDownload)
+		StringRemoveDuplicates(&lobsNeeded)
+
+		var lobsToDownload []string
+		if force {
+			// Just download all
+			lobsToDownload = lobsNeeded
+		} else {
+			lobsToDownload = GetMissingLOBs(lobsNeeded, false)
+		}
 
 		if len(lobsToDownload) == 0 {
 			callback(&ProgressCallbackData{ProgressCalculate, "No binaries to download.",
