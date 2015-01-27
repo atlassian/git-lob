@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -39,15 +40,30 @@ func LogSuppressAllConsoleOutput() {
 	outputLog = log.New(ioutil.Discard, "", 0)
 }
 
+func writeToLog(log *log.Logger, addNewline bool, includeStack bool, msgs ...interface{}) {
+	if log != nil {
+		// Prefix message with repo root (this is cached for efficiency)
+		// We don't add this to the Logger prefix in New() because this prefixes before the timestamp & other
+		// flag-based fields, which means things don't line up nicely in the log
+		root, _, _ := GetRepoRoot() // ignore failure, just use blank string
+		buf := bytes.NewBufferString(fmt.Sprintf("[%v]: ", root))
+		fmt.Fprint(buf, msgs...)
+		if addNewline {
+			buf.WriteString("\n")
+		}
+		log.Print(buf.String())
+		if includeStack {
+			log.Println(string(debug.Stack()))
+		}
+	}
+
+}
+
 // Log error to console and log with format (no implicit newline)
 func LogErrorf(format string, v ...interface{}) {
-	fmt.Fprintf(consoleErr, format, v...)
-
-	if errorLog != nil {
-		errorLog.Printf(format, v...)
-		// Also dump stack trace to log
-		errorLog.Println(string(debug.Stack()))
-	}
+	msg := fmt.Sprintf(format, v...)
+	fmt.Fprint(consoleErr, msg)
+	writeToLog(errorLog, false, true, msg)
 }
 
 // Log debug message to console and log with format (if verbose)
@@ -56,10 +72,8 @@ func LogDebugf(format string, v ...interface{}) {
 		fmt.Fprintf(consoleOut, format, v...)
 	}
 
-	if GlobalOptions.Verbose || GlobalOptions.VerboseLog {
-		if debugLog != nil {
-			debugLog.Printf(format, v...)
-		}
+	if GlobalOptions.VerboseLog {
+		writeToLog(debugLog, false, false, fmt.Sprintf(format, v...))
 	}
 
 }
@@ -67,24 +81,16 @@ func LogDebugf(format string, v ...interface{}) {
 // Log output message to console and log with format (if not quiet)
 func Logf(format string, v ...interface{}) {
 	if !GlobalOptions.Quiet {
-		fmt.Fprintf(consoleOut, format, v...)
-
-		if outputLog != nil {
-			outputLog.Printf(format, v...)
-		}
+		msg := fmt.Sprintf(format, v...)
+		fmt.Fprint(consoleOut, msg)
+		writeToLog(outputLog, false, false, msg)
 	}
 }
 
 // Log error message to console and log with newline & spaces in between
 func LogError(msgs ...interface{}) {
 	fmt.Fprintln(consoleErr, msgs...)
-
-	if errorLog != nil {
-		errorLog.Println(msgs...)
-		// Also dump stack trace to log
-		errorLog.Println(debug.Stack())
-	}
-
+	writeToLog(errorLog, true, true, msgs...)
 }
 
 // Log debug message to console and log with newline (if verbose)
@@ -93,10 +99,8 @@ func LogDebug(msgs ...interface{}) {
 		fmt.Fprintln(consoleOut, msgs...)
 	}
 
-	if GlobalOptions.Verbose || GlobalOptions.VerboseLog {
-		if debugLog != nil {
-			debugLog.Println(msgs...)
-		}
+	if GlobalOptions.VerboseLog {
+		writeToLog(debugLog, true, false, msgs...)
 	}
 }
 
@@ -104,10 +108,7 @@ func LogDebug(msgs ...interface{}) {
 func Log(msgs ...interface{}) {
 	if !GlobalOptions.Quiet {
 		fmt.Fprintln(consoleOut, msgs...)
-
-		if outputLog != nil {
-			outputLog.Println(msgs...)
-		}
+		writeToLog(outputLog, true, false, msgs...)
 	}
 }
 
