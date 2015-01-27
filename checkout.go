@@ -81,9 +81,9 @@ func Checkout(pathspecs []string, dryRun bool, callback CheckoutCallback) error 
 	// in order to not overwrite modified files.
 
 	// firstly convert any pathspecs to the root of the repo, in case this is being executed in a sub-folder
-	reporoot, _ := GetRepoRoot()
-	if reporoot == "" {
-		return errors.New("Not in git repository?")
+	reporoot, _, err := GetRepoRoot()
+	if err != nil {
+		return err
 	}
 	curdir, err := os.Getwd()
 	if err != nil {

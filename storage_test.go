@@ -58,7 +58,8 @@ var _ = Describe("Storage", func() {
 					if err != nil {
 						Fail(fmt.Sprintf("Can't chdir to %v: %v", f, err))
 					}
-					testroot, sep := GetRepoRoot()
+					testroot, sep, err := GetRepoRoot()
+					Expect(err).To(BeNil(), "Should be no error getting repo root")
 					Expect(testroot).To(Equal(expandedroot))
 					Expect(sep).To(Equal(false))
 				}
@@ -68,8 +69,9 @@ var _ = Describe("Storage", func() {
 			It("Fails safely outside a git repo", func() {
 				// Relies on temp dir not being a git repo, which should be valid assumption
 				os.Chdir(os.TempDir())
-				testroot, _ := GetRepoRoot()
+				testroot, _, err := GetRepoRoot()
 				Expect(testroot).To(Equal(""))
+				Expect(err).ToNot(BeNil(), "Should be error outside git repo")
 			})
 
 		})

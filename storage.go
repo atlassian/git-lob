@@ -41,19 +41,18 @@ var cachedRepoRootIsSeparate bool
 var cachedRepoRootWorkingDir string
 
 // Gets the root folder of this git repository (the one containing .git)
-func GetRepoRoot() (path string, isSeparateGitDir bool) {
+func GetRepoRoot() (path string, isSeparateGitDir bool, reterr error) {
 	// We could call 'git rev-parse --git-dir' but this requires shelling out = slow, especially on Windows
 	// We should try to avoid that whenever we can
 	// So let's just find it ourselves; first containing folder with a .git folder/file
 	curDir, err := os.Getwd()
 	if err != nil {
-		LogErrorf("Getwd failed: %v\n", err)
-		return "", false
+		return "", false, err
 	}
 	origCurDir := curDir
 	// Use the cached value if known
 	if cachedRepoRootWorkingDir == curDir && cachedRepoRoot != "" {
-		return cachedRepoRoot, cachedRepoRootIsSeparate
+		return cachedRepoRoot, cachedRepoRootIsSeparate, nil
 	}
 
 	for {
@@ -63,20 +62,22 @@ func GetRepoRoot() (path string, isSeparateGitDir bool) {
 			cachedRepoRoot = curDir
 			cachedRepoRootWorkingDir = origCurDir
 			cachedRepoRootIsSeparate = !isDir
-			return curDir, !isDir
+			return curDir, !isDir, nil
 		}
 		curDir = filepath.Dir(curDir)
 		if len(curDir) == 0 || curDir[len(curDir)-1] == filepath.Separator || curDir == "." {
 			// Not a repo
-			LogError("Couldn't find repo root, not a git folder")
-			return "", false
+			return "", false, errors.New("Couldn't find repo root, not a git folder")
 		}
 	}
 }
 
 // Gets the git data dir of git repository (the .git dir, or where .git file points)
 func GetGitDir() string {
-	root, isSeparate := GetRepoRoot()
+	root, isSeparate, err := GetRepoRoot()
+	if err != nil {
+		return ""
+	}
 	git := filepath.Join(root, ".git")
 	if isSeparate {
 		// Git repo folder is separate, read location from file
