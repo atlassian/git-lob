@@ -317,6 +317,7 @@ func PushBasic(provider SyncProvider, remoteName string, refspecs []*GitRefSpec,
 		}
 	}
 
+	LogDebugf("Successfully pushed to %v via %v\n", remoteName, provider.TypeID())
 	return nil
 
 }

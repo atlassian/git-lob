@@ -127,6 +127,8 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 	// a 'git log -G' query for subsequent LOB changes. This is faster than doing ls-tree for every individual commit
 	// and eliminating duplicates.
 
+	LogDebugf("Fetching from %v via %v\n", remoteName, provider.TypeID())
+
 	var lobsNeeded []string
 
 	if len(refspecs) == 0 {
@@ -370,6 +372,8 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 			}
 		}
 	}
+
+	LogDebugf("Successfully fetched from %v via %v\n", remoteName, provider.TypeID())
 
 	return nil
 
