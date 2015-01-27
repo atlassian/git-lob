@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"runtime/debug"
 	"strings"
 )
 
@@ -34,8 +33,7 @@ func mainImpl() int {
 	// Generic panic handler so we get stack trace
 	defer func() {
 		if e := recover(); e != nil {
-			LogErrorf("git-lob panic: \n", e)
-			LogError(string(debug.Stack()))
+			LogErrorf("git-lob panic: %v\n", e)
 			os.Exit(99)
 		}
 
