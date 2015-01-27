@@ -593,7 +593,7 @@ func DeleteLOB(sha string) error {
 
 	if isUsingSharedStorage() {
 		// If we're using shared storage, then also check the number of links in
-		// shared storage for this SHA. See PurgeSharedStore for a more general
+		// shared storage for this SHA. See PruneSharedStore for a more general
 		// sweep for files that don't go through DeleteLOB (e.g. repo deleted manually)
 		shareddir := GetSharedLOBDir(sha)
 		names, err := filepath.Glob(filepath.Join(shareddir, fmt.Sprintf("%v*", sha)))

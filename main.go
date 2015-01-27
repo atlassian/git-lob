@@ -68,18 +68,18 @@ func mainImpl() int {
 			return 0
 		}
 		return cmdCheckout()
-	case "cleanup":
+	case "prune":
 		if GlobalOptions.HelpRequested {
-			cmdCleanupHelp()
+			cmdPruneHelp()
 			return 0
 		}
-		return cmdCleanup()
-	case "cleanup-shared":
+		return cmdPrune()
+	case "prune-shared":
 		if GlobalOptions.HelpRequested {
-			cmdCleanupSharedHelp()
+			cmdPruneSharedHelp()
 			return 0
 		}
-		return cmdCleanupShared()
+		return cmdPruneShared()
 	case "fetch":
 		if GlobalOptions.HelpRequested {
 			cmdFetchHelp()
@@ -98,6 +98,11 @@ func mainImpl() int {
 			return 0
 		}
 		return cmdCleanFilter()
+	case "help":
+		// Also support help as a command since 'git lob --help' uses git's help system
+		// You have to use "git-lob --help" otherwise
+		printHelp()
+		return 0
 	case "listproviders":
 		return cmdListProviders()
 	case "provider":
@@ -147,18 +152,25 @@ const helpTxt = `Usage: git-lob [command] [options] [file...]
   Use 'git-lob <command> --help' for more details
 
 Commands:
-  cleanup             Remove binaries unreferenced by any commit or the index
-  					  from the local repo binary store (and shared if no other
-  					  usage)
-  cleanup-shared      Delete any binaries in the shared store which have become
-                      unreferenced because repos were manually deleted
+  push                Upload local binaries to a remote.
+  fetch               Download binaries from a remote.
+  checkout            Check the working copy and fill in any binary content
+                      that's missing
+  pull                Perform 'fetch' then 'checkout'
+
+  filter-smudge       Execute the git smudge filter (when checking out)
+                      This should be set up in .gitattributes
+  filter-clean        Execute the git clean filter (when adding/committing)
+                      This should be set up in .gitattributes
+
   listproviders       List the available remote providers
   provider <name>     Print detail about named provider
-  push                Upload local binaries to a remote.
-  pull                Download binaries from a remote.
 
-  filter-smudge       Execute the git smudge filter (gitconfig only)
-  filter-clean        Execute the git clean filter (gitconfig only)
+  prune               Remove binaries unreferenced by any commit or the index
+                      from the local repo binary store (and shared if no other
+                      usage)
+  prune-shared        Delete any binaries in the shared store which have become
+                      unreferenced because repos were manually deleted
 
 Global Options:
   --quiet, -q          Print less output

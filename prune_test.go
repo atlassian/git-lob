@@ -11,10 +11,10 @@ import (
 	"path/filepath"
 )
 
-var _ = Describe("Purge", func() {
-	Describe("Purge all unreferenced", func() {
+var _ = Describe("Prune", func() {
+	Describe("Prune all unreferenced", func() {
 
-		root := filepath.Join(os.TempDir(), "PurgeTest")
+		root := filepath.Join(os.TempDir(), "PruneTest")
 		var initialCommit string
 		var oldwd string
 		BeforeEach(func() {
@@ -33,9 +33,9 @@ var _ = Describe("Purge", func() {
 
 		Context("No files", func() {
 			It("does nothing when no files present", func() {
-				shasToDelete, err := PurgeUnreferenced(false)
-				Expect(err).To(BeNil(), "PurgeUnreferenced should succeed")
-				Expect(shasToDelete).To(BeEmpty(), "Should report no files to purge")
+				shasToDelete, err := PruneUnreferenced(false)
+				Expect(err).To(BeNil(), "PruneUnreferenced should succeed")
+				Expect(shasToDelete).To(BeEmpty(), "Should report no files to prune")
 			})
 		})
 
@@ -68,11 +68,11 @@ var _ = Describe("Purge", func() {
 					os.Remove(l)
 				}
 			})
-			Context("purges all files when no references", func() {
+			Context("prunes all files when no references", func() {
 				// Because we've created no commits, all LOBs should be eligible for deletion
 				It("lists files but doesn't act on it in dry run mode", func() {
-					shasToDelete, err := PurgeUnreferenced(true)
-					Expect(err).To(BeNil(), "PurgeUnreferenced should succeed")
+					shasToDelete, err := PruneUnreferenced(true)
+					Expect(err).To(BeNil(), "PruneUnreferenced should succeed")
 					// Use sets to compare so ordering doesn't matter
 					actualset := NewStringSetFromSlice(shasToDelete)
 					Expect(actualset).To(Equal(lobshaset), "Should want to delete all files")
@@ -84,8 +84,8 @@ var _ = Describe("Purge", func() {
 
 				})
 				It("deletes files when not in dry run mode", func() {
-					shasToDelete, err := PurgeUnreferenced(false)
-					Expect(err).To(BeNil(), "PurgeUnreferenced should succeed")
+					shasToDelete, err := PruneUnreferenced(false)
+					Expect(err).To(BeNil(), "PruneUnreferenced should succeed")
 					// Use sets to compare so ordering doesn't matter
 					actualset := NewStringSetFromSlice(shasToDelete)
 					Expect(actualset).To(Equal(lobshaset), "Should want to delete all files")
@@ -142,8 +142,8 @@ var _ = Describe("Purge", func() {
 					//shasShouldKeep := NewStringSetFromSlice(lobshas[0:14])
 					shasShouldDelete := NewStringSetFromSlice(lobshas[14:])
 
-					deletedSlice, err := PurgeUnreferenced(false)
-					Expect(err).To(BeNil(), "PurgeUnreferenced should succeed")
+					deletedSlice, err := PruneUnreferenced(false)
+					Expect(err).To(BeNil(), "PruneUnreferenced should succeed")
 					shasDidDelete := NewStringSetFromSlice(deletedSlice)
 
 					Expect(shasDidDelete).To(Equal(shasShouldDelete), "Should delete the correct LOBs")
@@ -163,7 +163,7 @@ var _ = Describe("Purge", func() {
 			var lobshaset StringSet
 			var lobshas []string
 			var lobfiles []string
-			sharedStore := filepath.Join(os.TempDir(), "PurgeTest_SharedStore")
+			sharedStore := filepath.Join(os.TempDir(), "PruneTest_SharedStore")
 
 			BeforeEach(func() {
 				os.MkdirAll(sharedStore, 0755)
@@ -202,11 +202,11 @@ var _ = Describe("Purge", func() {
 				os.RemoveAll(sharedStore)
 				GlobalOptions.SharedStore = ""
 			})
-			Context("purges all files when no references", func() {
+			Context("prunes all files when no references", func() {
 				// Because we've created no commits, all LOBs should be eligible for deletion
 				It("lists files but doesn't act on it in dry run mode", func() {
-					shasToDelete, err := PurgeUnreferenced(true)
-					Expect(err).To(BeNil(), "PurgeUnreferenced should succeed")
+					shasToDelete, err := PruneUnreferenced(true)
+					Expect(err).To(BeNil(), "PruneUnreferenced should succeed")
 					// Use sets to compare so ordering doesn't matter
 					actualset := NewStringSetFromSlice(shasToDelete)
 					Expect(actualset).To(Equal(lobshaset), "Should want to delete all files")
@@ -219,8 +219,8 @@ var _ = Describe("Purge", func() {
 
 				})
 				It("deletes files when not in dry run mode", func() {
-					shasToDelete, err := PurgeUnreferenced(false)
-					Expect(err).To(BeNil(), "PurgeUnreferenced should succeed")
+					shasToDelete, err := PruneUnreferenced(false)
+					Expect(err).To(BeNil(), "PruneUnreferenced should succeed")
 					// Use sets to compare so ordering doesn't matter
 					actualset := NewStringSetFromSlice(shasToDelete)
 					Expect(actualset).To(Equal(lobshaset), "Should want to delete all files")
@@ -278,8 +278,8 @@ var _ = Describe("Purge", func() {
 					//shasShouldKeep := NewStringSetFromSlice(lobshas[0:14])
 					shasShouldDelete := NewStringSetFromSlice(lobshas[14:])
 
-					deletedSlice, err := PurgeUnreferenced(false)
-					Expect(err).To(BeNil(), "PurgeUnreferenced should succeed")
+					deletedSlice, err := PruneUnreferenced(false)
+					Expect(err).To(BeNil(), "PruneUnreferenced should succeed")
 					shasDidDelete := NewStringSetFromSlice(deletedSlice)
 
 					Expect(shasDidDelete).To(Equal(shasShouldDelete), "Should delete the correct LOBs")
@@ -303,7 +303,7 @@ var _ = Describe("Purge", func() {
 			var lobshaset StringSet
 			var lobshas []string
 			var sharedlobfiles []string
-			sharedStore := filepath.Join(os.TempDir(), "PurgeTest_SharedStore")
+			sharedStore := filepath.Join(os.TempDir(), "PruneTest_SharedStore")
 
 			BeforeEach(func() {
 				os.MkdirAll(sharedStore, 0755)
@@ -331,11 +331,11 @@ var _ = Describe("Purge", func() {
 				os.RemoveAll(sharedStore)
 				GlobalOptions.SharedStore = ""
 			})
-			Context("purges all files when no references", func() {
+			Context("prunes all files when no references", func() {
 				// Because we've created no hard links to the shared store, everything should be available for deletion
 				It("lists files but doesn't act on it in dry run mode", func() {
-					shasToDelete, err := PurgeSharedStore(true)
-					Expect(err).To(BeNil(), "PurgeSharedStore should succeed")
+					shasToDelete, err := PruneSharedStore(true)
+					Expect(err).To(BeNil(), "PruneSharedStore should succeed")
 					// Use sets to compare so ordering doesn't matter
 					actualset := NewStringSetFromSlice(shasToDelete)
 					Expect(actualset).To(Equal(lobshaset), "Should want to delete all files")
@@ -348,8 +348,8 @@ var _ = Describe("Purge", func() {
 
 				})
 				It("deletes files when not in dry run mode", func() {
-					shasToDelete, err := PurgeSharedStore(false)
-					Expect(err).To(BeNil(), "PurgeSharedStore should succeed")
+					shasToDelete, err := PruneSharedStore(false)
+					Expect(err).To(BeNil(), "PruneSharedStore should succeed")
 					// Use sets to compare so ordering doesn't matter
 					actualset := NewStringSetFromSlice(shasToDelete)
 					Expect(actualset).To(Equal(lobshaset), "Should want to delete all files")
@@ -387,14 +387,14 @@ var _ = Describe("Purge", func() {
 				})
 
 				It("does nothing in dry run mode", func() {
-					PurgeSharedStore(true)
+					PruneSharedStore(true)
 					for _, sharedfile := range sharedlobfiles {
 						exists, _ := FileOrDirExists(sharedfile)
 						Expect(exists).To(BeTrue(), "Should not have deleted %v", sharedfile)
 					}
 				})
 				It("correctly identifies referenced and unreferenced shared files", func() {
-					PurgeSharedStore(false)
+					PruneSharedStore(false)
 					for i, sharedfile := range sharedlobfiles {
 						exists, _ := FileOrDirExists(sharedfile)
 						if i <= referenceUpTo {

@@ -9,7 +9,82 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strings"
 )
+
+func cmdPrune() int {
+	files, err := PruneUnreferenced(GlobalOptions.DryRun)
+	if err != nil {
+		LogErrorf("Prune failed: %v\n", err)
+		return 3
+	}
+	if GlobalOptions.DryRun {
+		LogConsole("LOBs which would have been deleted:")
+		LogConsole(strings.Join(files, "\n"))
+	} else {
+		LogConsoleDebug("Deleted LOBs:")
+		LogConsoleDebug(strings.Join(files, "\n"))
+	}
+	return 0
+
+}
+
+func cmdPruneShared() int {
+	files, err := PruneSharedStore(GlobalOptions.DryRun)
+	if err != nil {
+		LogErrorf("Prune failed: %v\n", err)
+		return 3
+	}
+	if GlobalOptions.DryRun {
+		LogConsole("LOBs which would have been deleted:")
+		LogConsole(strings.Join(files, "\n"))
+	} else {
+		LogConsoleDebug("Deleted LOBs:")
+		LogConsoleDebug(strings.Join(files, "\n"))
+	}
+	return 0
+}
+
+func cmdPruneHelp() {
+	LogConsole(`Usage: git-lob Prune [options]
+
+  Removes binaries unreferenced by any commit or the index from the local repo
+  binary store (and shared if no other usage).
+
+  To do this, git-lob scans all reachable commits and your staged changes, then
+  deletes any files in the binary store not referenced by one of these. If your
+  repository is quite large, this might take a little time.
+
+  If you are using a shared store, then once the local repo's hard link is
+  deleted, if there are no other repos referencing this binary file then it is
+  also deleted from the shared store.
+
+Options:
+  --quiet, -q          Print less output
+  --verbose, -v        Print more output
+  --dry-run            Don't actually delete anything, just report
+`)
+}
+
+func cmdPruneSharedHelp() {
+	LogConsole(`Usage: git-lob prune-shared [options]
+
+  Removes binaries from the shared store which are no longer linked to by any
+  repo. 
+
+  Usually 'git-lob prune' will delete files from the shared store too once
+  the last repo link is removed, but if you manually delete repositories then
+  this won't happen. prune-shared deletes any binaries in the shared
+  store which have no other links left in the file system. This is relatively
+  quick compared to the repo prune since it doesn't require checking any
+  git repos.
+  
+Options:
+  --quiet, -q          Print less output
+  --verbose, -v        Print more output
+  --dry-run            Don't actually delete anything, just report
+`)
+}
 
 var (
 	diffLOBReferenceRegex *regexp.Regexp
@@ -115,7 +190,7 @@ func lobReferenceFromDiffLine(line string) string {
 // Delete unreferenced binary files from local store
 // For a file to be deleted it needs to not be referenced by any (reachable) commit
 // Returns a list of SHAs that were deleted (unless dryRun = true)
-func PurgeUnreferenced(dryRun bool) ([]string, error) {
+func PruneUnreferenced(dryRun bool) ([]string, error) {
 	// Purging requires full git on the command line, no way around this really
 	cmd := exec.Command("git", "log", "--all", "--no-color", "--oneline", "-p", "-G", SHALineRegex)
 	stdout, err := cmd.StdoutPipe()
@@ -138,7 +213,7 @@ func PurgeUnreferenced(dryRun bool) ([]string, error) {
 	}
 	cmd.Wait()
 
-	// Must also not purge anything that's added but uncommitted
+	// Must also not prune anything that's added but uncommitted
 	cmd = exec.Command("git", "diff", "--cached", "--no-color", "-G", SHALineRegex)
 	stdout, err = cmd.StdoutPipe()
 	if err != nil {
@@ -172,10 +247,10 @@ func PurgeUnreferenced(dryRun bool) ([]string, error) {
 
 }
 
-// Purge the shared store of all LOBs with only 1 hard link (itself)
-// DeleteLOB will do this for individual LOBs we purge, but if the user
+// Prune the shared store of all LOBs with only 1 hard link (itself)
+// DeleteLOB will do this for individual LOBs we prune, but if the user
 // manually deletes a repo then unreferenced shared LOBs may never be cleaned up
-func PurgeSharedStore(dryRun bool) ([]string, error) {
+func PruneSharedStore(dryRun bool) ([]string, error) {
 	fileSHAs, err := getAllSharedLOBSHAs()
 	if err == nil {
 		ret := make([]string, 0, 10)
