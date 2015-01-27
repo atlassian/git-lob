@@ -59,6 +59,15 @@ func mainImpl() int {
 		return 1
 	}
 
+	// Check we're in a git repo and if not fail early
+	// Unless help requested, in which case allow from anywhere
+	_, _, err := GetRepoRoot()
+	if err != nil && !GlobalOptions.HelpRequested &&
+		GlobalOptions.Command != "help" {
+		LogConsole(err.Error())
+		return 33
+	}
+
 	switch GlobalOptions.Command {
 	case "checkout":
 		if GlobalOptions.HelpRequested {
