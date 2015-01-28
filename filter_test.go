@@ -37,7 +37,7 @@ that we should absolutely not mess with`
 		})
 
 		It("doesn't alter LOB content when LOB isn't present in object store & no autodownloading", func() {
-			// TODO this is when auto download is not implemented; turn it off when added
+			GlobalOptions.AutoFetchEnabled = false
 			// Made up SHA that doesn't exist
 			lobString := SHAPrefix + "0123456789abcdef0123456789abcdef01234567"
 			inBuffer := bytes.NewBufferString(lobString)

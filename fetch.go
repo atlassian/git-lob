@@ -399,9 +399,67 @@ func fetchContentFiles(files []string, filesTotalBytes int64, provider SyncProvi
 	return nil
 }
 
+// Fetch the files required for a single LOB
+func FetchSingle(lobsha string, provider SyncProvider, remoteName string, force bool, callback ProgressCallback) error {
 
-	return nil
+	var lobToDownload []string
+	if force {
+		lobToDownload = append(lobToDownload, lobsha)
+	} else {
+		lobToDownload = GetMissingLOBs([]string{lobsha}, false)
+	}
 
+	if len(lobToDownload) > 0 {
+		return fetchLOBs(lobToDownload, provider, remoteName, force, callback)
+	} else {
+		return nil
+	}
+}
+
+// Auto-fetch a single LOB from the default locations
+func AutoFetch(lobsha string, reportProgress bool) error {
+	remoteName := GetGitDefaultRemoteForPull()
+	// check the remote config to make sure it's valid
+	provider, err := GetProviderForRemote(remoteName)
+	if err != nil {
+		return err
+	}
+	if err = provider.ValidateConfig(remoteName); err != nil {
+		return err
+	}
+
+	var fetcherr error
+	if reportProgress {
+		// We need to run this in a goroutine to report progress deterministically
+		// 100 items in the queue should be good enough, this means that it won't block
+		callbackChan := make(chan *ProgressCallbackData, 100)
+		go func(lobsha string, provider SyncProvider, remoteName string, progresschan chan<- *ProgressCallbackData) {
+
+			// Progress callback just passes the result back to the channel
+			progress := func(data *ProgressCallbackData) (abort bool) {
+				progresschan <- data
+
+				return false
+			}
+
+			err := FetchSingle(lobsha, provider, remoteName, false, progress)
+
+			close(progresschan)
+
+			if err != nil {
+				fetcherr = err
+			}
+
+		}(lobsha, provider, remoteName, callbackChan)
+
+		// Report progress on operation every 0.5s
+		ReportProgressToConsole(callbackChan, "Fetch", time.Millisecond*500)
+	} else {
+		// no progress, just do it
+		fetcherr = FetchSingle(lobsha, provider, remoteName, false, nil)
+	}
+
+	return fetcherr
 }
 
 func cmdFetchHelp() {

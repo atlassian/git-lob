@@ -44,6 +44,8 @@ type Options struct {
 	ChunkSize int64
 	// Shared folder in which to store binary files for all repos
 	SharedStore string
+	// Auto fetch (download) on checkout?
+	AutoFetchEnabled bool
 	// 'Recent' window in days for all refs (branches/tags) compared to current date
 	RecentRefsPeriodDays int
 	// 'Recent' window in days for commits on HEAD compared to latest commit date
@@ -129,6 +131,10 @@ func parseConfig(configmap map[string]string, opts *Options) {
 			}
 		}
 	}
+	if strings.ToLower(configmap["git-lob.autofetch"]) == "true" {
+		opts.AutoFetchEnabled = true
+	}
+
 	//git-lob.recent-refs          default: 90 days
 	//git-lob.recent-commits-head  default: 30 days
 	//git-lob.recent-commits-other default: 0 days

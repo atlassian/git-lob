@@ -198,6 +198,8 @@ Config files:
   git-lob.logverbose Verbose logging in log file
                      (separate to console)
   git-lob.chunksize  The size chunks to split binary files into in binary store
+  git-lob.autofetch  Automatically download binaries required on checkout if
+                     they're not already present in the binary store
   git-lob.sharedstore
                      A shared folder in which to store binary content rather
                      than storing it inside each repo. This minimises storage

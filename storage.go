@@ -284,9 +284,9 @@ func RetrieveLOB(sha string, out io.Writer) (info *LOBInfo, err error) {
 	if err != nil {
 		if os.IsNotExist(err) {
 			// OK we don't have this file yet
-			// Potentially auto-download
-			// TODO
-			LogErrorf("LOB meta not found TODO AUTODOWNLOAD %v: %v\n", sha, err)
+			if GlobalOptions.AutoFetchEnabled {
+				err = AutoFetch(sha, true)
+			}
 			return nil, err
 		} else {
 			// A problem
