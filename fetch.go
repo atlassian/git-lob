@@ -461,6 +461,8 @@ func AutoFetch(lobsha string, reportProgress bool) error {
 
 		// Report progress on operation every 0.5s
 		ReportProgressToConsole(callbackChan, "Fetch", time.Millisecond*500)
+		// Because no final newline from report progress
+		LogConsole("")
 	} else {
 		// no progress, just do it
 		fetcherr = FetchSingle(lobsha, provider, remoteName, false, nil)
