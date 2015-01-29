@@ -285,6 +285,9 @@ func RetrieveLOB(sha string, out io.Writer) (info *LOBInfo, err error) {
 	if err != nil {
 		if os.IsNotExist(err) && GlobalOptions.AutoFetchEnabled {
 			err = AutoFetch(sha, true)
+			if err == nil {
+				info, err = GetLOBInfo(sha)
+			}
 		}
 		if err != nil {
 			// A problem
