@@ -322,9 +322,14 @@ func RetrieveLOB(sha string, out io.Writer) (info *LOBInfo, err error) {
 			}
 
 			if !recoveredFromShared {
-				// TODO auto-download?
-				LogErrorf("LOB file not found or wrong size TODO AUTODOWNLOAD: %v expected to be %d bytes\n", chunkFilename, expectedSize)
-				return info, err
+				if GlobalOptions.AutoFetchEnabled {
+					err = AutoFetch(sha, true)
+					if err != nil {
+						return info, errors.New(fmt.Sprintf("Missing chunk %d for %v & could not fetch: %v", i, sha, err.Error()))
+					}
+				} else {
+					return info, errors.New(fmt.Sprintf("Missing chunk %d for %v", i, sha))
+				}
 			}
 		}
 	}
