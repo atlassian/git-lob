@@ -79,6 +79,8 @@ func LogDebugf(format string, v ...interface{}) {
 }
 
 // Log output message to console and log with format (if not quiet)
+// You probably don't want to use this since most info messages are for
+// an interactive user only; see LogConsolef instead for that
 func Logf(format string, v ...interface{}) {
 	if !GlobalOptions.Quiet {
 		msg := fmt.Sprintf(format, v...)
@@ -105,6 +107,8 @@ func LogDebug(msgs ...interface{}) {
 }
 
 // Log output message to console and log with newline (if not quiet)
+// You probably don't want to use this since most info messages are for
+// an interactive user only; see LogConsole instead for that
 func Log(msgs ...interface{}) {
 	if !GlobalOptions.Quiet {
 		fmt.Fprintln(consoleOut, msgs...)

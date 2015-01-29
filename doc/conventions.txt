@@ -35,6 +35,8 @@ Coding Conventions
              For significant errors, always reported to both log and console.
      Info:   Log, Logf 
              Informational messages, displayed to the console and log unless --quiet
+             You almost never need these since you don't really need to send
+             informational messages to the log, you'd want LogConsole[f] below instead.
      Debug:  LogDebug, LogDebugf
              Debug messages that are displayed to the console if --verbose and to the
              log if git-lob.logverbose
@@ -58,5 +60,38 @@ Coding Conventions
      the filters) always output user messages to stderr to avoid corrupting the
      piped output. The user can also effectively suppress stdout using --quiet,
      since only errors are output and those always go to stderr.
+
+ 3a. When to output errors
+
+   For consistency and to minimise 'noise', output error messages (LogError[f]) 
+   only at the top level function which does not return an error. If the function 
+   returns an error, simply add context to the error you've experienced and return 
+   a new error, e.g.
+
+   if err != nil {
+     return errors.New(fmt.Sprintf("Context message %v: %v", ctx, err.Error()))
+   }
+
+   This allows callers to decide whether the error is something that needs to be
+   logged or not, based on the context. If a function doesn't return an error, 
+   and failure is notable, then use LogError[f] to report it (or sometimes 
+   LogConsoleError if you only want it to appear interactively)
+
+ 3b. When to output debug messages
+
+   You can call LogDebug[f] whenever you like at any level of function, if
+   the information would be useful in --verbose mode.
+
+ 3c. When to output informational messages
+
+   When you need to provide feedback to the user at major points. Keep this
+   modest, each command shouldn't really need more than 5 info messages IN
+   TOTAL for a successful call, and usually less. Save the more detailed 
+   output for --verbose mode (LogDebug etc).
+   You'll almost always want to use LogConsole[f] and not Log[f] for
+   informational messages, since they're not usually of any use in the log.
+
+   
+
 
 
