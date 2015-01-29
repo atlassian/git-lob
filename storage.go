@@ -282,16 +282,12 @@ func RetrieveLOB(sha string, out io.Writer) (info *LOBInfo, err error) {
 	info, err = GetLOBInfo(sha)
 
 	if err != nil {
-		if os.IsNotExist(err) {
-			// OK we don't have this file yet
-			if GlobalOptions.AutoFetchEnabled {
-				err = AutoFetch(sha, true)
-			}
-			return nil, err
-		} else {
+		if os.IsNotExist(err) && GlobalOptions.AutoFetchEnabled {
+			err = AutoFetch(sha, true)
+		}
+		if err != nil {
 			// A problem
-			LogErrorf("Unable to retrieve LOB with SHA %v: %v\n", sha, err)
-			return nil, err
+			return nil, errors.New(fmt.Sprintf("Unable to retrieve LOB with SHA %v: %v", sha, err.Error()))
 		}
 	}
 
