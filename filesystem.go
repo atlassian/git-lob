@@ -73,7 +73,6 @@ func (*FileSystemSyncProvider) uploadSingleFile(remoteName, filename, fromDir, t
 			}
 		}
 		msg := fmt.Sprintf("Unable to stat %v: %v", srcfilename, err)
-		LogErrorf(msg)
 		errorList = append(errorList, msg)
 		// Keep going with other files
 		return errorList, false
@@ -102,7 +101,6 @@ func (*FileSystemSyncProvider) uploadSingleFile(remoteName, filename, fromDir, t
 	err = os.MkdirAll(parentDir, fileMode)
 	if err != nil {
 		msg := fmt.Sprintf("Unable to create dir %v: %v", parentDir, err)
-		LogErrorf(msg)
 		errorList = append(errorList, msg)
 		return errorList, false
 	}
@@ -112,7 +110,6 @@ func (*FileSystemSyncProvider) uploadSingleFile(remoteName, filename, fromDir, t
 	outf, err := ioutil.TempFile(parentDir, "tempupload")
 	if err != nil {
 		msg := fmt.Sprintf("Unable to create temp file for upload in %v: %v", parentDir, err)
-		LogErrorf(msg)
 		errorList = append(errorList, msg)
 		return errorList, false
 	}
@@ -125,7 +122,6 @@ func (*FileSystemSyncProvider) uploadSingleFile(remoteName, filename, fromDir, t
 	inf, err := os.OpenFile(srcfilename, os.O_RDONLY, 0644)
 	if err != nil {
 		msg := fmt.Sprintf("Unable to read input file for upload %v: %v", srcfilename, err)
-		LogErrorf(msg)
 		errorList = append(errorList, msg)
 		return errorList, false
 	}
@@ -162,7 +158,6 @@ func (*FileSystemSyncProvider) uploadSingleFile(remoteName, filename, fromDir, t
 			msg = fmt.Sprintf("Upload error: number of bytes written to %v in upload of %v does not agree (%d/%d)",
 				remoteName, srcfilename, copysize, srcfi.Size())
 		}
-		LogError(msg)
 		errorList = append(errorList, msg)
 		return errorList, false
 	}
@@ -251,7 +246,6 @@ func (*FileSystemSyncProvider) downloadSingleFile(remoteName, filename, fromDir,
 	err = os.MkdirAll(parentDir, 0755)
 	if err != nil {
 		msg := fmt.Sprintf("Unable to create dir %v: %v", parentDir, err)
-		LogErrorf(msg)
 		errorList = append(errorList, msg)
 		return errorList, false
 	}
@@ -261,7 +255,6 @@ func (*FileSystemSyncProvider) downloadSingleFile(remoteName, filename, fromDir,
 	outf, err := ioutil.TempFile(parentDir, "tempdownload")
 	if err != nil {
 		msg := fmt.Sprintf("Unable to create temp file for download in %v: %v", parentDir, err)
-		LogErrorf(msg)
 		errorList = append(errorList, msg)
 		return errorList, false
 	}
@@ -274,7 +267,6 @@ func (*FileSystemSyncProvider) downloadSingleFile(remoteName, filename, fromDir,
 	inf, err := os.OpenFile(srcfilename, os.O_RDONLY, 0644)
 	if err != nil {
 		msg := fmt.Sprintf("Unable to read input file for download %v: %v", srcfilename, err)
-		LogErrorf(msg)
 		errorList = append(errorList, msg)
 		return errorList, false
 	}
@@ -311,7 +303,6 @@ func (*FileSystemSyncProvider) downloadSingleFile(remoteName, filename, fromDir,
 			msg = fmt.Sprintf("Download error: number of bytes written to %v in download of %v does not agree (%d/%d)",
 				remoteName, srcfilename, copysize, srcfi.Size())
 		}
-		LogError(msg)
 		errorList = append(errorList, msg)
 		return errorList, false
 	}

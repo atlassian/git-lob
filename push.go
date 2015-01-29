@@ -71,7 +71,7 @@ func cmdPush() int {
 		if optAll {
 			branches, err := GetGitLocalBranches()
 			if err != nil {
-				LogConsoleErrorf("git-lob: unable to get local branch list - %v\n", err)
+				LogErrorf("git-lob: unable to get local branch list - %v\n", err)
 				return 7
 			}
 			for _, branch := range branches {
@@ -145,7 +145,7 @@ func cmdPush() int {
 	ReportProgressToConsole(callbackChan, "Push", time.Millisecond*500)
 
 	if pusherr != nil {
-		LogConsoleErrorf("git-lob: push error - %v", pusherr.Error())
+		LogErrorf("git-lob: push error(s):\n%v", pusherr.Error())
 		return 12
 	}
 	if GlobalOptions.DryRun {

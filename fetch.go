@@ -104,7 +104,7 @@ func cmdFetch() int {
 	ReportProgressToConsole(callbackChan, "Fetch", time.Millisecond*500)
 
 	if fetcherr != nil {
-		LogConsoleError("git-lob: fetch error - %v", fetcherr.Error())
+		LogError("git-lob: fetch error(s):\n%v", fetcherr.Error())
 		return 12
 	}
 	if GlobalOptions.DryRun {
@@ -317,6 +317,7 @@ func fetchMetadata(lobshas []string, provider SyncProvider, remoteName string, f
 			if (force || !FileExists(localfile)) && FileExists(sharedfile) {
 				linkerr := linkSharedLOBFilename(sharedfile)
 				if linkerr != nil {
+					// we want to continue so don't return this
 					LogErrorf("Failed to link shared file %v into local repo: %v\n", sharedfile, linkerr.Error())
 				}
 			}
@@ -394,6 +395,7 @@ func fetchContentFiles(files []string, filesTotalBytes int64, provider SyncProvi
 			if (force || !FileExists(localfile)) && FileExists(sharedfile) {
 				linkerr := linkSharedLOBFilename(sharedfile)
 				if linkerr != nil {
+					// we want to continue so don't return this
 					LogErrorf("Failed to link shared file %v into local repo: %v\n", sharedfile, linkerr.Error())
 				}
 			}

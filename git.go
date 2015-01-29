@@ -80,8 +80,7 @@ func WalkGitHistory(startSHA string, callback func(currentSHA, parentSHA string)
 
 		outp, err := cmd.StdoutPipe()
 		if err != nil {
-			LogErrorf("Unable to list commits from %v: %v", currentLogHEAD, err.Error())
-			return err
+			return errors.New(fmt.Sprintf("Unable to list commits from %v: %v", currentLogHEAD, err.Error()))
 		}
 		cmd.Start()
 		scanner := bufio.NewScanner(outp)
@@ -237,8 +236,7 @@ func GetGitLocalBranches() ([]string, error) {
 
 	outp, err := cmd.StdoutPipe()
 	if err != nil {
-		LogErrorf("Unable to get list local branches: %v", err.Error())
-		return []string{}, err
+		return []string{}, errors.New(fmt.Sprintf("Unable to get list local branches: %v", err.Error()))
 	}
 	cmd.Start()
 	scanner := bufio.NewScanner(outp)
@@ -271,8 +269,7 @@ func GetGitRemoteBranches(remoteName string) ([]string, error) {
 
 	outp, err := cmd.StdoutPipe()
 	if err != nil {
-		LogErrorf("Unable to get list remote branches: %v", err.Error())
-		return []string{}, err
+		return []string{}, errors.New(fmt.Sprintf("Unable to get list remote branches: %v", err.Error()))
 	}
 	cmd.Start()
 	scanner := bufio.NewScanner(outp)
@@ -433,8 +430,7 @@ func getGitCommitsReferencingLOBsInRange(from, to string, additions, removals bo
 	cmd := exec.Command("git", args...)
 	outp, err := cmd.StdoutPipe()
 	if err != nil {
-		LogErrorf("Unable to call git-log: %v", err.Error())
-		return []CommitLOBRef{}, err
+		return []CommitLOBRef{}, errors.New(fmt.Sprintf("Unable to call git-log: %v", err.Error()))
 	}
 	cmd.Start()
 
@@ -617,8 +613,7 @@ func GetGitAllLOBsToCheckoutAtCommitAndRecent(commit string, days int, includePa
 		cmd := exec.Command("git", args...)
 		outp, err := cmd.StdoutPipe()
 		if err != nil {
-			LogErrorf("Unable to call git-log: %v", err.Error())
-			return []string{}, err
+			return []string{}, errors.New(fmt.Sprintf("Unable to call git-log: %v", err.Error()))
 		}
 		cmd.Start()
 
@@ -771,7 +766,6 @@ func GetGitCommitSummary(commit string) (*GitCommitSummary, error) {
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		msg := fmt.Sprintf("Error calling git show: %v", err.Error())
-		LogError(msg)
 		return nil, errors.New(msg)
 	}
 
@@ -796,7 +790,6 @@ func GetGitCommitSummary(commit string) (*GitCommitSummary, error) {
 		return ret, nil
 	} else {
 		msg := fmt.Sprintf("Unexpected output from git show: %v", out)
-		LogError(msg)
 		return nil, errors.New(msg)
 	}
 
@@ -813,7 +806,6 @@ func GetGitRecentRefs(numdays int, includeRemoteBranches bool, remoteName string
 	outp, err := cmd.StdoutPipe()
 	if err != nil {
 		msg := fmt.Sprintf("Unable to call git for-each-ref: %v", err.Error())
-		LogError(msg)
 		return []string{}, errors.New(msg)
 	}
 	cmd.Start()

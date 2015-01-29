@@ -223,8 +223,7 @@ func GetLOBInfo(sha string) (*LOBInfo, error) {
 	err = json.Unmarshal(infobytes, info)
 	if err != nil {
 		// Fatal, corruption
-		LogErrorf("Unable to interpret meta file %v: %v\n", meta, err)
-		return nil, err
+		return nil, errors.New(fmt.Sprintf("Unable to interpret meta file %v: %v", meta, err))
 	}
 
 	return info, nil
@@ -247,6 +246,7 @@ func recoverLocalLOBFilesFromSharedStore(sha string) bool {
 		if FileExists(metashared) {
 			err := linkSharedLOBFilename(metashared)
 			if err != nil {
+				LogErrorf("Failed to link shared file %v into local repo: %v\n", metashared, err.Error())
 				return false
 			}
 		} else {
@@ -266,6 +266,7 @@ func recoverLocalLOBFilesFromSharedStore(sha string) bool {
 			if FileExistsAndIsOfSize(shared, expectedSize) {
 				err := linkSharedLOBFilename(shared)
 				if err != nil {
+					LogErrorf("Failed to link shared file %v into local repo: %v\n", shared, err.Error())
 					return false
 				}
 			} else {
@@ -335,13 +336,11 @@ func RetrieveLOB(sha string, out io.Writer) (info *LOBInfo, err error) {
 		chunkFilename := getLocalLOBChunkFilename(info.SHA, i)
 		in, err := os.OpenFile(chunkFilename, os.O_RDONLY, 0644)
 		if err != nil {
-			LogErrorf("Error reading LOB file %v: %v\n", chunkFilename, err)
-			return info, err
+			return info, errors.New(fmt.Sprintf("Error reading LOB file %v: %v", chunkFilename, err))
 		}
 		c, err := io.Copy(out, in)
 		if err != nil {
-			LogErrorf("I/O error while copying LOB file %v, check working copy state\n", chunkFilename)
-			return info, err
+			return info, errors.New(fmt.Sprintf("I/O error while copying LOB file %v, check working copy state", chunkFilename))
 		}
 		totalBytesRead += c
 	}
@@ -349,7 +348,6 @@ func RetrieveLOB(sha string, out io.Writer) (info *LOBInfo, err error) {
 	// Final check
 	if totalBytesRead != fileSize {
 		err = errors.New(fmt.Sprintf("Error, file length does not match expected in LOB %v, expected %d, total size %d", sha, fileSize, totalBytesRead))
-		LogErrorf(err.Error())
 		return info, err
 	}
 
@@ -377,8 +375,7 @@ func linkSharedLOBFilename(destSharedFile string) error {
 	os.Remove(linkPath)
 	err = CreateHardLink(destSharedFile, linkPath)
 	if err != nil {
-		LogErrorf("Error creating hard link from %v to %v: %v\n", linkPath, destSharedFile, err)
-		return err
+		return errors.New(fmt.Sprintf("Error creating hard link from %v to %v: %v", linkPath, destSharedFile, err))
 	}
 	return nil
 }
@@ -388,8 +385,7 @@ func linkSharedLOBFilename(destSharedFile string) error {
 func storeLOBInfo(info *LOBInfo) error {
 	infoBytes, err := json.Marshal(info)
 	if err != nil {
-		LogErrorf("Unable to convert LOB info to JSON: %v\n", err)
-		return err
+		return errors.New(fmt.Sprintf("Unable to convert LOB info to JSON: %v", err))
 	}
 	var infoFilename string
 	if isUsingSharedStorage() {
@@ -496,9 +492,8 @@ func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
 					outf.Close()
 					break
 				} else {
-					LogErrorf("I/O error reading chunk %d: %v", len(chunkFilenames), err)
 					outf.Close()
-					fatalError = err
+					fatalError = errors.New(fmt.Sprintf("I/O error reading chunk %d: %v", len(chunkFilenames), err))
 					break
 				}
 			}
@@ -511,8 +506,7 @@ func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
 			if outf == nil {
 				outf, err = ioutil.TempFile("", "tempchunk")
 				if err != nil {
-					LogErrorf("Unable to create chunk %d: %v\n", len(chunkFilenames), err)
-					fatalError = err
+					fatalError = errors.New(fmt.Sprintf("Unable to create chunk %d: %v", len(chunkFilenames), err))
 					break
 				}
 				LogDebugf("Creating temporary chunk file #%d: %v\n", len(chunkFilenames), outf.Name())
@@ -522,8 +516,7 @@ func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
 			sha.Write(dataToWrite)
 			c, err := outf.Write(dataToWrite)
 			if err != nil {
-				LogErrorf("I/O error writing chunk: %v wrote %d bytes of %d\n", err, c, len(dataToWrite))
-				fatalError = err
+				fatalError = errors.New(fmt.Sprintf("I/O error writing chunk: %v wrote %d bytes of %d", err, c, len(dataToWrite)))
 				break
 			}
 			currentChunkSize += int64(c)
@@ -581,14 +574,12 @@ func DeleteLOB(sha string) error {
 
 	names, err := filepath.Glob(filepath.Join(localdir, fmt.Sprintf("%v*", sha)))
 	if err != nil {
-		LogErrorf("Unable to glob local files for %v: %v\n", sha, err)
-		return err
+		return errors.New(fmt.Sprintf("Unable to glob local files for %v: %v", sha, err))
 	}
 	for _, n := range names {
 		err = os.Remove(n)
 		if err != nil {
-			LogErrorf("Unable to delete file %v: %v\n", n, err)
-			return err
+			return errors.New(fmt.Sprintf("Unable to delete file %v: %v", n, err))
 		}
 		LogDebugf("Deleted %v\n", n)
 	}
@@ -600,8 +591,7 @@ func DeleteLOB(sha string) error {
 		shareddir := GetSharedLOBDir(sha)
 		names, err := filepath.Glob(filepath.Join(shareddir, fmt.Sprintf("%v*", sha)))
 		if err != nil {
-			LogErrorf("Unable to glob shared files for %v: %v\n", sha, err)
-			return err
+			return errors.New(fmt.Sprintf("Unable to glob shared files for %v: %v", sha, err))
 		}
 		for _, n := range names {
 			links, err := GetHardLinkCount(n)
@@ -610,8 +600,7 @@ func DeleteLOB(sha string) error {
 				// so it's safe to delete it
 				err = os.Remove(n)
 				if err != nil {
-					LogErrorf("Unable to delete file %v: %v\n", n, err)
-					return err
+					return errors.New(fmt.Sprintf("Unable to delete file %v: %v", n, err))
 				}
 				LogDebugf("Deleted shared file %v\n", n)
 			}
@@ -674,7 +663,6 @@ func GetLOBFilesForSHA(sha, basedir string, check bool, checkHash bool) (files [
 
 				if !recoveredFromShared {
 					msg := fmt.Sprintf("LOB file not found or wrong size: %v expected to be %d bytes", abschunk, expectedSize)
-					LogError(msg)
 					return ret, info.Size, errors.New(msg)
 				}
 			}
@@ -683,13 +671,13 @@ func GetLOBFilesForSHA(sha, basedir string, check bool, checkHash bool) (files [
 			if checkHash {
 				f, err := os.OpenFile(abschunk, os.O_RDONLY, 0644)
 				if err != nil {
-					LogErrorf("Error opening LOB file %v to check SHA: %v\n", abschunk, err)
-					return ret, info.Size, err
+					msg := fmt.Sprintf("Error opening LOB file %v to check SHA: %v", abschunk, err)
+					return ret, info.Size, errors.New(msg)
 				}
 				_, err = io.Copy(shaRecalc, f)
 				if err != nil {
-					LogErrorf("Error copying LOB file %v into SHA calculator: %v\n", abschunk, err)
-					return ret, info.Size, err
+					msg := fmt.Sprintf("Error copying LOB file %v into SHA calculator: %v", abschunk, err)
+					return ret, info.Size, errors.New(msg)
 				}
 				f.Close()
 			}
@@ -701,7 +689,6 @@ func GetLOBFilesForSHA(sha, basedir string, check bool, checkHash bool) (files [
 		shaRecalcStr := fmt.Sprintf("%x", string(shaRecalc.Sum(nil)))
 		if sha != shaRecalcStr {
 			msg := fmt.Sprintf("Integrity error; content of files for LOB SHA %v actually have SHA %v", sha, shaRecalcStr)
-			LogErrorf("%v\n", msg)
 			return ret, info.Size, errors.New(msg)
 		}
 	}

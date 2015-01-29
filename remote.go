@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -94,8 +95,7 @@ func recordRemoteBinariesUpToDateAtCommit(remoteName, commitSHA string) (already
 			seekTo := int64(lineLen * insertAt)
 			_, err = f.Seek(seekTo, os.SEEK_SET)
 			if err != nil {
-				LogErrorf("Unable to seek to %v in %v", seekTo, filename)
-				return false, err
+				return false, errors.New(fmt.Sprintf("Unable to seek to %v in %v", seekTo, filename))
 			}
 			// Insert the new entry
 			f.WriteString(commitSHA + "\n")

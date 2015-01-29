@@ -119,39 +119,33 @@ func getAllLOBSHAsInDir(lobroot string) (StringSet, error) {
 	// We always work on the local LOB folder (either only copy or hard link)
 	rootf, err := os.Open(lobroot)
 	if err != nil {
-		LogErrorf("Unable to open LOB root: %v\n", err)
-		return set, err
+		return set, errors.New(fmt.Sprintf("Unable to open LOB root: %v\n", err))
 	}
 	dir1, err := rootf.Readdir(0)
 	if err != nil {
-		LogErrorf("Unable to read first level LOB dir: %v\n", err)
-		return set, err
+		return set, errors.New(fmt.Sprintf("Unable to read first level LOB dir: %v\n", err))
 	}
 	for _, dir1fi := range dir1 {
 		if dir1fi.IsDir() {
 			dir1path := filepath.Join(lobroot, dir1fi.Name())
 			dir1f, err := os.Open(dir1path)
 			if err != nil {
-				LogErrorf("Unable to open LOB dir: %v\n", err)
-				return set, err
+				return set, errors.New(fmt.Sprintf("Unable to open LOB dir: %v\n", err))
 			}
 			dir2, err := dir1f.Readdir(0)
 			if err != nil {
-				LogErrorf("Unable to read second level LOB dir: %v\n", err)
-				return set, err
+				return set, errors.New(fmt.Sprintf("Unable to read second level LOB dir: %v\n", err))
 			}
 			for _, dir2fi := range dir2 {
 				if dir2fi.IsDir() {
 					dir2path := filepath.Join(dir1path, dir2fi.Name())
 					dir2f, err := os.Open(dir2path)
 					if err != nil {
-						LogErrorf("Unable to open LOB dir: %v\n", err)
-						return set, err
+						return set, errors.New(fmt.Sprintf("Unable to open LOB dir: %v\n", err))
 					}
 					lobnames, err := dir2f.Readdirnames(0)
 					if err != nil {
-						LogErrorf("Unable to read innermost LOB dir: %v\n", err)
-						return set, err
+						return set, errors.New(fmt.Sprintf("Unable to read innermost LOB dir: %v\n", err))
 					}
 					for _, lobname := range lobnames {
 						// Make sure it's really a LOB file
@@ -258,8 +252,7 @@ func PruneSharedStore(dryRun bool) ([]string, error) {
 			shareddir := GetSharedLOBDir(sha)
 			names, err := filepath.Glob(filepath.Join(shareddir, fmt.Sprintf("%v*", sha)))
 			if err != nil {
-				LogErrorf("Unable to glob shared files for %v: %v\n", sha, err)
-				return make([]string, 0), err
+				return make([]string, 0), errors.New(fmt.Sprintf("Unable to glob shared files for %v: %v\n", sha, err))
 			}
 			var deleted bool = false
 			for _, n := range names {
@@ -271,6 +264,7 @@ func PruneSharedStore(dryRun bool) ([]string, error) {
 					if !dryRun {
 						err = os.Remove(n)
 						if err != nil {
+							// don't abort for 1 failure, report & carry on
 							LogErrorf("Unable to delete file %v: %v\n", n, err)
 						}
 						LogDebugf("Deleted shared file %v\n", n)
