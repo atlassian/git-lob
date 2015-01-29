@@ -425,6 +425,7 @@ func FetchSingle(lobsha string, provider SyncProvider, remoteName string, force 
 // Auto-fetch a single LOB from the default locations
 func AutoFetch(lobsha string, reportProgress bool) error {
 	remoteName := GetGitDefaultRemoteForPull()
+	LogDebugf("Trying to auto-fetch %v from %v\n", lobsha, remoteName)
 	// check the remote config to make sure it's valid
 	provider, err := GetProviderForRemote(remoteName)
 	if err != nil {
@@ -463,6 +464,12 @@ func AutoFetch(lobsha string, reportProgress bool) error {
 	} else {
 		// no progress, just do it
 		fetcherr = FetchSingle(lobsha, provider, remoteName, false, nil)
+	}
+
+	if fetcherr == nil {
+		LogDebugf("Successfully fetched %v from %v\n", lobsha, remoteName)
+	} else {
+		LogDebugf("Failed to auto fetch %v from %v: %v\n", lobsha, remoteName, fetcherr)
 	}
 
 	return fetcherr
