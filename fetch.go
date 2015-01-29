@@ -315,7 +315,10 @@ func fetchMetadata(lobshas []string, provider SyncProvider, remoteName string, f
 			localfile := getLocalLOBMetaFilename(sha)
 			sharedfile := getSharedLOBMetaFilename(sha)
 			if (force || !FileExists(localfile)) && FileExists(sharedfile) {
-				linkSharedLOBFilename(sharedfile)
+				linkerr := linkSharedLOBFilename(sharedfile)
+				if linkerr != nil {
+					LogErrorf("Failed to link shared file %v into local repo: %v\n", sharedfile, linkerr.Error())
+				}
 			}
 		}
 	}
@@ -389,7 +392,10 @@ func fetchContentFiles(files []string, filesTotalBytes int64, provider SyncProvi
 			localfile := filepath.Join(localroot, relfile)
 			sharedfile := filepath.Join(sharedroot, relfile)
 			if (force || !FileExists(localfile)) && FileExists(sharedfile) {
-				linkSharedLOBFilename(sharedfile)
+				linkerr := linkSharedLOBFilename(sharedfile)
+				if linkerr != nil {
+					LogErrorf("Failed to link shared file %v into local repo: %v\n", sharedfile, linkerr.Error())
+				}
 			}
 		}
 	}
