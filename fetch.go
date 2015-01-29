@@ -379,10 +379,8 @@ func fetchContentFiles(files []string, filesTotalBytes int64, provider SyncProvi
 	}
 	destDir := getFetchDestination()
 	err := provider.Download(remoteName, files, destDir, force, contentcallback)
-	if err != nil {
-		return err
-	}
 	// Also if shared store, link meta into local
+	// Link any we successfully downloaded
 	if isUsingSharedStorage() {
 		localroot := GetLocalLOBRoot()
 		sharedroot := GetSharedLOBRoot()
@@ -396,7 +394,7 @@ func fetchContentFiles(files []string, filesTotalBytes int64, provider SyncProvi
 		}
 	}
 
-	return nil
+	return err
 }
 
 // Fetch the files required for a single LOB
