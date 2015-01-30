@@ -354,7 +354,7 @@ func RetrieveLOB(sha string, out io.Writer) (info *LOBInfo, err error) {
 		return info, err
 	}
 
-	LogDebugf("Successfully retrieved LOB %v from %d chunks, total size %d\n", sha, info.NumChunks, totalBytesRead)
+	LogDebugf("Successfully retrieved LOB %v from %d chunks, total size %v\n", sha, info.NumChunks, FormatSize(totalBytesRead))
 
 	return info, nil
 
@@ -476,7 +476,6 @@ func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
 		var dataToWrite []byte
 
 		if writeLeader && len(leader) > 0 {
-			LogDebugf("Writing leader of size %d\n", len(leader))
 			dataToWrite = leader
 			writeLeader = false
 		} else {
@@ -512,7 +511,6 @@ func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
 					fatalError = errors.New(fmt.Sprintf("Unable to create chunk %d: %v", len(chunkFilenames), err))
 					break
 				}
-				LogDebugf("Creating temporary chunk file #%d: %v\n", len(chunkFilenames), outf.Name())
 				chunkFilenames = append(chunkFilenames, outf.Name())
 				currentChunkSize = 0
 			}
