@@ -189,7 +189,7 @@ func getLogFileHandle() *os.File {
 func InitLogging() {
 
 	if GlobalOptions.LogEnabled {
-		const logFlags = log.Ldate | log.Ltime | log.Lshortfile
+		const logFlags = log.Ldate | log.Ltime
 		f := getLogFileHandle()
 		outputLog = log.New(f, "", logFlags)
 		errorLog = log.New(f, "ERROR: ", logFlags)
