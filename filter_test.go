@@ -31,7 +31,7 @@ in a string
 that we should absolutely not mess with`
 			inBuffer := bytes.NewBufferString(nonLOBString)
 			var outBuffer bytes.Buffer
-			res := SmudgeFilterWithReaderWriter(inBuffer, &outBuffer)
+			res := SmudgeFilterWithReaderWriter(inBuffer, &outBuffer, "testfile.txt")
 			Expect(res).To(Equal(0), "smudge filter should succeed")
 			Expect(outBuffer.String()).To(BeEquivalentTo(nonLOBString), "non LOB should not be modified by smudge")
 		})
@@ -42,7 +42,7 @@ that we should absolutely not mess with`
 			lobString := SHAPrefix + "0123456789abcdef0123456789abcdef01234567"
 			inBuffer := bytes.NewBufferString(lobString)
 			var outBuffer bytes.Buffer
-			res := SmudgeFilterWithReaderWriter(inBuffer, &outBuffer)
+			res := SmudgeFilterWithReaderWriter(inBuffer, &outBuffer, "testfile.txt")
 			Expect(res).To(Equal(0), "smudge filter should succeed")
 			Expect(outBuffer.String()).To(BeEquivalentTo(lobString), "non existent LOB should not be modified by smudge")
 		})
@@ -52,7 +52,7 @@ that we should absolutely not mess with`
 			lobString := SHAPrefix + lobinfo.SHA
 			inBuffer := bytes.NewBufferString(lobString)
 			var outBuffer bytes.Buffer
-			res := SmudgeFilterWithReaderWriter(inBuffer, &outBuffer)
+			res := SmudgeFilterWithReaderWriter(inBuffer, &outBuffer, "testfile.txt")
 			Expect(res).To(Equal(0), "smudge filter should succeed")
 			Expect(outBuffer.Len()).To(BeEquivalentTo(lobinfo.Size), "extracted LOB data should be correct size")
 		})
@@ -62,7 +62,7 @@ that we should absolutely not mess with`
 			lobString := SHAPrefix + lobinfo.SHA
 			inBuffer := bytes.NewBufferString(lobString)
 			var outBuffer bytes.Buffer
-			res := SmudgeFilterWithReaderWriter(inBuffer, &outBuffer)
+			res := SmudgeFilterWithReaderWriter(inBuffer, &outBuffer, "testfile.txt")
 			Expect(res).To(Equal(0), "smudge filter should succeed")
 			Expect(outBuffer.Len()).To(BeEquivalentTo(lobinfo.Size), "extracted LOB data should be correct size")
 		})
@@ -77,7 +77,7 @@ that we should absolutely not mess with`
 			lobString := SHAPrefix + "0123456789abcdef0123456789abcdef01234567"
 			inBuffer := bytes.NewBufferString(lobString)
 			var outBuffer bytes.Buffer
-			res := CleanFilterWithReaderWriter(inBuffer, &outBuffer)
+			res := CleanFilterWithReaderWriter(inBuffer, &outBuffer, "testfile.txt")
 			Expect(res).To(Equal(0), "clean filter should succeed")
 			Expect(outBuffer.String()).To(BeEquivalentTo(lobString), "unexpanded LOB should not be modified by clean")
 
@@ -88,7 +88,7 @@ that we should absolutely not mess with`
 			info := CreateSmallTestLOBFileForStoring(testFileName)
 			in, _ := os.OpenFile(testFileName, os.O_RDONLY, 0644)
 			var outBuffer bytes.Buffer
-			res := CleanFilterWithReaderWriter(in, &outBuffer)
+			res := CleanFilterWithReaderWriter(in, &outBuffer, "testfile.txt")
 			Expect(res).To(Equal(0), "clean filter should succeed")
 			Expect(outBuffer.String()).To(BeEquivalentTo(SHAPrefix+info.SHA), "clean filter should output SHA reference")
 			readinfo, _ := GetLOBInfo(info.SHA)

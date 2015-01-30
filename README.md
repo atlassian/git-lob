@@ -56,15 +56,15 @@ Now edit your main .gitconfig file in your user directory and add a new filter d
 On Mac/Linux:
 ```ini
 [filter "lob"]
-  clean = "$GOPATH/bin/git-lob filter-clean"
-  smudge = "$GOPATH/bin/git-lob filter-smudge"
+  clean = "$GOPATH/bin/git-lob filter-clean %f"
+  smudge = "$GOPATH/bin/git-lob filter-smudge %f"
 ```
 
 On Windows:
 ```ini
 [filter "lob"]
-  clean = "%GOPATH%/bin/git-lob.exe filter-clean"
-  smudge = "%GOPATH%/bin/git-lob.exe filter-smudge"
+  clean = "%GOPATH%/bin/git-lob.exe filter-clean %f"
+  smudge = "%GOPATH%/bin/git-lob.exe filter-smudge %f"
 ```
 
 You can expand $GOTPATH/%GOPATH% inline if you need to support usage where GOPATH is not defined. Again on Windows, always use forward slashes, for example c:/path/to/git-lob.exe

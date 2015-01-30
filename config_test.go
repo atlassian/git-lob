@@ -62,8 +62,8 @@ var _ = Describe("Config", func() {
     #[commit]
     #  template=/Users/steve/gitcommittemplate
     [filter "lob"] # Our large file plugin
-      clean = "git-lob filter-clean" # test comment after line
-      smudge = "git-lob filter-smudge" ; test comment after line
+      clean = "git-lob filter-clean %f" # test comment after line
+      smudge = "git-lob filter-smudge %f" ; test comment after line
     `
 
 			It("correctly reads well formatted simple sections", func() {
@@ -97,8 +97,8 @@ var _ = Describe("Config", func() {
 				Expect(config["user.email"]).To(Equal("steve@stevestreeting.com"), "user.email")
 				Expect(config["push.default"]).To(Equal("matching"), "push.default")
 				Expect(config["commit.template"]).To(Equal(""), "commit.template is commented out")
-				Expect(config["filter.lob.clean"]).To(Equal(`"git-lob filter-clean"`), "filter.lob.clean - inline comments and quotes")
-				Expect(config["filter.lob.smudge"]).To(Equal(`"git-lob filter-smudge"`), "filter.lob.smudge - inline comments and quotes")
+				Expect(config["filter.lob.clean"]).To(Equal(`"git-lob filter-clean %f"`), "filter.lob.clean - inline comments and quotes")
+				Expect(config["filter.lob.smudge"]).To(Equal(`"git-lob filter-smudge %f"`), "filter.lob.smudge - inline comments and quotes")
 
 			})
 		})
@@ -114,8 +114,8 @@ var _ = Describe("Config", func() {
 #[commit]
 #  template=/Users/steve/gitcommittemplate
 [filter "lob"] # Our large file plugin
-  clean = "git-lob filter-clean" # test comment after line
-  smudge = "git-lob filter-smudge" ; test comment after line
+  clean = "git-lob filter-clean %f" # test comment after line
+  smudge = "git-lob filter-smudge %f" ; test comment after line
 `
 				tempfile, err := ioutil.TempFile("", "configinclude")
 				if err != nil {
@@ -156,8 +156,8 @@ var _ = Describe("Config", func() {
 				Expect(config["push.default"]).To(Equal("matching"), "included file should have overridden push.default")
 				Expect(config["user.email"]).To(Equal("steve@stevestreeting.com"), "user.email")
 				Expect(config["commit.template"]).To(Equal(""), "commit.template is commented out")
-				Expect(config["filter.lob.clean"]).To(Equal(`"git-lob filter-clean"`), "filter.lob.clean - inline comments and quotes")
-				Expect(config["filter.lob.smudge"]).To(Equal(`"git-lob filter-smudge"`), "filter.lob.smudge - inline comments and quotes")
+				Expect(config["filter.lob.clean"]).To(Equal(`"git-lob filter-clean %f"`), "filter.lob.clean - inline comments and quotes")
+				Expect(config["filter.lob.smudge"]).To(Equal(`"git-lob filter-smudge %f"`), "filter.lob.smudge - inline comments and quotes")
 				// after include
 				Expect(config["user.name"]).To(Equal("Steven J Streeting"), "user.name")
 				Expect(config["color.branch"]).To(Equal("auto"), "color.branch")

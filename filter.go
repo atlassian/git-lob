@@ -20,11 +20,19 @@ func getLOBPlaceholderContent(sha string) string {
 func cmdSmudgeFilter() int {
 	// Make sure we never write log output to stdout, filter uses it for content
 	LogAllConsoleOutputToStdErr()
-	return SmudgeFilterWithReaderWriter(os.Stdin, os.Stdout)
+	// Optional filename context that can be passed
+	var filename string
+	if len(GlobalOptions.Args) > 0 {
+		filename = GlobalOptions.Args[0]
+	} else {
+		filename = "[Unknown filename]"
+	}
+	return SmudgeFilterWithReaderWriter(os.Stdin, os.Stdout, filename)
 }
 
-func SmudgeFilterWithReaderWriter(in io.Reader, out io.Writer) int {
-	LogDebug("Running smudge filter")
+func SmudgeFilterWithReaderWriter(in io.Reader, out io.Writer, filename string) int {
+	LogDebug("Running smudge filter for ", filename)
+
 	shaRegex := regexp.MustCompile("^git-lob: ([0-9A-Fa-f]{40})$")
 	// read committed content from stdin
 	// write actual file content to stdout if a git-lob SHA
@@ -35,10 +43,10 @@ func SmudgeFilterWithReaderWriter(in io.Reader, out io.Writer) int {
 			sha := match[1]
 			lobinfo, err := RetrieveLOB(sha, out)
 			if err == nil {
-				LogDebugf("Retrieved LOB for %v from %v chunks\n", sha, lobinfo.NumChunks)
+				LogDebugf("Successfully smudged %v: %v in %v chunks from %v\n", filename, FormatSize(lobinfo.Size), lobinfo.NumChunks, sha)
 				return 0
 			} else {
-				LogErrorf("Error obtaining LOB data for %v: %v\n", sha, err)
+				LogErrorf("Error obtaining %v for %v: %v\n", sha, filename, err)
 				// fall through to below which will just write the SHA line to the working copy
 			}
 
@@ -47,22 +55,29 @@ func SmudgeFilterWithReaderWriter(in io.Reader, out io.Writer) int {
 	// Otherwise, pass through content
 	out.Write(buf[:c])
 	_, err = io.Copy(out, in)
-	if err == nil {
-		return 0
+	if err != nil {
+		LogErrorf("Error copying stdin->stdout for %v: %v\n", filename, err)
+		return 3
 	}
 
-	LogErrorf("Error copying stdin->stdout: %v\n", err)
-	return 3
+	return 0
 }
 
 func cmdCleanFilter() int {
 	// Make sure we never write log output to stdout, filter uses it for content
 	LogAllConsoleOutputToStdErr()
-	return CleanFilterWithReaderWriter(os.Stdin, os.Stdout)
+	// Optional filename context that can be passed
+	var filename string
+	if len(GlobalOptions.Args) > 0 {
+		filename = GlobalOptions.Args[0]
+	} else {
+		filename = "[Unknown filename]"
+	}
+	return CleanFilterWithReaderWriter(os.Stdin, os.Stdout, filename)
 }
 
-func CleanFilterWithReaderWriter(in io.Reader, out io.Writer) int {
-	LogDebug("Running clean filter")
+func CleanFilterWithReaderWriter(in io.Reader, out io.Writer, filename string) int {
+	LogDebug("Running clean filter for ", filename)
 	shaRegex := regexp.MustCompile("^git-lob: ([0-9A-Fa-f]{40})$")
 	// read working copy content from stdin
 	// First check if this is an unexpanded LOB SHA (not downloaded)
@@ -71,14 +86,15 @@ func CleanFilterWithReaderWriter(in io.Reader, out io.Writer) int {
 	if c == SHALineLen {
 		if match := shaRegex.FindStringSubmatch(string(buf)); match != nil {
 			sha := match[1]
-			LogDebugf("Unexpanded LOB SHA in file content (%v), clean filter will not change\n", sha)
+			LogDebugf("Unexpanded LOB file content at %v, not storing\n", filename)
 			// Yes, unexpanded SHA, just write
 			out.Write(buf[:c])
 			_, err = io.Copy(out, in)
 			if err == nil {
+				LogDebug("Successful clean filter for ", filename)
 				return 0
 			} else {
-				LogErrorf("Error writing unexpanded LOB in clean filter: %v\n", err)
+				LogErrorf("Error writing unexpanded LOB for %v/%v in clean filter: %v\n", filename, sha, err)
 				return 3
 			}
 
@@ -88,7 +104,7 @@ func CleanFilterWithReaderWriter(in io.Reader, out io.Writer) int {
 	lobinfo, err := StoreLOB(in, buf[:c])
 
 	if err != nil {
-		LogErrorf("Error storing LOB in clean filter: %v\n", err)
+		LogErrorf("Error storing LOB from %v in clean filter: %v\n", filename, err)
 		return 4
 	}
 
@@ -96,17 +112,17 @@ func CleanFilterWithReaderWriter(in io.Reader, out io.Writer) int {
 	shaLine := getLOBPlaceholderContent(lobinfo.SHA)
 	_, err = io.WriteString(out, shaLine)
 	if err != nil {
-		LogErrorf("Error writing LOB SHA to index in clean filter: %v\n", err)
+		LogErrorf("Error writing LOB SHA for %v to index in clean filter: %v\n", filename, err)
 		return 5
 	}
 
-	LogDebugf("Successfully stored/checked LOB data for SHA %v, %d chunks, total size %v\n", lobinfo.SHA, lobinfo.NumChunks, lobinfo.Size)
+	LogDebug("Successful clean filter for ", filename)
 
 	return 0
 }
 
 func cmdSmudgeFilterHelp() {
-	LogConsole(`Usage: git-lob filter-smudge [options]
+	LogConsole(`Usage: git-lob filter-smudge [options] <filename>
 
   The smudge filter converts a file stored in git to a file in the working
   directory. In this case we look for files containing the git-lob marker
@@ -122,7 +138,7 @@ Options:
 `)
 }
 func cmdCleanFilterHelp() {
-	LogConsole(`Usage: git-lob filter-clean [options]
+	LogConsole(`Usage: git-lob filter-clean [options] <filename>
 
   The clean filter converts a file in the working directory to a form which
   will be stored in git. In this case we calculate the SHA-1 of the binary
