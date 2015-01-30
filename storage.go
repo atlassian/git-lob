@@ -27,14 +27,6 @@ type LOBInfo struct {
 	ChunkSize int64
 }
 
-// Custom error type to indicate an integrity error, listing problem SHAs
-type IntegrityError struct {
-	FailedSHAs []string
-}
-
-func (i *IntegrityError) Error() string {
-	return fmt.Sprintf("One or more SHAs failed integrity: %v", i.FailedSHAs)
-}
 
 var cachedRepoRoot string
 var cachedRepoRootIsSeparate bool
@@ -212,7 +204,7 @@ func GetLOBInfo(sha string) (*LOBInfo, error) {
 				}
 				// otherwise we recovered!
 			} else {
-				return nil, err
+				return nil, NewNotFoundError(err.Error())
 			}
 		} else {
 			return nil, err
@@ -283,15 +275,20 @@ func RetrieveLOB(sha string, out io.Writer) (info *LOBInfo, err error) {
 	info, err = GetLOBInfo(sha)
 
 	if err != nil {
-		if os.IsNotExist(err) && GlobalOptions.AutoFetchEnabled {
+		if IsNotFoundError(err) && GlobalOptions.AutoFetchEnabled {
 			err = AutoFetch(sha, true)
 			if err == nil {
 				info, err = GetLOBInfo(sha)
 			}
 		}
 		if err != nil {
-			// A problem
-			return nil, errors.New(fmt.Sprintf("Unable to retrieve LOB with SHA %v: %v", sha, err.Error()))
+			if IsNotFoundError(err) {
+				// Still not found after possible recovery?
+				return nil, err
+			} else {
+				// Some other issue
+				return nil, errors.New(fmt.Sprintf("Unable to retrieve LOB with SHA %v: %v", sha, err.Error()))
+			}
 		}
 	}
 
@@ -325,10 +322,14 @@ func RetrieveLOB(sha string, out io.Writer) (info *LOBInfo, err error) {
 				if GlobalOptions.AutoFetchEnabled {
 					err = AutoFetch(sha, true)
 					if err != nil {
-						return info, errors.New(fmt.Sprintf("Missing chunk %d for %v & could not fetch: %v", i, sha, err.Error()))
+						if IsNotFoundError(err) {
+							return info, NewNotFoundError(fmt.Sprintf("Missing chunk %d for %v & not on remote", i, sha))
+						} else {
+							return info, errors.New(fmt.Sprintf("Missing chunk %d for %v & failed fetch: %v", i, sha, err.Error()))
+						}
 					}
 				} else {
-					return info, errors.New(fmt.Sprintf("Missing chunk %d for %v", i, sha))
+					return info, NewNotFoundError(fmt.Sprintf("Missing chunk %d for %v", i, sha))
 				}
 			}
 		}
@@ -755,7 +756,7 @@ func GetLOBFilenamesWithBaseDir(shas []string, check bool) (files []string, base
 		}
 	}
 	if len(errorshas) > 0 {
-		return ret, basedir, retSize, &IntegrityError{errorshas}
+		return ret, basedir, retSize, NewIntegrityError(errorshas)
 	}
 	return ret, basedir, retSize, nil
 }

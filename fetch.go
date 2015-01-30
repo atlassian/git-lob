@@ -423,6 +423,7 @@ func FetchSingle(lobsha string, provider SyncProvider, remoteName string, force 
 }
 
 // Auto-fetch a single LOB from the default locations
+// If the required files are not found this won't cause an error
 func AutoFetch(lobsha string, reportProgress bool) error {
 	remoteName := GetGitDefaultRemoteForPull()
 	LogDebugf("Trying to auto-fetch %v from %v\n", lobsha, remoteName)

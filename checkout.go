@@ -29,6 +29,9 @@ func cmdCheckout() int {
 		switch t {
 		case ProgressSkip:
 			filesUpToDate++
+		case ProgressNotFound:
+			LogConsole(err.Error())
+			filesFailed++
 		case ProgressError:
 			LogConsoleError("ERROR:", err.Error())
 			filesFailed++
@@ -152,9 +155,17 @@ func Checkout(pathspecs []string, dryRun bool, callback CheckoutCallback) error 
 				_, err = RetrieveLOB(filelob.SHA, f)
 				f.Close()
 				if err != nil {
-					// This is not fatal but log it
-					callback(ProgressError, &filelob,
-						errors.New(fmt.Sprintf("Can't retrieve content for %v: %v", filelob.Filename, err.Error())))
+					if IsNotFoundError(err) {
+						// most common issue, log nicely
+						callback(ProgressNotFound, &filelob,
+							NewNotFoundError(fmt.Sprintf("%v: content not available, placeholder used [%v]", filelob.Filename, filelob.SHA[:7])))
+					} else {
+						// Still not fatal but log full detail
+						callback(ProgressError, &filelob,
+							errors.New(fmt.Sprintf("Can't retrieve content for %v: %v", filelob.Filename, err.Error())))
+					}
+					// Either way, we already truncated the file so we need to re-write the contents
+					ioutil.WriteFile(absfile, []byte(getLOBPlaceholderContent(filelob.SHA)), 0644)
 					continue
 				}
 			}

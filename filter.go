@@ -46,7 +46,11 @@ func SmudgeFilterWithReaderWriter(in io.Reader, out io.Writer, filename string) 
 				LogDebugf("Successfully smudged %v: %v in %v chunks from %v\n", filename, FormatSize(lobinfo.Size), lobinfo.NumChunks, sha)
 				return 0
 			} else {
-				LogErrorf("Error obtaining %v for %v: %v\n", sha, filename, err)
+				if IsNotFoundError(err) {
+					LogErrorf("%v: content not available, placeholder used [%v]\n", filename, sha[:7])
+				} else {
+					LogErrorf("Error obtaining %v for %v: %v\n", sha, filename, err)
+				}
 				// fall through to below which will just write the SHA line to the working copy
 			}
 
