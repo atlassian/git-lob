@@ -466,7 +466,7 @@ func AutoFetch(lobsha string, reportProgress bool) error {
 		LogConsole("")
 	} else {
 		// no progress, just do it
-		fetcherr = FetchSingle(lobsha, provider, remoteName, false, nil)
+		fetcherr = FetchSingle(lobsha, provider, remoteName, false, func(data *ProgressCallbackData) (abort bool) { return false })
 	}
 
 	if fetcherr == nil {
