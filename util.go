@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -215,5 +216,61 @@ func FilenamePassesIncludeExcludeFilter(filename string, includePaths, excludePa
 	}
 
 	return true
+
+}
+
+// Execute 1:n os.exec.Command instances for a list of files, splitting where the command line might
+// get too long. name is the command name as per exec.Command Return nil only if all succeeded.
+// Files are appended to the end of the argument list
+func ExecForManyFilesSplitIfRequired(files []string, name string, baseargs ...string) error {
+
+	// How many characters have we used in base args?
+	baseLen := len(name)
+	for _, arg := range baseargs {
+		// +1 for separator (in practice might be +3 with quoting but we'll allow a little legroom)
+		baseLen += len(arg) + 1
+	}
+
+	lenLeft := GetMaxCommandLineLength() - baseLen - 1
+	argsLeft := GetMaxCommandLineArguments() - len(baseargs) - 1
+
+	if lenLeft <= 0 || argsLeft <= 0 {
+		return errors.New("Base arguments were too long to include anything else")
+	}
+
+	for filesLeft := files; len(filesLeft) > 0; {
+		newargs := baseargs
+		var filesUsed int
+		for _, file := range filesLeft {
+			lenadded := len(file)
+			if strings.Contains(file, " \t") {
+				// 2 for quoting
+				lenadded += 2
+			}
+			if lenadded > lenLeft || argsLeft == 0 {
+				break
+			}
+			argsLeft--
+			lenLeft -= (lenadded + 1) // +1 for space separator
+			newargs = append(newargs, file)
+			filesUsed++
+		}
+		// Issue this command
+		cmd := exec.Command(name, newargs...)
+		err := cmd.Run()
+		if err != nil {
+			outp, _ := cmd.CombinedOutput()
+			return errors.New(fmt.Sprintf("Error running command '%v' with arguments '%v': %v", name, newargs, outp))
+		}
+
+		if filesUsed == len(filesLeft) {
+			break
+		} else {
+			filesLeft = filesLeft[filesUsed:]
+		}
+
+	}
+
+	return nil
 
 }
