@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 func cmdCheckout() int {
@@ -114,6 +115,7 @@ func Checkout(pathspecs []string, dryRun bool, callback CheckoutCallback) error 
 	if err != nil {
 		return err
 	}
+	var modifiedfiles []string
 	for _, filelob := range filelobs {
 		// Check each file, and if it's missing or contains the placeholder text, replace it with content
 		// Otherwise, assume it's been locally modified and leave it alone (user can override this with git reset/checkout if they want)
@@ -166,19 +168,52 @@ func Checkout(pathspecs []string, dryRun bool, callback CheckoutCallback) error 
 					}
 					// Either way, we already truncated the file so we need to re-write the contents
 					ioutil.WriteFile(absfile, []byte(getLOBPlaceholderContent(filelob.SHA)), 0644)
-					continue
+				} else {
+					// Success
+					callback(ProgressTransferBytes, &filelob, nil)
 				}
+				// In all cases, we've changed the content of the file. It's important we note this for later
+				modifiedfiles = append(modifiedfiles, filelob.Filename)
+			} else {
+				// Dry run, still call back as if we did it
+				callback(ProgressTransferBytes, &filelob, nil)
 			}
-			callback(ProgressTransferBytes, &filelob, nil)
+
 		} else {
 			callback(ProgressSkip, &filelob, nil)
 		}
 
 	}
 
-	LogDebugf("Successfully checked the working copy")
+	var retErr error
+	if len(modifiedfiles) > 0 {
+		// Modifying files, even to a state that would show as unmodified in 'git diff' (because our filters
+		// make sure that it is so) confuses git because the cached stat() info it stores no longer agrees with the file
+		// So 'git status' would report the files modified even though 'git diff' wouldn't. Confusing for the user!
+		// The answer is to force git to refresh its cached stat() info for the files we changed
+		// Since we don't know how many there will be, potentially split into many commands
+		errorFunc := func(args []string, output string, err error) (abort bool) {
+			// exit status 1 is not important, it's just '<filename> needs update'
+			if !strings.HasSuffix(err.Error(), "exit status 1") {
+				// We actually continue anyway to make sure we try to update all files
+				// but note this one because it's odd
+				if retErr == nil {
+					retErr = fmt.Errorf("Post-checkout index refresh failed: %v", err.Error())
+				} else {
+					retErr = fmt.Errorf("%v\n%v", retErr.Error(), err.Error())
+				}
+			}
+			return false // don't abort
+		}
+		ExecForManyFilesSplitIfRequired(modifiedfiles, errorFunc,
+			"git", "update-index", "--really-refresh", "--")
+	}
 
-	return nil
+	if retErr == nil {
+		LogDebugf("Successfully checked the working copy")
+	}
+
+	return retErr
 
 }
 
