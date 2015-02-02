@@ -220,9 +220,12 @@ func FilenamePassesIncludeExcludeFilter(filename string, includePaths, excludePa
 }
 
 // Execute 1:n os.exec.Command instances for a list of files, splitting where the command line might
-// get too long. name is the command name as per exec.Command Return nil only if all succeeded.
+// get too long. name is the command name as per exec.Command
 // Files are appended to the end of the argument list
-func ExecForManyFilesSplitIfRequired(files []string, name string, baseargs ...string) error {
+// errorCallback is called for any errors so caller can decide whether to abort
+func ExecForManyFilesSplitIfRequired(files []string,
+	errorCallback func(args []string, output string, err error) (abort bool),
+	name string, baseargs ...string) {
 
 	// How many characters have we used in base args?
 	baseLen := len(name)
@@ -235,7 +238,9 @@ func ExecForManyFilesSplitIfRequired(files []string, name string, baseargs ...st
 	argsLeft := GetMaxCommandLineArguments() - len(baseargs) - 1
 
 	if lenLeft <= 0 || argsLeft <= 0 {
-		return errors.New("Base arguments were too long to include anything else")
+		errorCallback(baseargs, "",
+			fmt.Errorf("Base arguments were too long to include anything else in ExecForManyFilesSplitIfRequired: %v %v", name, baseargs))
+		return
 	}
 
 	for filesLeft := files; len(filesLeft) > 0; {
@@ -257,10 +262,12 @@ func ExecForManyFilesSplitIfRequired(files []string, name string, baseargs ...st
 		}
 		// Issue this command
 		cmd := exec.Command(name, newargs...)
-		err := cmd.Run()
+		outp, err := cmd.CombinedOutput()
 		if err != nil {
-			outp, _ := cmd.CombinedOutput()
-			return errors.New(fmt.Sprintf("Error running command '%v' with arguments '%v': %v", name, newargs, outp))
+			abort := errorCallback(newargs, string(outp), err)
+			if abort {
+				return
+			}
 		}
 
 		if filesUsed == len(filesLeft) {
@@ -270,7 +277,5 @@ func ExecForManyFilesSplitIfRequired(files []string, name string, baseargs ...st
 		}
 
 	}
-
-	return nil
 
 }
