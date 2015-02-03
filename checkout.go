@@ -205,7 +205,9 @@ func Checkout(pathspecs []string, dryRun bool, callback CheckoutCallback) error 
 			}
 			return false // don't abort
 		}
-		ExecForManyFilesSplitIfRequired(modifiedfiles, errorFunc,
+		// Need to make file list (which files are relative to repo root) relative to cwd for git's purposes
+		relfiles := MakeRepoFileListRelativeToCwd(modifiedfiles)
+		ExecForManyFilesSplitIfRequired(relfiles, errorFunc,
 			"git", "update-index", "--really-refresh", "--")
 	}
 

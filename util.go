@@ -279,3 +279,40 @@ func ExecForManyFilesSplitIfRequired(files []string,
 	}
 
 }
+
+// Make a list of filenames expressed relative to the root of the repo relative to the
+// current working dir. This is useful when needing to call out to git, but the user
+// may be in a subdir of their repo
+func MakeRepoFileListRelativeToCwd(repofiles []string) []string {
+	root, _, err := GetRepoRoot()
+	if err != nil {
+		LogError("Unable to get repo root: ", err.Error())
+		return repofiles
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		LogError("Unable to get working dir: ", err.Error())
+		return repofiles
+	}
+
+	// Early-out if working dir is root dir, same result
+	if root == wd {
+		return repofiles
+	}
+
+	var ret []string
+	for _, f := range repofiles {
+		abs := filepath.Join(root, f)
+		rel, err := filepath.Rel(wd, abs)
+		if err != nil {
+			LogErrorf("Unable to convert %v to path relative to working dir %v: %v\n", abs, wd, err.Error())
+			// Use absolute file instead (longer)
+			ret = append(ret, abs)
+		} else {
+			ret = append(ret, rel)
+		}
+	}
+
+	return ret
+
+}
