@@ -11,14 +11,17 @@ import (
 var _ = Describe("Filter", func() {
 
 	root := path.Join(os.TempDir(), "StorageTest")
+	var oldwd string
 	BeforeEach(func() {
 		// Set up git repo with some subfolders
 		CreateGitRepoForTest(root)
+		oldwd, _ = os.Getwd()
 		os.Chdir(root)
 
 	})
 
 	AfterEach(func() {
+		os.Chdir(oldwd)
 		// Delete repo
 		os.RemoveAll(root)
 	})

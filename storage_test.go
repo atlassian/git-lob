@@ -27,8 +27,9 @@ var _ = Describe("Storage", func() {
 
 	Describe("Identifying git repo root", func() {
 		Context("Valid git repo", func() {
-
+			var oldwd string
 			BeforeEach(func() {
+				oldwd, _ = os.Getwd()
 				// Set up git repo with some subfolders
 				CreateGitRepoForTest(root)
 
@@ -44,6 +45,7 @@ var _ = Describe("Storage", func() {
 			AfterEach(func() {
 				// Delete repo
 				os.RemoveAll(root)
+				os.Chdir(oldwd)
 			})
 
 			It("finds root git folder", func() {
@@ -52,7 +54,6 @@ var _ = Describe("Storage", func() {
 				// /var turns into /private/var on OS X for example
 				// Can't use this for creating repos etc though, OS X doesn't like direct access
 				expandedroot, _ := filepath.EvalSymlinks(root)
-
 				for _, f := range folders {
 					err := os.Chdir(f)
 					if err != nil {
@@ -66,6 +67,13 @@ var _ = Describe("Storage", func() {
 			})
 		})
 		Context("Invalid git repo", func() {
+			var oldwd string
+			BeforeEach(func() {
+				oldwd, _ = os.Getwd()
+			})
+			AfterEach(func() {
+				os.Chdir(oldwd)
+			})
 			It("Fails safely outside a git repo", func() {
 				// Relies on temp dir not being a git repo, which should be valid assumption
 				os.Chdir(os.TempDir())
@@ -80,7 +88,9 @@ var _ = Describe("Storage", func() {
 
 	Describe("Finding git dir", func() {
 		Context("Git repo with standard git dir", func() {
+			var oldwd string
 			BeforeEach(func() {
+				oldwd, _ = os.Getwd()
 				// Set up git repo with some subfolders
 				CreateGitRepoForTest(root)
 
@@ -94,6 +104,7 @@ var _ = Describe("Storage", func() {
 			})
 
 			AfterEach(func() {
+				os.Chdir(oldwd)
 				// Delete repo
 				os.RemoveAll(root)
 			})
@@ -118,7 +129,9 @@ var _ = Describe("Storage", func() {
 		})
 
 		Context("Git repo with separate git dir", func() {
+			var oldwd string
 			BeforeEach(func() {
+				oldwd, _ = os.Getwd()
 				// Set up git repo with some subfolders
 				CreateGitRepoWithSeparateGitDirForTest(root, separateGitDir)
 
@@ -132,6 +145,7 @@ var _ = Describe("Storage", func() {
 			})
 
 			AfterEach(func() {
+				os.Chdir(oldwd)
 				// Delete repo
 				os.RemoveAll(root)
 			})
@@ -158,7 +172,9 @@ var _ = Describe("Storage", func() {
 
 	Describe("Storing a LOB", func() {
 		// Common git repo
+		var oldwd string
 		BeforeEach(func() {
+			oldwd, _ = os.Getwd()
 			// Set up git repo with some subfolders
 			CreateGitRepoForTest(root)
 
@@ -172,6 +188,7 @@ var _ = Describe("Storage", func() {
 		})
 
 		AfterEach(func() {
+			os.Chdir(oldwd)
 			// Delete repo
 			os.RemoveAll(root)
 		})
@@ -507,7 +524,9 @@ var _ = Describe("Storage", func() {
 	// --- Shared tests
 	Describe("Storing a LOB (shared store)", func() {
 		// Common git repo
+		var oldwd string
 		BeforeEach(func() {
+			oldwd, _ = os.Getwd()
 			os.MkdirAll(sharedStore, 0755)
 			GlobalOptions.SharedStore = sharedStore
 			// Set up git repo with some subfolders
@@ -523,6 +542,7 @@ var _ = Describe("Storage", func() {
 		})
 
 		AfterEach(func() {
+			os.Chdir(oldwd)
 			// Delete repo
 			os.RemoveAll(root)
 			os.RemoveAll(sharedStore)
