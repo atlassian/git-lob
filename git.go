@@ -853,3 +853,33 @@ func GetGitRecentRefs(numdays int, includeRemoteBranches bool, remoteName string
 
 	return ret, nil
 }
+
+// Tell the index to refresh for files which we've modified outside of git commands
+// This is necessary because git caches stat() info to provide a fast way to detect
+// modifications for git-status and so can consider files modified when they're actually not
+// when we've changed things that the filter would consider unmodified when called via git-diff.
+// 'files' is a list of files with paths relative to the repo root
+func GitRefreshIndexForFiles(files []string) error {
+	var retErr error
+	// Since we don't know how many there will be, potentially split into many commands
+	errorFunc := func(args []string, output string, err error) (abort bool) {
+		// exit status 1 is not important, it's just '<filename> needs update'
+		if !strings.HasSuffix(err.Error(), "exit status 1") {
+			// We actually continue anyway to make sure we try to update all files
+			// but note this one because it's odd
+			if retErr == nil {
+				retErr = fmt.Errorf("Post-checkout index refresh failed: %v", err.Error())
+			} else {
+				retErr = fmt.Errorf("%v\n%v", retErr.Error(), err.Error())
+			}
+		}
+		return false // don't abort
+	}
+	// Need to make file list (which files are relative to repo root) relative to cwd for git's purposes
+	relfiles := MakeRepoFileListRelativeToCwd(files)
+	ExecForManyFilesSplitIfRequired(relfiles, errorFunc,
+		"git", "update-index", "--really-refresh", "--")
+
+	return retErr
+
+}

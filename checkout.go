@@ -6,7 +6,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 func cmdCheckout() int {
@@ -190,25 +189,8 @@ func Checkout(pathspecs []string, dryRun bool, callback CheckoutCallback) error 
 		// Modifying files, even to a state that would show as unmodified in 'git diff' (because our filters
 		// make sure that it is so) confuses git because the cached stat() info it stores no longer agrees with the file
 		// So 'git status' would report the files modified even though 'git diff' wouldn't. Confusing for the user!
-		// The answer is to force git to refresh its cached stat() info for the files we changed
-		// Since we don't know how many there will be, potentially split into many commands
-		errorFunc := func(args []string, output string, err error) (abort bool) {
-			// exit status 1 is not important, it's just '<filename> needs update'
-			if !strings.HasSuffix(err.Error(), "exit status 1") {
-				// We actually continue anyway to make sure we try to update all files
-				// but note this one because it's odd
-				if retErr == nil {
-					retErr = fmt.Errorf("Post-checkout index refresh failed: %v", err.Error())
-				} else {
-					retErr = fmt.Errorf("%v\n%v", retErr.Error(), err.Error())
-				}
-			}
-			return false // don't abort
-		}
-		// Need to make file list (which files are relative to repo root) relative to cwd for git's purposes
-		relfiles := MakeRepoFileListRelativeToCwd(modifiedfiles)
-		ExecForManyFilesSplitIfRequired(relfiles, errorFunc,
-			"git", "update-index", "--really-refresh", "--")
+		// Cause git to refresh its index
+		retErr = GitRefreshIndexForFiles(modifiedfiles)
 	}
 
 	if retErr == nil {
