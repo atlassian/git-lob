@@ -3,11 +3,13 @@ package main
 import (
 	"fmt"
 	. "github.com/onsi/ginkgo"
-	//. "github.com/onsi/gomega"
+	. "github.com/onsi/gomega"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strings"
 )
 
 // This test file is about running git commands with git filters configured
@@ -54,6 +56,49 @@ var _ = Describe("Integration", func() {
 		// All actual tests nested here
 		root := filepath.Join(os.TempDir(), "IntegrationTest")
 		var oldwd string
+		filespercommit := [][]string{
+			[]string{
+				"img1.png", "img2.jpg",
+				filepath.Join("movies", "movie1.mov"),
+				filepath.Join("movies", "movie2.mov"),
+				filepath.Join("other", "files", "windows.bmp"),
+			},
+			[]string{
+				"img3.tga", "img4.tiff", "img5.png",
+				filepath.Join("movies", "movie3.mov"),
+				filepath.Join("movies", "movie4.mov"),
+				filepath.Join("other", "files", "windows7.bmp"),
+			},
+			[]string{
+				"img6.jpg",
+				filepath.Join("other", "files", "windows10.bmp"),
+			},
+		}
+		sizeForFile := func(filename string, i int) int64 {
+			// not actually that big, we're not doing size tests here
+			if strings.HasSuffix(filename, ".mov") {
+				return int64(i%3*1000 + 2000)
+			} else {
+				return int64(i%3*100 + 300)
+			}
+		}
+		checkExistsAndRightSize := func(fileset int) {
+			files := filespercommit[fileset]
+			for i, file := range files {
+				sz := sizeForFile(file, i)
+				stat, err := os.Stat(file)
+				Expect(err).To(BeNil(), fmt.Sprintf("%v should exist", file))
+				Expect(stat.Size()).To(BeEquivalentTo(sz), fmt.Sprintf("%v should be correct size", file))
+			}
+		}
+		checkNotExists := func(fileset int) {
+			files := filespercommit[fileset]
+			for _, file := range files {
+				_, err := os.Stat(file)
+				Expect(err).ToNot(BeNil(), fmt.Sprintf("%v should not exist", file))
+			}
+		}
+
 		BeforeEach(func() {
 			createConfiguredRepoFunc(root)
 			oldwd, _ = os.Getwd()
@@ -65,6 +110,59 @@ var _ = Describe("Integration", func() {
 		})
 
 		It("Git filters work", func() {
+
+			diffregex := regexp.MustCompile("(?m)git-lob: ([A-Fa-f0-9]{40})")
+			// Create commits
+			for ci, commitfiles := range filespercommit {
+				for i, file := range commitfiles {
+					err := os.MkdirAll(filepath.Dir(file), 0755)
+					Expect(err).To(BeNil(), "Shouldn't fail creating dir")
+					sz := sizeForFile(file, i)
+					// Create real content
+					CreateRandomFileForTest(sz, file)
+					// git add, will write placeholder & store via filter (or should)
+					err = exec.Command("git", "add", file).Run()
+					Expect(err).To(BeNil(), fmt.Sprintf("Shouldn't fail in git add for %v", file))
+
+					// Check content of index & that binaries created
+
+					diffout, err := exec.Command("git", "diff", "--cached", file).CombinedOutput()
+					Expect(err).To(BeNil(), fmt.Sprintf("Shouldn't fail in git diff for %v", file))
+					match := diffregex.FindStringSubmatch(string(diffout))
+					Expect(match).ToNot(BeNil(), fmt.Sprintf("Should find git-lob ref in diff for %v", file))
+					Expect(match).To(HaveLen(2), "Should be 2 matches")
+					sha := match[1]
+
+					// confirm that the file is stored correctly
+					err = CheckLOBFilesForSHA(sha, GetLocalLOBRoot(), false)
+					Expect(err).To(BeNil(), fmt.Sprintf("Shouldn't fail checking storage for %v", file))
+				}
+				// Commit & tag
+				err := exec.Command("git", "commit", "-m", fmt.Sprintf("Commit %d", ci)).Run()
+				Expect(err).To(BeNil(), fmt.Sprintf("Shouldn't fail commit %d", ci))
+				err = exec.Command("git", "tag", "-a", "-m", "Nothing", fmt.Sprintf("Tag%d", ci)).Run()
+				Expect(err).To(BeNil(), fmt.Sprintf("Shouldn't fail tagging %d", ci))
+			}
+
+			// Now check out a few times to make sure working copy changes appropriately
+			err := exec.Command("git", "checkout", "Tag0").Run()
+			Expect(err).To(BeNil(), "Shouldn't fail to checkout")
+			checkExistsAndRightSize(0)
+			checkNotExists(1)
+			checkNotExists(2)
+
+			err = exec.Command("git", "checkout", "Tag1").Run()
+			Expect(err).To(BeNil(), "Shouldn't fail to checkout")
+			checkExistsAndRightSize(0)
+			checkExistsAndRightSize(1)
+			checkNotExists(2)
+
+			err = exec.Command("git", "checkout", "Tag2").Run()
+			Expect(err).To(BeNil(), "Shouldn't fail to checkout")
+			checkExistsAndRightSize(0)
+			checkExistsAndRightSize(1)
+			checkExistsAndRightSize(2)
+
 		})
 
 	})
