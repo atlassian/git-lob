@@ -878,7 +878,7 @@ func GitRefreshIndexForFiles(files []string) error {
 	// Need to make file list (which files are relative to repo root) relative to cwd for git's purposes
 	relfiles := MakeRepoFileListRelativeToCwd(files)
 	ExecForManyFilesSplitIfRequired(relfiles, errorFunc,
-		"git", "update-index", "--really-refresh", "--")
+		"git", "update-index", "-q", "--really-refresh", "--")
 
 	return retErr
 
