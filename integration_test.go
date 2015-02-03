@@ -27,14 +27,14 @@ var _ = Describe("Integration", func() {
 	createConfiguredRepoFunc := func(root string) {
 		CreateGitRepoForTest(root)
 		ioutil.WriteFile(filepath.Join(root, ".gitattributes"),
-			[]byte(`*.png filter=lob -crlf
-*.jpg filter=lob -crlf
-*.zip filter=lob -crlf
-*.tiff filter=lob -crlf
-*.tga filter=lob -crlf
-*.dds filter=lob -crlf
-*.bmp filter=lob -crlf
-*.mov filter=lob -crlf`), 0644)
+			[]byte(`*.png filter=testlob -crlf
+*.jpg filter=testlob -crlf
+*.zip filter=testlob -crlf
+*.tiff filter=testlob -crlf
+*.tga filter=testlob -crlf
+*.dds filter=testlob -crlf
+*.bmp filter=testlob -crlf
+*.mov filter=testlob -crlf`), 0644)
 		f, err := os.OpenFile(filepath.Join(root, ".git", "config"), os.O_APPEND|os.O_RDWR|os.O_CREATE, 0644)
 		if err != nil {
 			Fail(fmt.Sprintf("Can't write gitconfig: %v", err.Error()))
@@ -43,13 +43,11 @@ var _ = Describe("Integration", func() {
 		cwd, _ := os.Getwd()
 		gitlobbinary := filepath.Join(cwd, "git-lob")
 		f.WriteString(fmt.Sprintf(`
-[filter "lob"]
-  clean = "%v filter-clean %f"
-  smudge = "%v filter-smudge %f"
+[filter "testlob"]
+  clean = "%v filter-clean %%f"
+  smudge = "%v filter-smudge %%f"
 `, gitlobbinary, gitlobbinary))
 		f.Close()
-
-		fmt.Println("Decided that git-lob is located at ", gitlobbinary)
 	}
 
 	Context("Integration tests", func() {
