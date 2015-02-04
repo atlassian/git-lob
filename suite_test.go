@@ -316,3 +316,38 @@ func StoreLOBForTest(filename string) (*LOBInfo, error) {
 	defer f.Close()
 	return StoreLOB(bufio.NewReader(f), []byte(""))
 }
+
+func CreateManyCommitsForTest(filespercommit [][]string, commitOffset int, sizeFunc func(filename string, index int) int64) (shaspercommit [][]string) {
+	var ret [][]string
+	for ci, commitfiles := range filespercommit {
+		var shas []string
+		for i, file := range commitfiles {
+			err := os.MkdirAll(filepath.Dir(file), 0755)
+			Expect(err).To(BeNil(), "Shouldn't fail creating dir")
+			sz := sizeFunc(file, i)
+			// Create real content
+			CreateRandomFileForTest(sz, file)
+			info, err := StoreLOBForTest(file)
+			Expect(err).To(BeNil(), fmt.Sprintf("Shouldn't fail to store LOB for %v", file))
+
+			// Now overwrite with placeholder & add (what filter would have done)
+			ioutil.WriteFile(file, []byte(fmt.Sprintf("git-lob: %v", info.SHA)), 0644)
+
+			err = exec.Command("git", "add", file).Run()
+			Expect(err).To(BeNil(), fmt.Sprintf("Shouldn't fail in git add for %v", file))
+
+			shas = append(shas, info.SHA)
+		}
+
+		// Commit & tag
+		err := exec.Command("git", "commit", "-m", fmt.Sprintf("Commit %d", ci+commitOffset)).Run()
+		Expect(err).To(BeNil(), fmt.Sprintf("Shouldn't fail commit %d", ci+commitOffset))
+		err = exec.Command("git", "tag", "-a", "-m", "Nothing", fmt.Sprintf("Tag%d", ci+commitOffset)).Run()
+		Expect(err).To(BeNil(), fmt.Sprintf("Shouldn't fail tagging %d", ci+commitOffset))
+
+		ret = append(ret, shas)
+	}
+
+	return ret
+
+}
