@@ -25,6 +25,7 @@ var _ = Describe("Integration", func() {
 		}
 	})
 
+	var gitlobbinarypath string
 	// Function to create a git repo configured with git-lob filters for integration testing
 	createConfiguredRepoFunc := func(root string) {
 		CreateGitRepoForTest(root)
@@ -43,12 +44,12 @@ var _ = Describe("Integration", func() {
 		}
 		// Here we have to assume that go test is running in the root source folder
 		cwd, _ := os.Getwd()
-		gitlobbinary := filepath.Join(cwd, "git-lob")
+		gitlobbinarypath = filepath.Join(cwd, "git-lob")
 		f.WriteString(fmt.Sprintf(`
 [filter "testlob"]
   clean = "%v filter-clean %%f"
   smudge = "%v filter-smudge %%f"
-`, gitlobbinary, gitlobbinary))
+`, gitlobbinarypath, gitlobbinarypath))
 		f.Close()
 	}
 
@@ -91,6 +92,14 @@ var _ = Describe("Integration", func() {
 				Expect(stat.Size()).To(BeEquivalentTo(sz), fmt.Sprintf("%v should be correct size", file))
 			}
 		}
+		checkExistsAndIsPlaceholder := func(fileset int) {
+			files := filespercommit[fileset]
+			for _, file := range files {
+				stat, err := os.Stat(file)
+				Expect(err).To(BeNil(), fmt.Sprintf("%v should exist", file))
+				Expect(stat.Size()).To(BeEquivalentTo(SHALineLen), fmt.Sprintf("%v should be correct size", file))
+			}
+		}
 		checkNotExists := func(fileset int) {
 			files := filespercommit[fileset]
 			for _, file := range files {
@@ -102,6 +111,30 @@ var _ = Describe("Integration", func() {
 			outp, err := exec.Command("git", "status", "--porcelain", "-uno").CombinedOutput()
 			Expect(outp).To(HaveLen(0), "Should be no modified files")
 			Expect(err).To(BeNil(), "git status should succeed")
+		}
+		moveAsideLOBs := func(shas []string) {
+			for _, sha := range shas {
+				meta := getLocalLOBMetaPath(sha)
+				err := os.Rename(meta, meta+"_bak")
+				Expect(err).To(BeNil(), fmt.Sprintf("Rename should succeed for %v", meta))
+				// Assuming only one chunk for this test
+				chunk := getLocalLOBChunkPath(sha, 0)
+				err = os.Rename(chunk, chunk+"_bak")
+				Expect(err).To(BeNil(), fmt.Sprintf("Rename should succeed for %v", chunk))
+			}
+
+		}
+		restoreLOBs := func(shas []string) {
+			for _, sha := range shas {
+				meta := getLocalLOBMetaPath(sha)
+				err := os.Rename(meta+"_bak", meta)
+				Expect(err).To(BeNil(), fmt.Sprintf("Rename should succeed for %v", meta))
+				// Assuming only one chunk for this test
+				chunk := getLocalLOBChunkPath(sha, 0)
+				err = os.Rename(chunk+"_bak", chunk)
+				Expect(err).To(BeNil(), fmt.Sprintf("Rename should succeed for %v", chunk))
+			}
+
 		}
 
 		BeforeEach(func() {
@@ -169,6 +202,78 @@ var _ = Describe("Integration", func() {
 			err = exec.Command("git", "checkout", "Tag2").Run()
 			Expect(err).To(BeNil(), "Shouldn't fail to checkout")
 			checkExistsAndRightSize(0)
+			checkExistsAndRightSize(1)
+			checkExistsAndRightSize(2)
+			checkGitStatusNotModified()
+
+		})
+
+		It("leaves files unmodified when placeholders present and after checkout", func() {
+			diffregex := regexp.MustCompile("(?m)git-lob: ([A-Fa-f0-9]{40})")
+			var shaspercommit [][]string
+			// Create commits
+			for ci, commitfiles := range filespercommit {
+				var shas []string
+				for i, file := range commitfiles {
+					err := os.MkdirAll(filepath.Dir(file), 0755)
+					Expect(err).To(BeNil(), "Shouldn't fail creating dir")
+					sz := sizeForFile(file, i)
+					// Create real content
+					CreateRandomFileForTest(sz, file)
+					// git add, will write placeholder & store via filter (or should)
+					err = exec.Command("git", "add", file).Run()
+					Expect(err).To(BeNil(), fmt.Sprintf("Shouldn't fail in git add for %v", file))
+
+					// Get SHA
+					diffout, err := exec.Command("git", "diff", "--cached", file).CombinedOutput()
+					Expect(err).To(BeNil(), fmt.Sprintf("Shouldn't fail in git diff for %v", file))
+					match := diffregex.FindStringSubmatch(string(diffout))
+					Expect(match).ToNot(BeNil(), fmt.Sprintf("Should find git-lob ref in diff for %v", file))
+					Expect(match).To(HaveLen(2), "Should be 2 matches")
+					sha := match[1]
+
+					shas = append(shas, sha)
+				}
+				// Commit & tag
+				err := exec.Command("git", "commit", "-m", fmt.Sprintf("Commit %d", ci)).Run()
+				Expect(err).To(BeNil(), fmt.Sprintf("Shouldn't fail commit %d", ci))
+				err = exec.Command("git", "tag", "-a", "-m", "Nothing", fmt.Sprintf("Tag%d", ci)).Run()
+				Expect(err).To(BeNil(), fmt.Sprintf("Shouldn't fail tagging %d", ci))
+
+				shaspercommit = append(shaspercommit, shas)
+			}
+
+			// check out Tag0, thus deleting everything in Tag1/2
+			err := exec.Command("git", "checkout", "Tag0").Run()
+			Expect(err).To(BeNil(), "Shouldn't fail to checkout")
+			checkNotExists(1)
+			checkNotExists(2)
+			checkGitStatusNotModified()
+
+			// Now move aside storage for files in Tag1/2 so that they will be missing
+			// when we try to check them out
+			moveAsideLOBs(shaspercommit[1])
+			moveAsideLOBs(shaspercommit[2])
+			err = exec.Command("git", "checkout", "Tag2").Run()
+			Expect(err).To(BeNil(), "Shouldn't fail to checkout")
+			checkExistsAndIsPlaceholder(1)
+			checkExistsAndIsPlaceholder(2)
+
+			// now restore data for 1
+			restoreLOBs(shaspercommit[1])
+			// Now git-lob checkout - note we call direct not via "git lob" so we don't assume this test version is
+			// on the path (it probably isn't). We ignore errors because Tag2 files are still missing so will return non-zero
+			exec.Command(gitlobbinarypath, "checkout").Run()
+			checkExistsAndRightSize(1)
+			checkExistsAndIsPlaceholder(2)
+			checkGitStatusNotModified()
+
+			// now restore data for 2
+			restoreLOBs(shaspercommit[2])
+			// Now git-lob checkout - note we call direct not via "git lob" so we don't assume this test version is
+			// on the path (it probably isn't). Should be no errors this time since complete data
+			err = exec.Command(gitlobbinarypath, "checkout").Run()
+			Expect(err).To(BeNil(), "Shouldn't fail to git-lob checkout")
 			checkExistsAndRightSize(1)
 			checkExistsAndRightSize(2)
 			checkGitStatusNotModified()
