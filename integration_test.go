@@ -98,6 +98,11 @@ var _ = Describe("Integration", func() {
 				Expect(err).ToNot(BeNil(), fmt.Sprintf("%v should not exist", file))
 			}
 		}
+		checkGitStatusNotModified := func() {
+			outp, err := exec.Command("git", "status", "--porcelain", "-uno").CombinedOutput()
+			Expect(outp).To(HaveLen(0), "Should be no modified files")
+			Expect(err).To(BeNil(), "git status should succeed")
+		}
 
 		BeforeEach(func() {
 			createConfiguredRepoFunc(root)
@@ -142,6 +147,8 @@ var _ = Describe("Integration", func() {
 				Expect(err).To(BeNil(), fmt.Sprintf("Shouldn't fail commit %d", ci))
 				err = exec.Command("git", "tag", "-a", "-m", "Nothing", fmt.Sprintf("Tag%d", ci)).Run()
 				Expect(err).To(BeNil(), fmt.Sprintf("Shouldn't fail tagging %d", ci))
+
+				checkGitStatusNotModified()
 			}
 
 			// Now check out a few times to make sure working copy changes appropriately
@@ -150,18 +157,21 @@ var _ = Describe("Integration", func() {
 			checkExistsAndRightSize(0)
 			checkNotExists(1)
 			checkNotExists(2)
+			checkGitStatusNotModified()
 
 			err = exec.Command("git", "checkout", "Tag1").Run()
 			Expect(err).To(BeNil(), "Shouldn't fail to checkout")
 			checkExistsAndRightSize(0)
 			checkExistsAndRightSize(1)
 			checkNotExists(2)
+			checkGitStatusNotModified()
 
 			err = exec.Command("git", "checkout", "Tag2").Run()
 			Expect(err).To(BeNil(), "Shouldn't fail to checkout")
 			checkExistsAndRightSize(0)
 			checkExistsAndRightSize(1)
 			checkExistsAndRightSize(2)
+			checkGitStatusNotModified()
 
 		})
 
