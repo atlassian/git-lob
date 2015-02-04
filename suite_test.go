@@ -113,9 +113,9 @@ func CreateSmallTestLOBDataForRetrieval() (correctInfo *LOBInfo) {
 
 	var lobFile string
 	if isUsingSharedStorage() {
-		lobFile = getSharedLOBChunkFilename(correctLOBInfo.SHA, 0)
+		lobFile = getSharedLOBChunkPath(correctLOBInfo.SHA, 0)
 	} else {
-		lobFile = getLocalLOBChunkFilename(correctLOBInfo.SHA, 0)
+		lobFile = getLocalLOBChunkPath(correctLOBInfo.SHA, 0)
 	}
 	f, err := os.OpenFile(lobFile, os.O_WRONLY|os.O_CREATE, 0644)
 	Expect(err).To(BeNil(), "Shouldn't be error creating LOB file %v", lobFile)
@@ -128,7 +128,7 @@ func CreateSmallTestLOBDataForRetrieval() (correctInfo *LOBInfo) {
 	}
 	f.Close()
 	if isUsingSharedStorage() {
-		link := getLocalLOBChunkFilename(correctLOBInfo.SHA, 0)
+		link := getLocalLOBChunkPath(correctLOBInfo.SHA, 0)
 		CreateHardLink(lobFile, link)
 	}
 	return correctLOBInfo
@@ -160,15 +160,15 @@ func CreateLargeTestLOBDataForRetrieval() (correctInfo *LOBInfo) {
 					dest := outf.Name()
 					outf.Close()
 					if isUsingSharedStorage() {
-						link := getLocalLOBChunkFilename(correctLOBInfo.SHA, chunkIdx-1)
+						link := getLocalLOBChunkPath(correctLOBInfo.SHA, chunkIdx-1)
 						CreateHardLink(dest, link)
 					}
 				}
 				var lobFile string
 				if isUsingSharedStorage() {
-					lobFile = getSharedLOBChunkFilename(correctLOBInfo.SHA, chunkIdx)
+					lobFile = getSharedLOBChunkPath(correctLOBInfo.SHA, chunkIdx)
 				} else {
-					lobFile = getLocalLOBChunkFilename(correctLOBInfo.SHA, chunkIdx)
+					lobFile = getLocalLOBChunkPath(correctLOBInfo.SHA, chunkIdx)
 				}
 				chunkIdx++
 				outf, err = os.OpenFile(lobFile, os.O_WRONLY|os.O_CREATE, 0644)
@@ -184,7 +184,7 @@ func CreateLargeTestLOBDataForRetrieval() (correctInfo *LOBInfo) {
 		dest := outf.Name()
 		outf.Close()
 		if isUsingSharedStorage() {
-			link := getLocalLOBChunkFilename(correctLOBInfo.SHA, chunkIdx-1)
+			link := getLocalLOBChunkPath(correctLOBInfo.SHA, chunkIdx-1)
 			CreateHardLink(dest, link)
 		}
 	}

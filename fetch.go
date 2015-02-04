@@ -264,7 +264,7 @@ func fetchLOBs(lobshas []string, provider SyncProvider, remoteName string, force
 		filesTotalBytes += info.Size
 		for i := 0; i < info.NumChunks; i++ {
 			// get relative filename for download purposes
-			files = append(files, getLOBRelChunkFilename(sha, i))
+			files = append(files, getLOBChunkRelativePath(sha, i))
 		}
 	}
 	callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf("Metadata done, downloading content (%v)", FormatSize(filesTotalBytes)),
@@ -302,7 +302,7 @@ func fetchMetadata(lobshas []string, provider SyncProvider, remoteName string, f
 	var metafilesToDownload []string
 	for _, sha := range lobshas {
 		// Note get relative file name
-		metafilesToDownload = append(metafilesToDownload, getLOBRelMetaFilename(sha))
+		metafilesToDownload = append(metafilesToDownload, getLOBMetaRelativePath(sha))
 	}
 	// Download to shared if using shared area (we link later)
 	destDir := getFetchDestination()
@@ -312,8 +312,8 @@ func fetchMetadata(lobshas []string, provider SyncProvider, remoteName string, f
 	if isUsingSharedStorage() {
 		for _, sha := range lobshas {
 			// filenames are relative (for download)
-			localfile := getLocalLOBMetaFilename(sha)
-			sharedfile := getSharedLOBMetaFilename(sha)
+			localfile := getLocalLOBMetaPath(sha)
+			sharedfile := getSharedLOBMetaPath(sha)
 			if (force || !FileExists(localfile)) && FileExists(sharedfile) {
 				linkerr := linkSharedLOBFilename(sharedfile)
 				if linkerr != nil {

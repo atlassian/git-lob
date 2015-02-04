@@ -219,7 +219,7 @@ var _ = Describe("Storage", func() {
 				lobinfo, err := StoreLOB(f, leader[:c])
 				Expect(err).To(BeNil(), "Shouldn't be error storing LOB")
 				Expect(lobinfo).To(Equal(correctLOBInfo))
-				fileinfo, err := os.Stat(getLocalLOBChunkFilename(lobinfo.SHA, 0))
+				fileinfo, err := os.Stat(getLocalLOBChunkPath(lobinfo.SHA, 0))
 				Expect(err).To(BeNil(), "Shouldn't be error opening stored LOB")
 				Expect(fileinfo.Size()).To(Equal(lobinfo.Size), "Stored LOB should be correct size")
 			})
@@ -291,7 +291,7 @@ var _ = Describe("Storage", func() {
 				Expect(lobinfo.Size).To(BeEquivalentTo(GlobalOptions.ChunkSize), "Size should be correct")
 				Expect(lobinfo.NumChunks).To(BeEquivalentTo(1), "Should only be one chunk")
 				Expect(lobinfo.ChunkSize).To(BeEquivalentTo(GlobalOptions.ChunkSize), "Chunk size should be correct")
-				fileinfo, err := os.Stat(getLocalLOBChunkFilename(lobinfo.SHA, 0))
+				fileinfo, err := os.Stat(getLocalLOBChunkPath(lobinfo.SHA, 0))
 				Expect(err).To(BeNil(), "Shouldn't be error opening stored LOB")
 				Expect(fileinfo.Size()).To(Equal(lobinfo.Size), "Stored LOB should be correct size")
 
@@ -311,10 +311,10 @@ var _ = Describe("Storage", func() {
 				Expect(lobinfo.Size).To(BeEquivalentTo(GlobalOptions.ChunkSize*2), "Size should be correct")
 				Expect(lobinfo.NumChunks).To(BeEquivalentTo(2), "Should be 2 chunks")
 				Expect(lobinfo.ChunkSize).To(BeEquivalentTo(GlobalOptions.ChunkSize), "Chunk size should be correct")
-				fileinfo, err = os.Stat(getLocalLOBChunkFilename(lobinfo.SHA, 0))
+				fileinfo, err = os.Stat(getLocalLOBChunkPath(lobinfo.SHA, 0))
 				Expect(err).To(BeNil(), "Shouldn't be error opening stored LOB")
 				Expect(fileinfo.Size()).To(Equal(lobinfo.ChunkSize), "Stored LOB should be correct size")
-				fileinfo, err = os.Stat(getLocalLOBChunkFilename(lobinfo.SHA, 1))
+				fileinfo, err = os.Stat(getLocalLOBChunkPath(lobinfo.SHA, 1))
 				Expect(err).To(BeNil(), "Shouldn't be error opening stored LOB")
 				Expect(fileinfo.Size()).To(Equal(lobinfo.ChunkSize), "Stored LOB should be correct size")
 
@@ -350,7 +350,7 @@ var _ = Describe("Storage", func() {
 				Expect(err).To(BeNil(), "Shouldn't be error storing LOB")
 				Expect(lobinfo).To(Equal(correctLOBInfo))
 				for i := 0; i < lobinfo.NumChunks; i++ {
-					fileinfo, err := os.Stat(getLocalLOBChunkFilename(lobinfo.SHA, i))
+					fileinfo, err := os.Stat(getLocalLOBChunkPath(lobinfo.SHA, i))
 					Expect(err).To(BeNil(), "Shouldn't be error opening stored LOB #%v", i)
 					if i+1 < lobinfo.NumChunks {
 						Expect(fileinfo.Size()).To(BeEquivalentTo(GlobalOptions.ChunkSize), "Stored LOB #%v should be chunk limit size", i)
@@ -580,18 +580,18 @@ var _ = Describe("Storage", func() {
 				Expect(err).To(BeNil(), "Shouldn't be error retrieving LOB info")
 				Expect(lobinfo).To(Equal(correctLOBInfo))
 
-				fileinfo, err := os.Stat(getLocalLOBChunkFilename(lobinfo.SHA, 0))
+				fileinfo, err := os.Stat(getLocalLOBChunkPath(lobinfo.SHA, 0))
 				Expect(err).To(BeNil(), "Shouldn't be error opening stored LOB (local)")
 				Expect(fileinfo.Size()).To(Equal(lobinfo.Size), "Stored LOB should be correct size (local)")
 				// Also test shared
-				fileinfo, err = os.Stat(getSharedLOBChunkFilename(lobinfo.SHA, 0))
+				fileinfo, err = os.Stat(getSharedLOBChunkPath(lobinfo.SHA, 0))
 				Expect(err).To(BeNil(), "Shouldn't be error opening stored LOB (shared)")
 				Expect(fileinfo.Size()).To(Equal(lobinfo.Size), "Stored LOB should be correct size (shared)")
 
-				links, err := GetHardLinkCount(getLocalLOBChunkFilename(lobinfo.SHA, 0))
+				links, err := GetHardLinkCount(getLocalLOBChunkPath(lobinfo.SHA, 0))
 				Expect(err).To(BeNil(), "Shouldn't be error getting local LOB hard link info")
 				Expect(links).To(Equal(2), "Should be the right number of hard links (shared)")
-				links, err = GetHardLinkCount(getSharedLOBChunkFilename(lobinfo.SHA, 0))
+				links, err = GetHardLinkCount(getSharedLOBChunkPath(lobinfo.SHA, 0))
 				Expect(err).To(BeNil(), "Shouldn't be error getting shared LOB hard link info")
 				Expect(links).To(Equal(2), "Should be the right number of hard links (local)")
 			})
@@ -630,7 +630,7 @@ var _ = Describe("Storage", func() {
 				Expect(lobinfo).To(Equal(correctLOBInfo))
 
 				for i := 0; i < lobinfo.NumChunks; i++ {
-					fileinfo, err := os.Stat(getLocalLOBChunkFilename(lobinfo.SHA, i))
+					fileinfo, err := os.Stat(getLocalLOBChunkPath(lobinfo.SHA, i))
 					Expect(err).To(BeNil(), "Shouldn't be error opening stored LOB #%v", i)
 					if i+1 < lobinfo.NumChunks {
 						Expect(fileinfo.Size()).To(BeEquivalentTo(GlobalOptions.ChunkSize), "Stored LOB #%v should be chunk limit size", i)
@@ -638,17 +638,17 @@ var _ = Describe("Storage", func() {
 						Expect(fileinfo.Size()).To(BeEquivalentTo(lobinfo.Size%GlobalOptions.ChunkSize), "Stored LOB #%v should be correct size", i)
 					}
 					// Also check shared
-					fileinfo, err = os.Stat(getSharedLOBChunkFilename(lobinfo.SHA, i))
+					fileinfo, err = os.Stat(getSharedLOBChunkPath(lobinfo.SHA, i))
 					Expect(err).To(BeNil(), "Shouldn't be error opening stored LOB #%v", i)
 					if i+1 < lobinfo.NumChunks {
 						Expect(fileinfo.Size()).To(BeEquivalentTo(GlobalOptions.ChunkSize), "Stored LOB #%v should be chunk limit size", i)
 					} else {
 						Expect(fileinfo.Size()).To(BeEquivalentTo(lobinfo.Size%GlobalOptions.ChunkSize), "Stored LOB #%v should be correct size", i)
 					}
-					links, err := GetHardLinkCount(getLocalLOBChunkFilename(lobinfo.SHA, i))
+					links, err := GetHardLinkCount(getLocalLOBChunkPath(lobinfo.SHA, i))
 					Expect(err).To(BeNil(), "Shouldn't be error getting local LOB hard link info")
 					Expect(links).To(Equal(2), "Should be the right number of hard links (shared)")
-					links, err = GetHardLinkCount(getSharedLOBChunkFilename(lobinfo.SHA, i))
+					links, err = GetHardLinkCount(getSharedLOBChunkPath(lobinfo.SHA, i))
 					Expect(err).To(BeNil(), "Shouldn't be error getting shared LOB hard link info")
 					Expect(links).To(Equal(2), "Should be the right number of hard links (local)")
 
@@ -814,51 +814,51 @@ var _ = Describe("Storage", func() {
 			// Test for simple corruptions
 			// Remove a meta file
 			var err error
-			metafile := getLocalLOBMetaFilename(lobinfos[smallFileIdx[0]].SHA)
+			metafile := getLocalLOBMetaPath(lobinfos[smallFileIdx[0]].SHA)
 			os.Remove(metafile)
 			err = CheckLOBFilesForSHA(lobinfos[smallFileIdx[0]].SHA, basedir, false)
 			Expect(err).ToNot(BeNil(), "Should detect missing meta file")
 
 			var chunkfile string
 			// Remove a chunk file (only one)
-			chunkfile = getLocalLOBChunkFilename(lobinfos[smallFileIdx[1]].SHA, 0)
+			chunkfile = getLocalLOBChunkPath(lobinfos[smallFileIdx[1]].SHA, 0)
 			os.Remove(chunkfile)
 			err = CheckLOBFilesForSHA(lobinfos[smallFileIdx[1]].SHA, basedir, false)
 			Expect(err).ToNot(BeNil(), "Should detect missing chunk file for single-chunk file")
 			// Remove a chunk file (one of many - first)
-			chunkfile = getLocalLOBChunkFilename(lobinfos[midFileIdx[0]].SHA, 0)
+			chunkfile = getLocalLOBChunkPath(lobinfos[midFileIdx[0]].SHA, 0)
 			os.Remove(chunkfile)
 			err = CheckLOBFilesForSHA(lobinfos[midFileIdx[0]].SHA, basedir, false)
 			Expect(err).ToNot(BeNil(), "Should detect missing first chunk file for 2-chunk file")
 			// Remove a chunk file (one of many - last)
-			chunkfile = getLocalLOBChunkFilename(lobinfos[midFileIdx[1]].SHA, 1)
+			chunkfile = getLocalLOBChunkPath(lobinfos[midFileIdx[1]].SHA, 1)
 			os.Remove(chunkfile)
 			err = CheckLOBFilesForSHA(lobinfos[midFileIdx[1]].SHA, basedir, false)
 			Expect(err).ToNot(BeNil(), "Should detect missing second chunk file for 2-chunk file")
 
 			// Change the size of a chunk file (single chunk)
-			chunkfile = getLocalLOBChunkFilename(lobinfos[smallFileIdx[2]].SHA, 0)
+			chunkfile = getLocalLOBChunkPath(lobinfos[smallFileIdx[2]].SHA, 0)
 			f, _ := os.OpenFile(chunkfile, os.O_APPEND|os.O_RDWR, 0644)
 			f.Write([]byte("icorruptthee"))
 			f.Close()
 			err = CheckLOBFilesForSHA(lobinfos[smallFileIdx[2]].SHA, basedir, false)
 			Expect(err).ToNot(BeNil(), "Should detect incorrect size chunk file for single-chunk file")
 			// Change the size of a chunk file (one of many - first)
-			chunkfile = getLocalLOBChunkFilename(lobinfos[midFileIdx[2]].SHA, 0)
+			chunkfile = getLocalLOBChunkPath(lobinfos[midFileIdx[2]].SHA, 0)
 			f, _ = os.OpenFile(chunkfile, os.O_APPEND|os.O_RDWR, 0644)
 			f.Write([]byte("hssss"))
 			f.Close()
 			err = CheckLOBFilesForSHA(lobinfos[midFileIdx[2]].SHA, basedir, false)
 			Expect(err).ToNot(BeNil(), "Should detect incorrect size chunk file for multi-chunk file (first)")
 			// Change the size of a chunk file (one of many - middle)
-			chunkfile = getLocalLOBChunkFilename(lobinfos[largeFileIdx[0]].SHA, 1)
+			chunkfile = getLocalLOBChunkPath(lobinfos[largeFileIdx[0]].SHA, 1)
 			f, _ = os.OpenFile(chunkfile, os.O_APPEND|os.O_RDWR, 0644)
 			f.Write([]byte("itburns"))
 			f.Close()
 			err = CheckLOBFilesForSHA(lobinfos[largeFileIdx[0]].SHA, basedir, false)
 			Expect(err).ToNot(BeNil(), "Should detect incorrect size chunk file for multi-chunk file (middle)")
 			// Change the size of a chunk file (one of many - last)
-			chunkfile = getLocalLOBChunkFilename(lobinfos[largeFileIdx[1]].SHA, lobinfos[largeFileIdx[1]].NumChunks-1)
+			chunkfile = getLocalLOBChunkPath(lobinfos[largeFileIdx[1]].SHA, lobinfos[largeFileIdx[1]].NumChunks-1)
 			f, _ = os.OpenFile(chunkfile, os.O_APPEND|os.O_RDWR, 0644)
 			f.Write([]byte("ngggg"))
 			f.Close()
@@ -881,7 +881,7 @@ var _ = Describe("Storage", func() {
 			var chunkfile string
 			var err error
 			// Change 2 bytes of a chunk file, size unchanged (single chunk)
-			chunkfile = getLocalLOBChunkFilename(lobinfos[smallFileIdx[0]].SHA, 0)
+			chunkfile = getLocalLOBChunkPath(lobinfos[smallFileIdx[0]].SHA, 0)
 			f, _ := os.OpenFile(chunkfile, os.O_RDWR|os.O_SYNC, 0644)
 			f.Seek(10, os.SEEK_SET)
 			f.Write([]byte("qq"))
@@ -892,7 +892,7 @@ var _ = Describe("Storage", func() {
 			err = CheckLOBFilesForSHA(lobinfos[smallFileIdx[0]].SHA, basedir, true)
 			Expect(err).ToNot(BeNil(), "Should detect the corruption with deep hash check")
 			// Change 2 bytes of a chunk file, size unchanged (multiple chunk)
-			chunkfile = getLocalLOBChunkFilename(lobinfos[midFileIdx[0]].SHA, 1)
+			chunkfile = getLocalLOBChunkPath(lobinfos[midFileIdx[0]].SHA, 1)
 			f, _ = os.OpenFile(chunkfile, os.O_RDWR|os.O_SYNC, 0644)
 			f.Seek(51, os.SEEK_SET)
 			f.Write([]byte("zf"))

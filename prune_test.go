@@ -51,12 +51,12 @@ var _ = Describe("Prune", func() {
 				lobshas = GetListOfRandomSHAsForTest(20)
 				lobshaset = NewStringSetFromSlice(lobshas)
 				for _, s := range lobshas {
-					metafile := getLocalLOBMetaFilename(s)
+					metafile := getLocalLOBMetaPath(s)
 					ioutil.WriteFile(metafile, []byte("meta something"), 0644)
 					lobfiles = append(lobfiles, metafile)
 					numChunks := rand.Intn(3) + 1
 					for c := 0; c < numChunks; c++ {
-						chunkfile := getLocalLOBChunkFilename(s, c)
+						chunkfile := getLocalLOBChunkPath(s, c)
 						lobfiles = append(lobfiles, chunkfile)
 						ioutil.WriteFile(chunkfile, []byte("data something"), 0644)
 					}
@@ -175,20 +175,20 @@ var _ = Describe("Prune", func() {
 				lobshas = GetListOfRandomSHAsForTest(20)
 				lobshaset = NewStringSetFromSlice(lobshas)
 				for _, s := range lobshas {
-					metafile := getSharedLOBMetaFilename(s)
+					metafile := getSharedLOBMetaPath(s)
 					ioutil.WriteFile(metafile, []byte("meta something"), 0644)
 					lobfiles = append(lobfiles, metafile)
 					// link shared locally
-					metalinkfile := getLocalLOBMetaFilename(s)
+					metalinkfile := getLocalLOBMetaPath(s)
 					CreateHardLink(metafile, metalinkfile)
 					lobfiles = append(lobfiles, metalinkfile)
 					numChunks := rand.Intn(3) + 1
 					for c := 0; c < numChunks; c++ {
-						chunkfile := getSharedLOBChunkFilename(s, c)
+						chunkfile := getSharedLOBChunkPath(s, c)
 						lobfiles = append(lobfiles, chunkfile)
 						ioutil.WriteFile(chunkfile, []byte("data something"), 0644)
 						// link shared locally
-						linkfile := getLocalLOBChunkFilename(s, c)
+						linkfile := getLocalLOBChunkPath(s, c)
 						CreateHardLink(chunkfile, linkfile)
 						lobfiles = append(lobfiles, linkfile)
 					}
@@ -315,12 +315,12 @@ var _ = Describe("Prune", func() {
 				lobshas = GetListOfRandomSHAsForTest(20)
 				lobshaset = NewStringSetFromSlice(lobshas)
 				for _, s := range lobshas {
-					metafile := getSharedLOBMetaFilename(s)
+					metafile := getSharedLOBMetaPath(s)
 					ioutil.WriteFile(metafile, []byte("meta something"), 0644)
 					sharedlobfiles = append(sharedlobfiles, metafile)
 					numChunks := rand.Intn(3) + 1
 					for c := 0; c < numChunks; c++ {
-						chunkfile := getSharedLOBChunkFilename(s, c)
+						chunkfile := getSharedLOBChunkPath(s, c)
 						sharedlobfiles = append(sharedlobfiles, chunkfile)
 						ioutil.WriteFile(chunkfile, []byte("data something"), 0644)
 					}
