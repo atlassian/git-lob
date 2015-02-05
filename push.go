@@ -152,7 +152,6 @@ func cmdPush() int {
 		LogConsole("Done, run again without --dry-run to perform real push")
 	} else {
 		// Because no newlines in progress reporting
-		LogConsole()
 		if pushCounts.ErrorCount > 0 {
 			LogConsole("Warning: non-fatal errors were encountered, not all data was pushed.")
 		} else if pushCounts.NotFoundCount > 0 {

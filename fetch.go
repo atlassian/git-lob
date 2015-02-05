@@ -111,7 +111,6 @@ func cmdFetch() int {
 		LogConsole("Done, run again without --dry-run to perform real fetch")
 	} else {
 		// Because no newlines in progress reporting
-		LogConsole()
 		// Warn if anything wasn't found or non-fatal errors
 		if fetchCounts.ErrorCount > 0 {
 			LogConsole("Warning: non-fatal errors were encountered, not all data was retrieved.")
