@@ -136,7 +136,7 @@ func ReportProgressToConsole(callbackChan <-chan *ProgressCallbackData, op strin
 						buf.WriteString(" Overall: ")
 					}
 				}
-				if lastProgress.TotalBytes > 0 {
+				if lastProgress.TotalBytes > 0 && avgRate > 0 {
 					overallPercent := int((100 * lastProgress.TotalBytesDone) / lastProgress.TotalBytes)
 					bytesRemaining := lastProgress.TotalBytes - lastProgress.TotalBytesDone
 					secondsRemaining := bytesRemaining / avgRate
