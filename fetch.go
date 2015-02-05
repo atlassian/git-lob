@@ -101,7 +101,7 @@ func cmdFetch() int {
 	}(provider, remoteName, refspecs, optDryRun, optForce, optPrune, callbackChan)
 
 	// Report progress on operation every 0.5s
-	ReportProgressToConsole(callbackChan, "Fetch", time.Millisecond*500)
+	fetchCounts := ReportProgressToConsole(callbackChan, "Fetch", time.Millisecond*500)
 
 	if fetcherr != nil {
 		LogError("git-lob: fetch error(s):\n%v", fetcherr.Error())
@@ -112,7 +112,15 @@ func cmdFetch() int {
 	} else {
 		// Because no newlines in progress reporting
 		LogConsole()
-		LogConsole("Successfully fetched binaries from", remoteName)
+		// Warn if anything wasn't found or non-fatal errors
+		if fetchCounts.ErrorCount > 0 {
+			LogConsole("Warning: non-fatal errors were encountered, not all data was retrieved.")
+		} else if fetchCounts.NotFoundCount > 0 {
+			LogConsole("Warning: some requested data was not available on remote", remoteName)
+		} else {
+			LogConsole("Successfully fetched binaries from", remoteName)
+		}
+
 	}
 
 	return 0

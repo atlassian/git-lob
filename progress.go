@@ -37,6 +37,18 @@ type ProgressCallbackData struct {
 	TotalBytes int64
 }
 
+// Summarised results of some progress action
+type ProgressResults struct {
+	// Items transferred fully
+	TransferredCount int
+	// Items skipped (not needed)
+	SkippedCount int
+	// Items that failed (but did not stop process)
+	ErrorCount int
+	// Items which were not found in source
+	NotFoundCount int
+}
+
 // Callback when progress is made during process
 // return true to abort the (entire) process
 type ProgressCallback func(data *ProgressCallbackData) (abort bool)
@@ -46,7 +58,7 @@ type ProgressCallback func(data *ProgressCallbackData) (abort bool)
 // from a goroutine at an unknown frequency. This function will then print updates every freq seconds
 // of the updates received so far, collapsing duplicates (in the case of very frequent transfer updates)
 // and filling in the blanks with an updated transfer rate in the case of no updates in the time.
-func ReportProgressToConsole(callbackChan <-chan *ProgressCallbackData, op string, freq time.Duration) {
+func ReportProgressToConsole(callbackChan <-chan *ProgressCallbackData, op string, freq time.Duration) *ProgressResults {
 	// Update the console once every half second regardless of how many callbacks
 	// (or zero callbacks, so we can reduce xfer rate)
 	tickChan := time.Tick(freq)
@@ -58,6 +70,7 @@ func ReportProgressToConsole(callbackChan <-chan *ProgressCallbackData, op strin
 	var lastProgress *ProgressCallbackData
 	complete := false
 	lastConsoleLineLen := 0
+	results := &ProgressResults{}
 	for _ = range tickChan {
 		// We run this every 0.5s
 		var finalDownloadProgress *ProgressCallbackData
@@ -80,20 +93,25 @@ func ReportProgressToConsole(callbackChan <-chan *ProgressCallbackData, op strin
 					LogConsole(data.Desc)
 				case ProgressSkip:
 					finalDownloadProgress = nil
+					results.SkippedCount++
 					// Only print if verbose
 					LogConsoleDebugf("Skipped: %v (Up to date)\n", data.Desc)
 				case ProgressNotFound:
 					finalDownloadProgress = nil
+					results.NotFoundCount++
 					LogConsolef("Not found: %v (Continuing)\n", data.Desc)
 				case ProgressTransferBytes:
 					// Print completion in verbose mode
-					if data.ItemBytesDone == data.ItemBytes && GlobalOptions.Verbose {
-						msg := fmt.Sprintf("%ved: %v 100%%", op, data.Desc)
-						LogConsoleOverwrite(msg, lastConsoleLineLen)
-						lastConsoleLineLen = len(msg)
-						// Clear line on completion in verbose mode
-						// Don't do this as \n in string above since we need to clear spaces after
-						LogConsole("")
+					if data.ItemBytesDone == data.ItemBytes {
+						results.TransferredCount++
+						if GlobalOptions.Verbose {
+							msg := fmt.Sprintf("%ved: %v 100%%", op, data.Desc)
+							LogConsoleOverwrite(msg, lastConsoleLineLen)
+							lastConsoleLineLen = len(msg)
+							// Clear line on completion in verbose mode
+							// Don't do this as \n in string above since we need to clear spaces after
+							LogConsole("")
+						}
 						finalDownloadProgress = nil
 						lastProgress = nil
 					} else {
@@ -155,5 +173,6 @@ func ReportProgressToConsole(callbackChan <-chan *ProgressCallbackData, op strin
 		}
 
 	}
+	return results
 
 }

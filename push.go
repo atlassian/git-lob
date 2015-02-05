@@ -142,7 +142,7 @@ func cmdPush() int {
 
 	// Update the console once every half second regardless of how many callbacks
 	// (or zero callbacks, so we can reduce xfer rate)
-	ReportProgressToConsole(callbackChan, "Push", time.Millisecond*500)
+	pushCounts := ReportProgressToConsole(callbackChan, "Push", time.Millisecond*500)
 
 	if pusherr != nil {
 		LogErrorf("git-lob: push error(s):\n%v", pusherr.Error())
@@ -153,6 +153,14 @@ func cmdPush() int {
 	} else {
 		// Because no newlines in progress reporting
 		LogConsole()
+		if pushCounts.ErrorCount > 0 {
+			LogConsole("Warning: non-fatal errors were encountered, not all data was pushed.")
+		} else if pushCounts.NotFoundCount > 0 {
+			LogConsole("Warning: some binaries referred to by commits to push were not found locally")
+			LogConsole("         Push will re-try these next time.")
+		} else {
+			LogConsole("Successfully fetched binaries from", remoteName)
+		}
 		LogConsole("Successfully pushed binaries to", remoteName)
 	}
 
