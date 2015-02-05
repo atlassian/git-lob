@@ -153,14 +153,13 @@ func cmdPush() int {
 	} else {
 		// Because no newlines in progress reporting
 		if pushCounts.ErrorCount > 0 {
-			LogConsole("Warning: non-fatal errors were encountered, not all data was pushed.")
+			LogConsole("WARNING: non-fatal errors were encountered, not all data was pushed.")
 		} else if pushCounts.NotFoundCount > 0 {
-			LogConsole("Warning: some binaries referred to by commits to push were not found locally")
-			LogConsole("         Push will re-try these next time.")
+			LogConsole("WARNING: some binaries referred to by commits to push were not found locally")
+			LogConsole("Push will re-try these next time.")
 		} else {
-			LogConsole("Successfully fetched binaries from", remoteName)
+			LogConsole("Successfully pushed binaries to", remoteName)
 		}
-		LogConsole("Successfully pushed binaries to", remoteName)
 	}
 
 	return 0
@@ -172,6 +171,7 @@ type PushCommitContentDetails struct {
 	Files      []string // list of files we'll need to upload, relative path
 	BaseDir    string   // the base dir of the above files
 	TotalBytes int64    // total bytes for all files in the list
+	Incomplete bool     // File list is not complete because of missing local data, we shouldn't mark this commit as pushed
 }
 
 func PushBasic(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dryRun, force, recheck bool,
@@ -182,6 +182,7 @@ func PushBasic(provider SyncProvider, remoteName string, refspecs []*GitRefSpec,
 	// First, build up details of what it is we need to push so we can estimate %
 	var allCommitsSize int64
 	var commitsToPush []*PushCommitContentDetails
+	var anyIncomplete bool
 	// for use when --force used
 	filesUploaded := NewStringSet()
 	for i, refspec := range refspecs {
@@ -217,14 +218,27 @@ func PushBasic(provider SyncProvider, remoteName string, refspecs []*GitRefSpec,
 		} else {
 			for _, commit := range refcommits {
 				filenames, basedir, totalSize, err := GetLOBFilenamesWithBaseDir(commit.lobSHAs, true)
+				commitIncomplete := false
 				if err != nil {
-					return err
+					if IsNotFoundError(err) {
+						// This means one or more files wasn't found
+						// We still want to push the rest though, we want to be tolerant of partial data
+						// However we can't mark the push as fully successful in cache
+						commitIncomplete = true
+						anyIncomplete = true
+						LogDebug(fmt.Sprintf("Content for commit %v is missing, cannot push", commit.commit[:7]))
+						callback(&ProgressCallbackData{ProgressNotFound, fmt.Sprintf("data for commit %v", commit.commit[:7]),
+							int64(i + 1), int64(len(refspecs)), 0, 0})
+					} else {
+						return err
+					}
 				}
 				commitsToPush = append(commitsToPush, &PushCommitContentDetails{
 					CommitSHA:  commit.commit,
 					Files:      filenames,
 					BaseDir:    basedir,
-					TotalBytes: totalSize})
+					TotalBytes: totalSize,
+					Incomplete: commitIncomplete})
 
 				refCommitsSize += totalSize
 				allCommitsSize += totalSize
@@ -246,6 +260,7 @@ func PushBasic(provider SyncProvider, remoteName string, refspecs []*GitRefSpec,
 			0, 0, 0, 0})
 
 		var bytesFromFilesDoneSoFar int64
+		previousCommitIncomplete := false
 		for _, commit := range commitsToPush {
 			// Upload now
 			var lastFilename string
@@ -254,7 +269,7 @@ func PushBasic(provider SyncProvider, remoteName string, refspecs []*GitRefSpec,
 				if lastFilename != fileInProgress {
 					// New file, always callback
 					if progressType == ProgressSkip || progressType == ProgressNotFound {
-						// 'not found' will cause an error anyway so just pass through
+						// 'not found' will have caused an error earlier anyway so just pass through
 						filesdone++
 						bytesFromFilesDoneSoFar += totalBytes
 						callback(&ProgressCallbackData{progressType, fileInProgress, totalBytes, totalBytes,
@@ -315,16 +330,31 @@ func PushBasic(provider SyncProvider, remoteName string, refspecs []*GitRefSpec,
 				// Stop at commit we can't upload
 				return err
 			}
-			// Otherwise mark commit as pushed
-			err = SuccessfullyPushedBinariesForCommit(remoteName, commit.CommitSHA)
-			if err != nil {
-				// Stop at commit we can't mark
-				return err
+			// Otherwise mark commit as pushed IF complete
+			if commit.Incomplete {
+				previousCommitIncomplete = true
+				// Any subsequent commits will also not be marked as pushed so we always go back to the incomplete commit
+				// until this is resolved. Our commits are in ancestor order.
+				// note that in the case of multiple refs is also means other following commits aren't marked as complete either
+				// this will result in longer than necessary calculations in subsequent pushes, but better to be safe.
+				// Sync provider will avoid any duplicate uploads anyway.
+			}
+			if !commit.Incomplete && !previousCommitIncomplete {
+				err = SuccessfullyPushedBinariesForCommit(remoteName, commit.CommitSHA)
+				if err != nil {
+					// Stop at commit we can't mark, order is important
+					return err
+				}
 			}
 		}
 	}
 
-	LogDebugf("Successfully pushed to %v via %v\n", remoteName, provider.TypeID())
+	if anyIncomplete {
+		LogDebugf("Partial push to %v via %v\n", remoteName, provider.TypeID())
+	} else {
+		LogDebugf("Successfully pushed to %v via %v\n", remoteName, provider.TypeID())
+	}
+
 	return nil
 
 }

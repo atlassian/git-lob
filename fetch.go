@@ -113,9 +113,9 @@ func cmdFetch() int {
 		// Because no newlines in progress reporting
 		// Warn if anything wasn't found or non-fatal errors
 		if fetchCounts.ErrorCount > 0 {
-			LogConsole("Warning: non-fatal errors were encountered, not all data was retrieved.")
+			LogConsole("WARNING: non-fatal errors were encountered, not all data was retrieved.")
 		} else if fetchCounts.NotFoundCount > 0 {
-			LogConsole("Warning: some requested data was not available on remote", remoteName)
+			LogConsole("WARNING: some requested data was not available on remote", remoteName)
 		} else {
 			LogConsole("Successfully fetched binaries from", remoteName)
 		}

@@ -6,16 +6,24 @@ import (
 
 // Custom error type to indicate an integrity error, listing problem SHAs
 type IntegrityError struct {
-	FailedSHAs []string
+	FailedSHAs        []string
+	AdditionalMessage string
 }
 
 func (i *IntegrityError) Error() string {
-	return fmt.Sprintf("One or more SHAs failed integrity: %v", i.FailedSHAs)
+	ret := fmt.Sprintf("One or more SHAs failed integrity: %v", i.FailedSHAs)
+	if i.AdditionalMessage != "" {
+		ret = fmt.Sprintf("%v\n%v", ret, i.AdditionalMessage)
+	}
+	return ret
 }
 
 // Create a new IntegrityError
 func NewIntegrityError(shas []string) error {
-	return &IntegrityError{shas}
+	return &IntegrityError{shas, ""}
+}
+func NewIntegrityErrorWithAdditionalMessage(shas []string, msg string) error {
+	return &IntegrityError{shas, msg}
 }
 
 // Is an error an IntegrityError?

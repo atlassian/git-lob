@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha1"
 	"encoding/json"
 	"errors"
@@ -671,7 +672,7 @@ func GetLOBFilesForSHA(sha, basedir string, check bool, checkHash bool) (files [
 
 				if !recoveredFromShared {
 					msg := fmt.Sprintf("LOB file not found or wrong size: %v expected to be %d bytes", abschunk, expectedSize)
-					return ret, info.Size, errors.New(msg)
+					return ret, info.Size, NewNotFoundError(msg)
 				}
 			}
 
@@ -696,8 +697,7 @@ func GetLOBFilesForSHA(sha, basedir string, check bool, checkHash bool) (files [
 	if check && checkHash {
 		shaRecalcStr := fmt.Sprintf("%x", string(shaRecalc.Sum(nil)))
 		if sha != shaRecalcStr {
-			msg := fmt.Sprintf("Integrity error; content of files for LOB SHA %v actually have SHA %v", sha, shaRecalcStr)
-			return ret, info.Size, errors.New(msg)
+			return ret, info.Size, NewIntegrityError([]string{sha})
 		}
 	}
 
@@ -749,20 +749,47 @@ func GetLOBFilenamesWithBaseDir(shas []string, check bool) (files []string, base
 	// this is because all SHAs are hard linked here even when using shared storage
 	basedir = GetLocalLOBRoot()
 	var ret []string
-	var errorshas []string
+	var integrityerrorshas []string
+	var notfoundshamsgs []string
+	var othererrormsgs []string
+	errorOccurred := false
 	var retSize int64
 	for _, sha := range shas {
 		// Do basic check, not content check
 		shafiles, shasize, shaerr := GetLOBFilesForSHA(sha, basedir, check, false)
 		if shaerr != nil {
-			errorshas = append(errorshas, sha)
+			errorOccurred = true
+			if IsNotFoundError(shaerr) {
+				notfoundshamsgs = append(notfoundshamsgs, shaerr.Error())
+			} else if IsIntegrityError(shaerr) {
+				integrityerrorshas = append(integrityerrorshas, sha)
+			} else {
+				othererrormsgs = append(othererrormsgs, shaerr.Error())
+			}
 		} else {
 			ret = append(ret, shafiles...)
 			retSize += shasize
 		}
 	}
-	if len(errorshas) > 0 {
-		return ret, basedir, retSize, NewIntegrityError(errorshas)
+	if errorOccurred {
+		var reterr error
+		msg := bytes.NewBufferString("")
+		for _, m := range notfoundshamsgs {
+			msg.WriteString(m)
+			msg.WriteString("\n")
+		}
+		for _, m := range othererrormsgs {
+			msg.WriteString(m)
+			msg.WriteString("\n")
+		}
+		if len(integrityerrorshas) > 0 {
+			reterr = NewIntegrityErrorWithAdditionalMessage(integrityerrorshas, msg.String())
+		} else if len(notfoundshamsgs) > 0 {
+			reterr = NewNotFoundError(msg.String())
+		} else {
+			reterr = errors.New(msg.String())
+		}
+		return ret, basedir, retSize, reterr
 	}
 	return ret, basedir, retSize, nil
 }
