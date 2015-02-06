@@ -216,3 +216,45 @@ func GetCommitLOBsToPushForRefSpec(remoteName string, refspec *GitRefSpec, reche
 	return []CommitLOBRef{}, nil
 
 }
+
+// Check with a remote provider for the presence of all data required for a given LOB
+// Return nil if all data is there, NotFoundErr if not
+func CheckRemoteLOBFilesForSHA(sha string, provider SyncProvider, remoteName string) error {
+	// We need LOB info to know size / how many chunks it had
+	var info *LOBInfo
+	info, err := GetLOBInfo(sha)
+	meta := getLOBMetaRelativePath(sha)
+	if err != nil {
+		// We have to actually download meta file in order to figure out what else is needed
+		dlerr := provider.Download(remoteName, []string{meta}, os.TempDir(), false, DummySyncProgressCallback)
+		if dlerr != nil {
+			return dlerr
+		}
+		metafullpath := filepath.Join(os.TempDir(), meta)
+		var parseerr error
+		info, parseerr = parseLOBInfoFromFile(metafullpath)
+		// delete from temp afterwards
+		os.Remove(metafullpath)
+		if parseerr != nil {
+			return fmt.Errorf("Unable to parse metadata from file downloaded from %v for %v: %v", remoteName, sha, parseerr.Error())
+		}
+	} else {
+		// We had the meta locally, so just check the file is on the remote
+		if !provider.FileExists(remoteName, meta) {
+			return NewNotFoundError(fmt.Sprintf("Meta file %v missing from %v", meta, remoteName))
+		}
+	}
+
+	// Now we get the list of chunks & check they are present
+	for i := 0; i < info.NumChunks; i++ {
+		expectedSize := getLOBExpectedChunkSize(info, i)
+		chunk := getLOBChunkRelativePath(sha, i)
+		if !provider.FileExistsAndIsOfSize(remoteName, chunk, expectedSize) {
+			return NewNotFoundError(fmt.Sprintf("Chunk file %v missing from %v", chunk, remoteName))
+		}
+	}
+
+	// All OK
+	return nil
+
+}

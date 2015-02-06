@@ -198,13 +198,12 @@ func getSharedLOBChunkPath(sha string, chunkIdx int) string {
 // Retrieve information about an existing stored LOB
 func GetLOBInfo(sha string) (*LOBInfo, error) {
 	meta := getLocalLOBMetaPath(sha)
-	infobytes, err := ioutil.ReadFile(meta)
-
+	_, err := os.Stat(meta)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Try to recover from shared
 			if recoverLocalLOBFilesFromSharedStore(sha) {
-				infobytes, err = ioutil.ReadFile(meta)
+				_, err := os.Stat(meta)
 				if err != nil {
 					// Dang
 					return nil, err
@@ -217,12 +216,23 @@ func GetLOBInfo(sha string) (*LOBInfo, error) {
 			return nil, err
 		}
 	}
+
+	return parseLOBInfoFromFile(meta)
+}
+
+// Parse a LOB meta file
+func parseLOBInfoFromFile(file string) (*LOBInfo, error) {
+	infobytes, err := ioutil.ReadFile(file)
+
+	if err != nil {
+		return nil, err
+	}
 	// Read JSON metadata
 	info := &LOBInfo{}
 	err = json.Unmarshal(infobytes, info)
 	if err != nil {
 		// Fatal, corruption
-		return nil, errors.New(fmt.Sprintf("Unable to interpret meta file %v: %v", meta, err))
+		return nil, errors.New(fmt.Sprintf("Unable to interpret meta file %v: %v", file, err))
 	}
 
 	return info, nil
@@ -740,7 +750,9 @@ func GetMissingLOBs(lobshas []string, checkHash bool) []string {
 // This finds this machine's storage of the SHAs in question, including the metadata file and
 // all of the chunks. If check = true (recommended) then the integrity of the files
 // is checked and only if all the files for a SHA are valid are they included in the
-// returned list. In this case the error return is an IntegrityError and includes the bad SHAs
+// returned list.
+// If files are just missing, they are returned as a NotFoundError
+// If files are corrupt, an IntegrityError is returned instead
 // The filenames returned are relative to basedir, the root folder for all of the files
 // Note that 'check' only checks the surface level integrity (all the files are there & correct size). If you
 // want to do a deep integrity check (ensure all bytes are valid), use CheckLOBFilesForSHA with checkHash=true
@@ -750,7 +762,7 @@ func GetLOBFilenamesWithBaseDir(shas []string, check bool) (files []string, base
 	basedir = GetLocalLOBRoot()
 	var ret []string
 	var integrityerrorshas []string
-	var notfoundshamsgs []string
+	var notfoundshas []string
 	var othererrormsgs []string
 	errorOccurred := false
 	var retSize int64
@@ -760,7 +772,7 @@ func GetLOBFilenamesWithBaseDir(shas []string, check bool) (files []string, base
 		if shaerr != nil {
 			errorOccurred = true
 			if IsNotFoundError(shaerr) {
-				notfoundshamsgs = append(notfoundshamsgs, shaerr.Error())
+				notfoundshas = append(notfoundshas, sha)
 			} else if IsIntegrityError(shaerr) {
 				integrityerrorshas = append(integrityerrorshas, sha)
 			} else {
@@ -774,9 +786,9 @@ func GetLOBFilenamesWithBaseDir(shas []string, check bool) (files []string, base
 	if errorOccurred {
 		var reterr error
 		msg := bytes.NewBufferString("")
-		for _, m := range notfoundshamsgs {
-			msg.WriteString(m)
-			msg.WriteString("\n")
+		for _, sha := range notfoundshas {
+			msg.WriteString(sha)
+			msg.WriteString(" missing\n")
 		}
 		for _, m := range othererrormsgs {
 			msg.WriteString(m)
@@ -784,8 +796,8 @@ func GetLOBFilenamesWithBaseDir(shas []string, check bool) (files []string, base
 		}
 		if len(integrityerrorshas) > 0 {
 			reterr = NewIntegrityErrorWithAdditionalMessage(integrityerrorshas, msg.String())
-		} else if len(notfoundshamsgs) > 0 {
-			reterr = NewNotFoundError(msg.String())
+		} else if len(notfoundshas) > 0 {
+			reterr = NewNotFoundForSHAsError(shas)
 		} else {
 			reterr = errors.New(msg.String())
 		}

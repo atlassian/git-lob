@@ -220,19 +220,49 @@ func PushBasic(provider SyncProvider, remoteName string, refspecs []*GitRefSpec,
 				filenames, basedir, totalSize, err := GetLOBFilenamesWithBaseDir(commit.lobSHAs, true)
 				commitIncomplete := false
 				if err != nil {
-					if IsNotFoundError(err) {
-						// This means one or more files wasn't found
-						// We still want to push the rest though, we want to be tolerant of partial data
-						// However we can't mark the push as fully successful in cache
-						commitIncomplete = true
-						anyIncomplete = true
-						LogDebug(fmt.Sprintf("Content for commit %v is missing, cannot push", commit.commit[:7]))
-						callback(&ProgressCallbackData{ProgressNotFound, fmt.Sprintf("data for commit %v", commit.commit[:7]),
-							int64(i + 1), int64(len(refspecs)), 0, 0})
-					} else {
+					var problemSHAs []string
+					switch errSpec := err.(type) {
+					case *NotFoundForSHAsError:
+						problemSHAs = errSpec.SHAsNotFound
+					case *IntegrityError:
+						return err
+					default:
 						return err
 					}
+					// If we got here it means one or more sets of files for SHAs were not available or were bad locally
+					// We still want to push the rest though, we want to be tolerant of partial data
+
+					// This MAY be ok to still mark as pushed - the commits may have come from someone else,
+					// and may just be outside of our fetch range. If all the missing ones are already present
+					// on the remote then we're OK
+
+					// Check the remote for the presence of missing SHA data
+					remoteHasOurMissingSHAs := true
+					for _, sha := range problemSHAs {
+						remoteerr := CheckRemoteLOBFilesForSHA(sha, provider, remoteName)
+						if remoteerr != nil {
+							// Damn, missing
+							LogDebug(fmt.Sprintf("Commit %v locally missing %v, not on remote: %v", commit.commit[:7], sha, remoteerr.Error()))
+							remoteHasOurMissingSHAs = false
+							break
+						}
+					}
+
+					if !remoteHasOurMissingSHAs {
+						// Genuinely incomplete data in this commit that isn't present on remote
+						// We can't mark this (or following) commits as pushed, but we still want to
+						// push everything we can
+						commitIncomplete = true
+						anyIncomplete = true
+						LogDebug(fmt.Sprintf("Some content for commit %v is missing & not on remote already", commit.commit[:7]))
+						callback(&ProgressCallbackData{ProgressNotFound, fmt.Sprintf("data for commit %v", commit.commit[:7]),
+							int64(i + 1), int64(len(refspecs)), 0, 0})
+					}
+
+					// If we DID manage to find the missing data on the remote though, we treat this as
+					// being able to push everything
 				}
+
 				commitsToPush = append(commitsToPush, &PushCommitContentDetails{
 					CommitSHA:  commit.commit,
 					Files:      filenames,
@@ -243,7 +273,7 @@ func PushBasic(provider SyncProvider, remoteName string, refspecs []*GitRefSpec,
 				refCommitsSize += totalSize
 				allCommitsSize += totalSize
 			}
-			callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf(" * %v: %d commits with %v to push",
+			callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf(" * %v: %d commits with %v to push (if not already on remote)",
 				refspec, len(refcommits), FormatSize(refCommitsSize)), int64(i + 1), int64(len(refspecs)), 0, 0})
 		}
 
@@ -256,7 +286,7 @@ func PushBasic(provider SyncProvider, remoteName string, refspecs []*GitRefSpec,
 	if !dryRun && len(commitsToPush) > 0 {
 		filesdone := 0
 		callback(&ProgressCallbackData{ProgressCalculate,
-			fmt.Sprintf("Uploading %v to %v via %v", FormatSize(allCommitsSize), remoteName, provider.TypeID()),
+			fmt.Sprintf("Uploading up to %v to %v via %v", FormatSize(allCommitsSize), remoteName, provider.TypeID()),
 			0, 0, 0, 0})
 
 		var bytesFromFilesDoneSoFar int64
@@ -324,7 +354,11 @@ func PushBasic(provider SyncProvider, remoteName string, refspecs []*GitRefSpec,
 					}
 				}
 			} else {
-				err = provider.Upload(remoteName, commit.Files, commit.BaseDir, force, localcallback)
+				// It IS possible to have a commit here with no files to upload. E.g. missing data locally (see above)
+				// which was present on remote. We still include it in the commit list for completeness
+				if len(commit.Files) > 0 {
+					err = provider.Upload(remoteName, commit.Files, commit.BaseDir, force, localcallback)
+				}
 			}
 			if err != nil {
 				// Stop at commit we can't upload

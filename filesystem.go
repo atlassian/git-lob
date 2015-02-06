@@ -172,14 +172,10 @@ func (*FileSystemSyncProvider) uploadSingleFile(remoteName, filename, fromDir, t
 func (self *FileSystemSyncProvider) Upload(remoteName string, filenames []string, fromDir string,
 	force bool, callback SyncProgressCallback) error {
 
-	// Check config
-	destpath, ok := GlobalOptions.GitConfig[fmt.Sprintf("remote.%v.git-lob-path", remoteName)]
-	if !ok {
-		return fmt.Errorf("Missing git-lob-path config parameter for remote '%v'", remoteName)
+	destpath, err := self.getRemoteRootPath(remoteName)
+	if err != nil {
+		return err
 	}
-
-	// clean up the path
-	destpath = filepath.Clean(destpath)
 
 	// Check dir exists & also extract permissions to use
 	destpathfi, err := os.Stat(destpath)
@@ -316,14 +312,11 @@ func (*FileSystemSyncProvider) downloadSingleFile(remoteName, filename, fromDir,
 
 func (self *FileSystemSyncProvider) Download(remoteName string, filenames []string, toDir string,
 	force bool, callback SyncProgressCallback) error {
-	// Check config
-	srcpath, ok := GlobalOptions.GitConfig[fmt.Sprintf("remote.%v.git-lob-path", remoteName)]
-	if !ok {
-		return fmt.Errorf("Missing git-lob-path config parameter for remote '%v'", remoteName)
-	}
 
-	// clean up the path
-	srcpath = filepath.Clean(srcpath)
+	srcpath, err := self.getRemoteRootPath(remoteName)
+	if err != nil {
+		return err
+	}
 
 	// Check dir exists & also extract permissions to use
 	srcpathfi, err := os.Stat(srcpath)
@@ -346,4 +339,39 @@ func (self *FileSystemSyncProvider) Download(remoteName string, filenames []stri
 	}
 
 	return nil
+}
+
+func (*FileSystemSyncProvider) getRemoteRootPath(remoteName string) (string, error) {
+	// Check config
+	path, ok := GlobalOptions.GitConfig[fmt.Sprintf("remote.%v.git-lob-path", remoteName)]
+	if !ok {
+		return "", fmt.Errorf("Missing git-lob-path config parameter for remote '%v'", remoteName)
+	}
+
+	// clean up the path
+	path = filepath.Clean(path)
+
+	return path, nil
+}
+
+func (self *FileSystemSyncProvider) FileExists(remoteName, filename string) bool {
+	root, err := self.getRemoteRootPath(remoteName)
+	if err != nil {
+		return false
+	}
+	fullpath := filepath.Join(root, filename)
+	_, err = os.Stat(fullpath)
+
+	return err == nil
+}
+func (self *FileSystemSyncProvider) FileExistsAndIsOfSize(remoteName, filename string, sz int64) bool {
+	root, err := self.getRemoteRootPath(remoteName)
+	if err != nil {
+		return false
+	}
+	fullpath := filepath.Join(root, filename)
+	stat, err := os.Stat(fullpath)
+
+	return err == nil && stat.Size() == sz
+
 }

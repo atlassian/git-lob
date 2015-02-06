@@ -51,10 +51,27 @@ func NewNotFoundError(msg string) error {
 	return &NotFoundError{msg}
 }
 
+// Custom error type to indicate a 'not found' condition for a list of SHAs
+// This type of error may be expected or tolerable so identify separately
+type NotFoundForSHAsError struct {
+	SHAsNotFound []string
+}
+
+func (i *NotFoundForSHAsError) Error() string {
+	return fmt.Sprintf("Data missing for SHAs: %v", i.SHAsNotFound)
+}
+
+// Create a new NotFound error
+func NewNotFoundForSHAsError(shas []string) error {
+	return &NotFoundForSHAsError{shas}
+}
+
 // Is an error a NotFoundError?
 func IsNotFoundError(err error) bool {
 	switch err.(type) {
 	case *NotFoundError:
+		return true
+	case *NotFoundForSHAsError:
 		return true
 	default:
 		return false

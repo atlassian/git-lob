@@ -39,6 +39,12 @@ type SyncProvider interface {
 	// Files not found should not cause an error, since we do not query presence beforehand. Instead,
 	// the callback should be called with ProgressNotFound and proceed to the next one.
 	Download(remoteName string, filenames []string, toDir string, force bool, callback SyncProgressCallback) error
+	// Validate that the passed in file exists on the named remote
+	// filename is relative to the root of the store
+	FileExists(remoteName, filename string) bool
+	// Validate that the passed in file exists on the named remote and is of the correct size
+	// filename is relative to the root of the store
+	FileExistsAndIsOfSize(remoteName, filename string, sz int64) bool
 }
 
 // Callback when progress is made uploading / downloading
@@ -58,6 +64,10 @@ type SmartSyncProvider interface {
 
 var (
 	syncProviders map[string]SyncProvider = make(map[string]SyncProvider, 0)
+	// A simple helper callback you can use to do nothing
+	DummySyncProgressCallback = func(fileInProgress string, progressType ProgressCallbackType, bytesDone, totalBytes int64) (abort bool) {
+		return false
+	}
 )
 
 // Registers an instance of a SyncProvider for later use
