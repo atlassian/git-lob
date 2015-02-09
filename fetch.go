@@ -200,6 +200,10 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 		}
 	}
 
+	// Before we actually fetch anything, check if we can bulk mark things as pushed
+	// Common case - first fetch after clone, user hasn't done any local work
+	InitSuccessfullyPushedCacheIfAppropriate()
+
 	if len(lobsNeeded) == 0 {
 		callback(&ProgressCallbackData{ProgressCalculate, "No binaries to download.",
 			int64(len(refspecs)), int64(len(refspecs)), 0, 0})

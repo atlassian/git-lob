@@ -819,3 +819,20 @@ func getLOBExpectedChunkSize(info *LOBInfo, chunkIdx int) int64 {
 	}
 
 }
+
+// returns whether the local store has any binaries in it
+func IsLocalLOBStoreEmpty() bool {
+	root := GetLocalLOBRoot()
+	rootf, err := os.Open(root)
+	if err != nil {
+		return true
+	}
+	defer rootf.Close()
+	// Max 3 entries
+	dirs, err := rootf.Readdirnames(3)
+	if err != nil {
+		return true
+	}
+	// Will be no entries if this is new
+	return len(dirs) == 0
+}

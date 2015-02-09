@@ -72,7 +72,7 @@ func recordRemoteBinariesUpToDateAtCommit(remoteName, commitSHA string) (already
 	if err != nil {
 		// File did not exist, just write single line
 		// For consistency in sizing, always include \n
-		LogDebugf("Created new remote state cache file %v to mark %v as pushed", filename, commitSHA)
+		LogDebugf("Created new remote state cache file %v to mark %v as pushed\n", filename, commitSHA)
 		return false, ioutil.WriteFile(filename, []byte(commitSHA+"\n"), 0644)
 	} else {
 		defer f.Close()
@@ -112,6 +112,44 @@ func recordRemoteBinariesUpToDateAtCommit(remoteName, commitSHA string) (already
 		// Was already recorded
 		return true, nil
 	}
+}
+
+// Initialise the 'pushed' markers for all recent commits, if we can be sure we can do it
+// Most common case: just after clone
+func InitSuccessfullyPushedCacheIfAppropriate() {
+	// Things get complex when you can have a combination of binaries which need fetching and
+	// which might need pushing. Our push cache errs on the side of caution since binaries may
+	// have been added from multiple sources so we check we pushed (or don't need to) before
+	// marking a commit as pushed.
+	// Fetching doesn't generally mark all commits as pushed, because you can easily have the
+	// case where fetch only goes back a certain distance in time, but there are still commits
+	// further back in history which you haven't pushed the binaries for yet.
+	// However, after first clone you don't want to have to check the entire history. A really
+	// easy shortcut is that if there are no local binaries, then there can't be anything to
+	// push. This is the case on first fetch after a clone, so this is where we call it for now
+	// We can mark all known remotes as pushed.
+
+	// Adding a new remote (e.g. a fork) will however cause everything to be checked again.
+	if IsLocalLOBStoreEmpty() {
+		// No binaries locally so everything can be marked as pushed
+		remotes, err := GetGitRemotes()
+		if err != nil {
+			LogErrorf("Unable to get remotes to mark as pushed %v\n", err.Error())
+			return
+		}
+		// Mark as pushed at all refs (local branches, remote branches, tags)
+		refs, err := GetGitAllRefs()
+		if err != nil {
+			LogErrorf("Unable to get all refs from git %v\n", err.Error())
+			return
+		}
+		for _, ref := range refs {
+			for _, remote := range remotes {
+				SuccessfullyPushedBinariesForCommit(remote, ref.CommitSHA)
+			}
+		}
+	}
+
 }
 
 // Say that we've successfully pushed binaries for a remote at a commit (and all ancestors)
