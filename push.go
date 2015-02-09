@@ -258,7 +258,6 @@ func PushBasic(provider SyncProvider, remoteName string, refspecs []*GitRefSpec,
 						callback(&ProgressCallbackData{ProgressNotFound, fmt.Sprintf("data for commit %v", commit.commit[:7]),
 							int64(i + 1), int64(len(refspecs)), 0, 0})
 					}
-
 					// If we DID manage to find the missing data on the remote though, we treat this as
 					// being able to push everything
 				}
@@ -277,11 +276,10 @@ func PushBasic(provider SyncProvider, remoteName string, refspecs []*GitRefSpec,
 				callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf(" * %v: %d commits with %v to push (if not already on remote)",
 					refspec, len(refcommits), FormatSize(refCommitsSize)), int64(i + 1), int64(len(refspecs)), 0, 0})
 			} else {
-				callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf(" * %v: Nothing to push", refspec),
+				callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf(" * %v: Nothing to push, remote is up to date", refspec),
 					int64(i + 1), int64(len(refspecs)), 0, 0})
 			}
 		}
-
 		if GlobalOptions.Verbose {
 			callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf("Finished calculating data to push for %v", refspec),
 				int64(i + 1), int64(len(refspecs)), 0, 0})
