@@ -138,6 +138,24 @@ func GetGitDefaultRemoteForPull() string {
 	return "origin"
 }
 
+// Get a list of git remotes
+func GetGitRemotes() ([]string, error) {
+	cmd := exec.Command("git", "remote")
+	outp, err := cmd.StdoutPipe()
+	if err != nil {
+		return []string{}, fmt.Errorf("Error calling 'git remote': %v", err.Error())
+	}
+	scanner := bufio.NewScanner(outp)
+	cmd.Start()
+	var ret []string
+	for scanner.Scan() {
+		ret = append(ret, scanner.Text())
+	}
+	cmd.Wait()
+	return ret, nil
+
+}
+
 var cachedCurrentBranch string
 
 // Get the name of the current branch

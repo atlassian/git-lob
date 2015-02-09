@@ -239,6 +239,8 @@ var _ = Describe("Git", func() {
 			remotePathUrl := strings.Replace(remotePath, "\\", "/", -1)
 			remotePathUrl = "file://" + remotePathUrl
 			exec.Command("git", "remote", "add", "origin", remotePathUrl).Run()
+			exec.Command("git", "remote", "add", "fork1", remotePathUrl).Run()
+			exec.Command("git", "remote", "add", "fork2", remotePathUrl).Run()
 		})
 		AfterEach(func() {
 			os.Chdir(oldwd)
@@ -312,6 +314,12 @@ var _ = Describe("Git", func() {
 			Expect(remote).To(Equal("origin"), "Remote should be origin in tracking when behind")
 			Expect(branch).To(Equal("master"), "Master should track master when behind")
 
+		})
+
+		It("Lists remotes", func() {
+			remotes, err := GetGitRemotes()
+			Expect(err).To(BeNil(), "Shouldn't be error listing remotes")
+			Expect(remotes).To(ConsistOf([]string{"origin", "fork1", "fork2"}), "Remote list should be correct")
 		})
 
 	})
