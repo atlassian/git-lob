@@ -12,8 +12,7 @@ import (
 	"time"
 )
 
-// A git reference or reference range
-
+// Git specification of a commit or range of commits (a reference or reference range)
 type GitRefSpec struct {
 	// First ref
 	Ref1 string
@@ -35,6 +34,23 @@ type GitCommitSummary struct {
 	CommitterName  string
 	CommitterEmail string
 	Subject        string
+}
+
+const (
+	GitRefTypeLocalBranch  = iota
+	GitRefTypeRemoteBranch = iota
+	GitRefTypeLocalTag     = iota
+	GitRefTypeRemoteTag    = iota
+	GitRefTypeHEAD         = iota // current checkout
+)
+
+type GitRefType int
+
+// A git reference (branch, tag etc)
+type GitRef struct {
+	Name      string
+	Type      GitRefType
+	CommitSHA string
 }
 
 // Returns whether a GitRefSpec is a range or not
@@ -900,4 +916,82 @@ func GitRefreshIndexForFiles(files []string) error {
 
 	return retErr
 
+}
+
+// get all refs in the repo (branches, tags, stashes)
+func GetGitAllRefs() ([]*GitRef, error) {
+	cmd := exec.Command("git", "show-ref", "--head", "--dereference")
+	outp, err := cmd.StdoutPipe()
+	if err != nil {
+		return []*GitRef{}, fmt.Errorf("Failure in git-show-ref: %v", err.Error())
+	}
+	scanner := bufio.NewScanner(outp)
+	var ret []*GitRef
+	cmd.Start()
+
+	// Output is like this:
+	// <sha> HEAD
+	// <sha> refs/heads/<branch>
+	// <sha> refs/tags/<tag>
+	// <sha> refs/tags/<tag>^{}     <- dereferenced tag, should use this one instead of original
+	// <sha> refs/remotes/<remotebranch>
+	// <sha> refs/stash (skipped)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		f := strings.Fields(line)
+		if len(f) == 2 {
+			sha := f[0]
+			fullref := f[1]
+			var name string
+			var t GitRefType
+			const localPrefix = "refs/heads/"
+			const remotePrefix = "refs/remotes/"
+			const remoteTagPrefix = "refs/remotes/tags/"
+			const localTagPrefix = "refs/tags/"
+
+			if fullref == "HEAD" {
+				name = fullref
+				t = GitRefTypeHEAD
+			} else if strings.HasPrefix(fullref, localPrefix) {
+				name = fullref[len(localPrefix):]
+				t = GitRefTypeLocalBranch
+			} else if strings.HasPrefix(fullref, remotePrefix) {
+				name = fullref[len(remotePrefix):]
+				t = GitRefTypeRemoteBranch
+			} else if strings.HasPrefix(fullref, remoteTagPrefix) {
+				name = fullref[len(remoteTagPrefix):]
+				t = GitRefTypeRemoteTag
+			} else if strings.HasPrefix(fullref, localTagPrefix) {
+				name = fullref[len(localTagPrefix):]
+				t = GitRefTypeLocalTag
+			} else {
+				// skip all others (including Stash)
+				continue
+			}
+
+			// Special case dereferenced tags. Non-lightweight tags refer to the tag
+			// object, not the commit, but --dereference shows you the actual commit
+			// with an extra ref after the tag object, called <tagname>^{}
+			// This must take precedence to report the commit it applies to
+			if t == GitRefTypeLocalTag && strings.HasSuffix(name, "^{}") {
+				name = name[:len(name)-3]
+				// now overwrite the previous tag object entry (they always come before)
+				for _, ref := range ret {
+					if ref.Name == name {
+						ref.CommitSHA = sha
+					}
+				}
+			} else {
+				// Otherwise, new ref
+				ret = append(ret, &GitRef{Name: name, Type: t, CommitSHA: sha})
+			}
+
+		}
+
+	}
+	cmd.Wait()
+
+	return ret, nil
 }

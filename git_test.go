@@ -241,23 +241,18 @@ var _ = Describe("Git", func() {
 			exec.Command("git", "remote", "add", "origin", remotePathUrl).Run()
 			exec.Command("git", "remote", "add", "fork1", remotePathUrl).Run()
 			exec.Command("git", "remote", "add", "fork2", remotePathUrl).Run()
-		})
-		AfterEach(func() {
-			os.Chdir(oldwd)
-			os.RemoveAll(root)
-			os.RemoveAll(remotePath)
-		})
 
-		It("Reports remote branches correctly", func() {
-
-			// Create a bunch of local branches
 			exec.Command("git", "commit", "--allow-empty", "-m", "First commit").Run()
 			CreateBranchForTest("feature/ABC")
 			CheckoutForTest("feature/ABC")
 			exec.Command("git", "commit", "--allow-empty", "-m", "Second commit").Run()
+			// annotated tag
+			exec.Command("git", "tag", "-a", "-m", "Annotated tag", "Tag_Annotated").Run()
 			CreateBranchForTest("feature/DEF")
 			CheckoutForTest("feature/DEF")
 			exec.Command("git", "commit", "--allow-empty", "-m", "3rd commit").Run()
+			// lightweight tag
+			exec.Command("git", "tag", "Tag_Lightweight").Run()
 			CheckoutForTest("master")
 			CreateBranchForTest("release/1.1")
 			CreateBranchForTest("release/1.2")
@@ -268,6 +263,17 @@ var _ = Describe("Git", func() {
 			exec.Command("git", "push", "--set-upstream", "origin", "feature/DEF:feature/DEFchangedonremote").Run()
 			// Push one that we DON'T set tracking branch for
 			exec.Command("git", "push", "origin", "something").Run()
+
+		})
+		AfterEach(func() {
+			os.Chdir(oldwd)
+			os.RemoveAll(root)
+			os.RemoveAll(remotePath)
+		})
+
+		It("Reports remote branches correctly", func() {
+
+			// Create a bunch of local branches
 			// List remote branches
 			remoteBranches, err := GetGitRemoteBranches("origin")
 			Expect(err).To(BeNil(), "Should not error listing remote branches")
@@ -320,6 +326,42 @@ var _ = Describe("Git", func() {
 			remotes, err := GetGitRemotes()
 			Expect(err).To(BeNil(), "Shouldn't be error listing remotes")
 			Expect(remotes).To(ConsistOf([]string{"origin", "fork1", "fork2"}), "Remote list should be correct")
+		})
+
+		It("Lists all refs correctly", func() {
+			refs, err := GetGitAllRefs()
+			Expect(err).To(BeNil(), "Shouldn't be an error getting all refs")
+			expectedrefs := map[string]GitRefType{
+				"HEAD":                              GitRefTypeHEAD,
+				"master":                            GitRefTypeLocalBranch,
+				"feature/ABC":                       GitRefTypeLocalBranch,
+				"feature/DEF":                       GitRefTypeLocalBranch,
+				"release/1.1":                       GitRefTypeLocalBranch,
+				"release/1.2":                       GitRefTypeLocalBranch,
+				"something":                         GitRefTypeLocalBranch,
+				"origin/master":                     GitRefTypeRemoteBranch,
+				"origin/feature/DEFchangedonremote": GitRefTypeRemoteBranch,
+				"origin/feature/ABC":                GitRefTypeRemoteBranch,
+				"origin/something":                  GitRefTypeRemoteBranch,
+				"Tag_Annotated":                     GitRefTypeLocalTag,
+				"Tag_Lightweight":                   GitRefTypeLocalTag,
+			}
+			Expect(refs).To(HaveLen(len(expectedrefs)), "Ref list should be correct length")
+			for _, ref := range refs {
+				// Check types & SHAs
+				Expect(expectedrefs).To(HaveKey(ref.Name), "Ref should be in expected list")
+				Expect(ref.Type).To(BeEquivalentTo(expectedrefs[ref.Name]), "Ref type should be correct")
+				var expectedsha string
+				if ref.Name == "Tag_Annotated" {
+					// need to dereference
+					b, _ := exec.Command("git", "rev-parse", fmt.Sprintf("%v^{commit}", ref.Name)).CombinedOutput()
+					expectedsha = strings.TrimSpace(string(b))
+				} else {
+					expectedsha, _ = GitRefToFullSHA(ref.Name)
+				}
+				Expect(ref.CommitSHA).To(Equal(expectedsha), "Commit SHA should be correct")
+			}
+
 		})
 
 	})
