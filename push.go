@@ -273,8 +273,13 @@ func PushBasic(provider SyncProvider, remoteName string, refspecs []*GitRefSpec,
 				refCommitsSize += totalSize
 				allCommitsSize += totalSize
 			}
-			callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf(" * %v: %d commits with %v to push (if not already on remote)",
-				refspec, len(refcommits), FormatSize(refCommitsSize)), int64(i + 1), int64(len(refspecs)), 0, 0})
+			if refCommitsSize > 0 {
+				callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf(" * %v: %d commits with %v to push (if not already on remote)",
+					refspec, len(refcommits), FormatSize(refCommitsSize)), int64(i + 1), int64(len(refspecs)), 0, 0})
+			} else {
+				callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf(" * %v: Nothing to push", refspec),
+					int64(i + 1), int64(len(refspecs)), 0, 0})
+			}
 		}
 
 		if GlobalOptions.Verbose {
@@ -285,9 +290,13 @@ func PushBasic(provider SyncProvider, remoteName string, refspecs []*GitRefSpec,
 
 	if !dryRun && len(commitsToPush) > 0 {
 		filesdone := 0
-		callback(&ProgressCallbackData{ProgressCalculate,
-			fmt.Sprintf("Uploading up to %v to %v via %v", FormatSize(allCommitsSize), remoteName, provider.TypeID()),
-			0, 0, 0, 0})
+
+		// Even if allCommitsSize == 0 we still skim through marking them as pushed (must have been that data was on remote)
+		if allCommitsSize > 0 {
+			callback(&ProgressCallbackData{ProgressCalculate,
+				fmt.Sprintf("Uploading up to %v to %v via %v", FormatSize(allCommitsSize), remoteName, provider.TypeID()),
+				0, 0, 0, 0})
+		}
 
 		var bytesFromFilesDoneSoFar int64
 		previousCommitIncomplete := false
