@@ -173,6 +173,11 @@ func ReportProgressToConsole(callbackChan <-chan *ProgressCallbackData, op strin
 		}
 
 	}
+	if !GlobalOptions.Verbose && lastConsoleLineLen > 0 {
+		// Write final line with newline
+		LogConsoleOverwrite(fmt.Sprintf("%ving: 100%%", op), lastConsoleLineLen)
+		LogConsole("")
+	}
 	return results
 
 }
