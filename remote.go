@@ -201,7 +201,9 @@ func HasPushedBinaryState(remoteName string) bool {
 // Find the most recent ancestor of commitSHA (or itself) at which we believe we've
 // already pushed all binaries. Returns a blanks string if none have been pushed.
 func FindLatestAncestorWhereBinariesPushed(remoteName, commitSHA string) (string, error) {
-
+	if len(commitSHA) != 40 {
+		return "", errors.New("Invalid parameter, commitSHA must be full SHA not alias/ref")
+	}
 	// Check self first (avoid git log call if up to date)
 	if !ShouldPushBinariesForCommit(remoteName, commitSHA) {
 		return commitSHA, nil
