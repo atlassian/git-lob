@@ -342,7 +342,7 @@ func CreateManyCommitsForTest(filespercommit [][]string, commitOffset int, sizeF
 		// Commit & tag
 		err := exec.Command("git", "commit", "-m", fmt.Sprintf("Commit %d", ci+commitOffset)).Run()
 		Expect(err).To(BeNil(), fmt.Sprintf("Shouldn't fail commit %d", ci+commitOffset))
-		err = exec.Command("git", "tag", "-a", "-m", "Nothing", fmt.Sprintf("Tag%d", ci+commitOffset)).Run()
+		err = exec.Command("git", "tag", fmt.Sprintf("Tag%d", ci+commitOffset)).Run()
 		Expect(err).To(BeNil(), fmt.Sprintf("Shouldn't fail tagging %d", ci+commitOffset))
 
 		ret = append(ret, shas)
