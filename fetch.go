@@ -359,19 +359,18 @@ func fetchContentFiles(files []string, filesTotalBytes int64, provider SyncProvi
 	contentcallback := func(fileInProgress string, progressType ProgressCallbackType, bytesDone, totalBytes int64) (abort bool) {
 
 		var ret bool
+		if lastFilename != fileInProgress && lastFilename != "" {
+			// we obviously never got a 100% call for previous file
+			bytesFromFilesDoneSoFar += lastFileBytes
+			ret = callback(&ProgressCallbackData{ProgressTransferBytes, lastFilename, lastFileBytes, lastFileBytes,
+				bytesFromFilesDoneSoFar, filesTotalBytes})
+			lastFilename = ""
+		}
 		if progressType == ProgressSkip || progressType == ProgressNotFound {
 			bytesFromFilesDoneSoFar += totalBytes
 			ret = callback(&ProgressCallbackData{progressType, fileInProgress, totalBytes, totalBytes,
 				bytesFromFilesDoneSoFar, filesTotalBytes})
 		} else {
-
-			if lastFilename != fileInProgress && lastFilename != "" {
-				// we obviously never got a 100% call for previous file
-				bytesFromFilesDoneSoFar += lastFileBytes
-				ret = callback(&ProgressCallbackData{ProgressTransferBytes, lastFilename, lastFileBytes, lastFileBytes,
-					bytesFromFilesDoneSoFar, filesTotalBytes})
-				lastFilename = ""
-			}
 
 			if bytesDone == totalBytes {
 				// finished
@@ -394,6 +393,12 @@ func fetchContentFiles(files []string, filesTotalBytes int64, provider SyncProvi
 	}
 	destDir := getFetchDestination()
 	err := provider.Download(remoteName, files, destDir, force, contentcallback)
+	if err == nil && lastFilename != "" {
+		// we obviously never got a 100% progress call for final file
+		callback(&ProgressCallbackData{ProgressTransferBytes, lastFilename, lastFileBytes, lastFileBytes,
+			filesTotalBytes, filesTotalBytes})
+		lastFilename = ""
+	}
 	// Also if shared store, link meta into local
 	// Link any we successfully downloaded
 	if isUsingSharedStorage() {

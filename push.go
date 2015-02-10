@@ -305,6 +305,14 @@ func PushBasic(provider SyncProvider, remoteName string, refspecs []*GitRefSpec,
 			localcallback := func(fileInProgress string, progressType ProgressCallbackType, bytesDone, totalBytes int64) (abort bool) {
 				if lastFilename != fileInProgress {
 					// New file, always callback
+					if lastFilename != "" {
+						// we obviously never got a 100% call for previous file
+						filesdone++
+						bytesFromFilesDoneSoFar += lastFileBytes
+						callback(&ProgressCallbackData{ProgressTransferBytes, lastFilename, lastFileBytes, lastFileBytes,
+							bytesFromFilesDoneSoFar, allCommitsSize})
+						lastFilename = ""
+					}
 					if progressType == ProgressSkip || progressType == ProgressNotFound {
 						// 'not found' will have caused an error earlier anyway so just pass through
 						filesdone++
@@ -312,19 +320,12 @@ func PushBasic(provider SyncProvider, remoteName string, refspecs []*GitRefSpec,
 						callback(&ProgressCallbackData{progressType, fileInProgress, totalBytes, totalBytes,
 							bytesFromFilesDoneSoFar, allCommitsSize})
 					} else {
-						if lastFilename != "" {
-							// we obviously never got a 100% call for previous file
-							filesdone++
-							bytesFromFilesDoneSoFar += lastFileBytes
-							callback(&ProgressCallbackData{ProgressTransferBytes, lastFilename, lastFileBytes, lastFileBytes,
-								bytesFromFilesDoneSoFar, allCommitsSize})
-						}
 						// Start new file
 						callback(&ProgressCallbackData{ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
 							bytesFromFilesDoneSoFar + bytesDone, allCommitsSize})
+						lastFilename = fileInProgress
+						lastFileBytes = totalBytes
 					}
-					lastFilename = fileInProgress
-					lastFileBytes = totalBytes
 				} else {
 					if bytesDone == totalBytes {
 						// finished
@@ -370,6 +371,13 @@ func PushBasic(provider SyncProvider, remoteName string, refspecs []*GitRefSpec,
 			if err != nil {
 				// Stop at commit we can't upload
 				return err
+			}
+			if lastFilename != "" {
+				// We obviously never got a 100% progress update from the last file
+				bytesFromFilesDoneSoFar += lastFileBytes
+				callback(&ProgressCallbackData{ProgressTransferBytes, lastFilename, lastFileBytes, lastFileBytes,
+					bytesFromFilesDoneSoFar, allCommitsSize})
+				lastFilename = ""
 			}
 			// Otherwise mark commit as pushed IF complete
 			if commit.Incomplete {
