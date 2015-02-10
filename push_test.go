@@ -68,6 +68,15 @@ var _ = Describe("Push", func() {
 		}
 
 	}
+	removeLOBs := func(shas []string, path string) {
+		for _, sha := range shas {
+			meta := filepath.Join(path, getLOBMetaRelativePath(sha))
+			os.Remove(meta)
+			chunk := filepath.Join(path, getLOBChunkRelativePath(sha, 0))
+			os.Remove(chunk)
+		}
+
+	}
 	BeforeEach(func() {
 		CreateGitRepoForTest(root)
 		oldwd, _ = os.Getwd()
@@ -132,6 +141,7 @@ var _ = Describe("Push", func() {
 		var filesTransferred int
 		var filesSkipped int
 		var filesFailed int
+		var commitsNotFound int
 		callback := func(data *ProgressCallbackData) (abort bool) {
 			switch data.Type {
 			case ProgressTransferBytes:
@@ -143,10 +153,13 @@ var _ = Describe("Push", func() {
 			case ProgressError:
 				filesFailed++
 			case ProgressNotFound:
-				filesFailed++
+				commitsNotFound++
 			}
 			return false
 		}
+		Expect(HasPushedBinaryState("origin")).To(BeFalse(), "Should not have pushed state for origin")
+		Expect(HasPushedBinaryState("fork")).To(BeFalse(), "Should not have pushed state for fork")
+
 		// Start by pushing up to Tag1 so that we push only first 2 commits on master
 		err = PushBasic(originprovider, "origin", []*GitRefSpec{&GitRefSpec{Ref1: "Tag1"}}, false, false, false, callback)
 		Expect(err).To(BeNil(), "Push should succeed")
@@ -155,6 +168,17 @@ var _ = Describe("Push", func() {
 		Expect(filesTransferred).To(BeEquivalentTo(expectedFileCount), "Should have transferred the right number of files")
 		Expect(filesSkipped).To(BeEquivalentTo(0), "No files should be skipped")
 		Expect(filesFailed).To(BeEquivalentTo(0), "No files should fail")
+		Expect(commitsNotFound).To(BeEquivalentTo(0), "No files should be not found")
+
+		// Should now have pushed state
+		Expect(HasPushedBinaryState("origin")).To(BeTrue(), "Should have pushed state for origin")
+		// Check it's at position expected
+		mastersha, _ := GitRefToFullSHA("master")
+		pushedSHA, err := FindLatestAncestorWhereBinariesPushed("origin", mastersha)
+		Expect(err).To(BeNil(), "Should not be error finding latest pushed")
+		tag1sha, _ := GitRefToFullSHA("Tag1")
+		Expect(pushedSHA).To(Equal(tag1sha), "Pushed marker should be at Tag1")
+
 		// Confirm data exists on remote
 		checkLOBsExist(mastershaspercommit[0], originBinStore)
 		checkLOBsExist(mastershaspercommit[1], originBinStore)
@@ -168,8 +192,13 @@ var _ = Describe("Push", func() {
 		Expect(filesTransferred).To(BeEquivalentTo(expectedFileCount), "Should have transferred the right number of files")
 		Expect(filesSkipped).To(BeEquivalentTo(0), "No files should be skipped") // because cache should prevent
 		Expect(filesFailed).To(BeEquivalentTo(0), "No files should fail")
+		Expect(commitsNotFound).To(BeEquivalentTo(0), "No files should be not found")
 		// Confirm data exists on remote
 		checkLOBsExist(mastershaspercommit[2], originBinStore)
+
+		pushedSHA, err = FindLatestAncestorWhereBinariesPushed("origin", mastersha)
+		Expect(err).To(BeNil(), "Should not be error finding latest pushed")
+		Expect(pushedSHA).To(Equal(mastersha), "Pushed marker should be at master")
 
 		// Now push a different branch
 		// Now push all of master, should skip previous & upload new
@@ -181,11 +210,21 @@ var _ = Describe("Push", func() {
 		Expect(filesTransferred).To(BeEquivalentTo(expectedFileCount), "Should have transferred the right number of files")
 		Expect(filesSkipped).To(BeEquivalentTo(0), "No files should be skipped") // because cache should prevent
 		Expect(filesFailed).To(BeEquivalentTo(0), "No files should fail")
+		Expect(commitsNotFound).To(BeEquivalentTo(0), "No files should be not found")
 		// Confirm data exists on remote
 		checkLOBsExist(branch2shaspercommit[0], originBinStore)
 		checkLOBsExist(branch2shaspercommit[1], originBinStore)
 
+		branch2sha, _ := GitRefToFullSHA("branch2")
+		pushedSHA, err = FindLatestAncestorWhereBinariesPushed("origin", branch2sha)
+		Expect(err).To(BeNil(), "Should not be error finding latest pushed")
+		Expect(pushedSHA).To(Equal(branch2sha), "Pushed marker should be at branch2")
+
 		// Now push master to fork
+		pushedSHA, err = FindLatestAncestorWhereBinariesPushed("fork", mastersha)
+		Expect(err).To(BeNil(), "Should not be error finding latest pushed")
+		Expect(pushedSHA).To(Equal(""), "Pushed marker should not be set for fork")
+
 		filesTransferred = 0
 		err = PushBasic(originprovider, "fork", []*GitRefSpec{&GitRefSpec{Ref1: "master"}}, false, false, false, callback)
 		Expect(err).To(BeNil(), "Push should succeed")
@@ -194,9 +233,91 @@ var _ = Describe("Push", func() {
 		Expect(filesTransferred).To(BeEquivalentTo(expectedFileCount), "Should have transferred the right number of files")
 		Expect(filesSkipped).To(BeEquivalentTo(0), "No files should be skipped") // because cache should prevent
 		Expect(filesFailed).To(BeEquivalentTo(0), "No files should fail")
+		Expect(commitsNotFound).To(BeEquivalentTo(0), "No files should be not found")
 		// Confirm data exists on remote
 		checkLOBsExist(mastershaspercommit[0], forkBinStore)
 		checkLOBsExist(mastershaspercommit[1], forkBinStore)
+		Expect(HasPushedBinaryState("fork")).To(BeTrue(), "Should have pushed state for fork")
+		pushedSHA, err = FindLatestAncestorWhereBinariesPushed("fork", mastersha)
+		Expect(err).To(BeNil(), "Should not be error finding latest pushed")
+		Expect(pushedSHA).To(Equal(mastersha), "Pushed marker should be at master")
+
+		// now reset all the pushed data for origin
+		err = ResetPushedBinaryState("origin")
+		Expect(err).To(BeNil(), "Should not be error resetting pushed data")
+		Expect(HasPushedBinaryState("origin")).To(BeFalse(), "Should not have pushed state for origin")
+		pushedSHA, err = FindLatestAncestorWhereBinariesPushed("origin", mastersha)
+		Expect(err).To(BeNil(), "Should not be error finding latest pushed")
+		Expect(pushedSHA).To(Equal(""), "Pushed marker should not be set")
+
+		// now delete some of the local LOBs to create a gap in our data
+		// but leave the data on the remote; this simulates the case where user has fetched commits from
+		// someone else but hasn't fetched LOBs, then tries to push their own binaries
+		// this should still succeed, and because LOBs are on the remote then it's fine to
+		// move the pushed pointer over these commits
+		removeLOBs(mastershaspercommit[1], GetLocalLOBRoot())
+		// Also delete some *other* LOBs on the remote to make sure they get pushed
+		removeLOBs(mastershaspercommit[2], originBinStore)
+
+		// now push master again, should be OK to skip over missing LOBs since on remote
+		filesTransferred = 0
+		err = PushBasic(originprovider, "origin", []*GitRefSpec{&GitRefSpec{Ref1: "master"}}, false, false, false, callback)
+		Expect(err).To(BeNil(), "Push should succeed")
+		// Files should equal 2 for each entry (meta + one chunk)
+		// We should transfer [2] because not on remote
+		// We should do nothing with [1] - missing locally but OK because on remote
+		// And should skip [0] since already on remote and local
+		expectedFileCount = len(masterfilespercommit[2]) * 2
+		expectedSkipFileCount := len(masterfilespercommit[0]) * 2
+		Expect(filesTransferred).To(BeEquivalentTo(expectedFileCount), "Should have transferred the right number of files")
+		Expect(filesSkipped).To(BeEquivalentTo(expectedSkipFileCount), "Should skip the files already on remote")
+		Expect(filesFailed).To(BeEquivalentTo(0), "No files should fail")
+		Expect(commitsNotFound).To(BeEquivalentTo(0), "Should have no 'not found' files since found on remote")
+		// Confirm new data exists on remote
+		checkLOBsExist(mastershaspercommit[2], originBinStore)
+		// Check that push cache has been updated (because missing files were OK on remote)
+		pushedSHA, err = FindLatestAncestorWhereBinariesPushed("origin", mastersha)
+		Expect(err).To(BeNil(), "Should not be error finding latest pushed")
+		Expect(pushedSHA).To(Equal(mastersha), "Pushed marker should be at master")
+
+		// Reset all the state again, and this time we'll test with missing data locally that's
+		// also missing on the remote
+		err = ResetPushedBinaryState("origin")
+		Expect(err).To(BeNil(), "Should not be error resetting pushed data")
+		Expect(HasPushedBinaryState("origin")).To(BeFalse(), "Should not have pushed state for origin")
+		pushedSHA, err = FindLatestAncestorWhereBinariesPushed("origin", mastersha)
+		Expect(err).To(BeNil(), "Should not be error finding latest pushed")
+		Expect(pushedSHA).To(Equal(""), "Pushed marker should not be set")
+
+		// now delete some of the local AND remote LOBs to create a gap in our data
+		// We should still push data we have but not update push cache state, should warn about missing
+		removeLOBs(mastershaspercommit[1], GetLocalLOBRoot())
+		removeLOBs(mastershaspercommit[1], originBinStore)
+		// Also delete some *other* LOBs on the remote to make sure they get pushed
+		removeLOBs(mastershaspercommit[2], originBinStore)
+
+		// now push master again, should be OK to skip over missing LOBs since on remote
+		filesTransferred = 0
+		filesSkipped = 0
+		err = PushBasic(originprovider, "origin", []*GitRefSpec{&GitRefSpec{Ref1: "master"}}, false, false, false, callback)
+		Expect(err).To(BeNil(), "Push should succeed")
+		// Files should equal 2 for each entry (meta + one chunk)
+		// We should transfer [2] because not on remote & present locally
+		// We should 'not found' on [1]
+		// And should skip [0] since already on remote and local
+		expectedFileCount = len(masterfilespercommit[2]) * 2
+		expectedSkipFileCount = len(masterfilespercommit[0]) * 2
+		Expect(filesTransferred).To(BeEquivalentTo(expectedFileCount), "Should have transferred the right number of files")
+		Expect(filesSkipped).To(BeEquivalentTo(expectedSkipFileCount), "Should skip the files already on remote")
+		Expect(filesFailed).To(BeEquivalentTo(0), "No files should fail")
+		Expect(commitsNotFound).To(BeEquivalentTo(1), "One commit should have had missing files locally & on remote")
+		// Confirm new data exists on remote
+		checkLOBsExist(mastershaspercommit[2], originBinStore)
+		// Check that push cache has been updated, but only to [0] (Tag0)
+		tag0sha, _ := GitRefToFullSHA("Tag0")
+		pushedSHA, err = FindLatestAncestorWhereBinariesPushed("origin", mastersha)
+		Expect(err).To(BeNil(), "Should not be error finding latest pushed")
+		Expect(pushedSHA).To(Equal(tag0sha), "Pushed marker should have only been moved to the point before missing files on local & remote")
 
 	})
 
