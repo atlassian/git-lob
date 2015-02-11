@@ -242,6 +242,10 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 
 	LogDebugf("Successfully fetched from %v via %v\n", remoteName, provider.TypeID())
 
+	if prune {
+		PruneOld(dryRun)
+	}
+
 	return nil
 
 }

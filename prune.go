@@ -241,6 +241,12 @@ func PruneUnreferenced(dryRun bool) ([]string, error) {
 
 }
 
+// Remove LOBs from the local store if they fall outside the range we would normally fetch for
+func PruneOld(dryRun bool) {
+	// TODO
+	LogConsole("PSA: Prune functionality is not implemented yet")
+}
+
 // Prune the shared store of all LOBs with only 1 hard link (itself)
 // DeleteLOB will do this for individual LOBs we prune, but if the user
 // manually deletes a repo then unreferenced shared LOBs may never be cleaned up
