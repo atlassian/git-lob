@@ -209,6 +209,22 @@ func CreateRandomFileForTest(sz int64, filename string) {
 
 }
 
+// Store a random file LOB, then overwrite it with a placeholder ready for commit (without filters)
+func CreateAndStoreLOBFileForTest(sz int64, filename string) *LOBInfo {
+	CreateRandomFileForTest(sz, filename)
+	info, err := StoreLOBForTest(filename)
+	if err != nil {
+		Fail(fmt.Sprintf("Failed to store test LOB %v: %v", filename, err))
+	}
+	// now overwrite with placeholder ready for adding to git
+	err = ioutil.WriteFile(filename,
+		[]byte(fmt.Sprintf("git-lob: %v", info.SHA)), 0644)
+	if err != nil {
+		Fail(fmt.Sprintf("Failed to wite placeholder for %v: %v", filename, err))
+	}
+	return info
+}
+
 // generate a random list of SHAs for testing purposes
 // these SHAs are random and don't correspond to any valid data
 func GetListOfRandomSHAsForTest(num int) []string {
