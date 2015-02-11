@@ -545,38 +545,6 @@ Options:
   --verbose, -v Print more output
   --dry-run     Don't actually download anything, just report
 
-REMOTES
-
-Binaries in git-lob are not stored in the regular git repo, but a corresponding
-binary store must always exist to provide the actual binary content. A remote
-in git usually only gives you the real git repo, so git-lob needs to expand
-the configuration parameters to git remotes to specify the location of the 
-corresponding remote binary store. 
-
-The <remote> parameter refers to a named remote in .git/config (plain URLs 
-cannot be supported). The remote entry itself is the same as any normal git
-remote, except that it requires additional git-lob specific parameters. The
-parameters depend on the type of binary storage ('provider') being used; see
-'git-lob providers' for a list of available providers and 
-'git-lob provider <provider>' for specific details of one provider.
-
-As an example, let's take the 'filesystem' provider, which simply uses the OS's
-file system as a remote transport (obviously very simplistic):
-
-[remote "origin"]
-    # these 2 lines are standard git
-    url = ssh://git@bitbucket.org/something/somthing.git
-    fetch = +refs/heads/*:refs/remotes/origin/*
-    # these next 2 lines are required to configure the remote binary store
-    git-lob-provider = filesystem
-    git-lob-path = /Volumes/shared/something/something/binary/store
-    
-Other providers may require other parameters. It's important to note that you
-can share a binary store among multiple remote repos if you wish, much like
-the local git-lob.sharedstore option, since binaries are stored by SHA. 
-Identical file content in multiple repos can be stored only once this way.
-Of course, access control may be an issue to consider here though.
-
 RECENT COMMITS
 
 If no refs are specified on the command line, git-lob will fetch binaries 
@@ -592,25 +560,10 @@ Recent commits means:
   * Any ancestors of those branches/tags within git-lob.recent_commits_other
     days of its last commit date
 
+REMOTES
+  Type 'git lob help remotes' for details
+
 CONFIG
-
-There are a few user config settings specific to the fetch command which can
-be in ~/.gitconfig or $REPO/.git/config.
-
-  git-lob.recent-refs          default: 90 days
-  git-lob.recent-commits-head  default: 30 days
-  git-lob.recent-commits-other default: 0 days
-
-These 3 settings are used to control the meaning of 'recent commits', see
-RECENT COMMITS above.
-
-  git-lob.fetch-include
-  git-lob.fetch-exclude
-
-These 2 settings you probably only want to define at the repo level. 
-fetch-include limits the binaries downloaded to only matching paths, while
-fetch-exclude downloads everything except files matching these paths.
-The contents of each are comma-separated paths with wildcard (*) matching.
-Note that wildcards do not match path separators, like gitignore.
+  Type 'git lob help config' for details, see the 'fetch' section
 `)
 }
