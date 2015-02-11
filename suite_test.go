@@ -365,3 +365,12 @@ func CheckLOBsExistForTest(shas []string, rootlobpath string) {
 	}
 
 }
+func RemoveLOBsForTest(shas []string, rootlobpath string) {
+	for _, sha := range shas {
+		meta := filepath.Join(rootlobpath, getLOBMetaRelativePath(sha))
+		os.Remove(meta)
+		chunk := filepath.Join(rootlobpath, getLOBChunkRelativePath(sha, 0))
+		os.Remove(chunk)
+	}
+
+}

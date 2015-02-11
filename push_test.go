@@ -56,15 +56,6 @@ var _ = Describe("Push", func() {
 	}
 	var mastershaspercommit [][]string
 	var branch2shaspercommit [][]string
-	removeLOBs := func(shas []string, path string) {
-		for _, sha := range shas {
-			meta := filepath.Join(path, getLOBMetaRelativePath(sha))
-			os.Remove(meta)
-			chunk := filepath.Join(path, getLOBChunkRelativePath(sha, 0))
-			os.Remove(chunk)
-		}
-
-	}
 	BeforeEach(func() {
 		CreateGitRepoForTest(root)
 		oldwd, _ = os.Getwd()
@@ -245,9 +236,9 @@ var _ = Describe("Push", func() {
 		// someone else but hasn't fetched LOBs, then tries to push their own binaries
 		// this should still succeed, and because LOBs are on the remote then it's fine to
 		// move the pushed pointer over these commits
-		removeLOBs(mastershaspercommit[1], GetLocalLOBRoot())
+		RemoveLOBsForTest(mastershaspercommit[1], GetLocalLOBRoot())
 		// Also delete some *other* LOBs on the remote to make sure they get pushed
-		removeLOBs(mastershaspercommit[2], originBinStore)
+		RemoveLOBsForTest(mastershaspercommit[2], originBinStore)
 
 		// now push master again, should be OK to skip over missing LOBs since on remote
 		filesTransferred = 0
@@ -281,10 +272,10 @@ var _ = Describe("Push", func() {
 
 		// now delete some of the local AND remote LOBs to create a gap in our data
 		// We should still push data we have but not update push cache state, should warn about missing
-		removeLOBs(mastershaspercommit[1], GetLocalLOBRoot())
-		removeLOBs(mastershaspercommit[1], originBinStore)
+		RemoveLOBsForTest(mastershaspercommit[1], GetLocalLOBRoot())
+		RemoveLOBsForTest(mastershaspercommit[1], originBinStore)
 		// Also delete some *other* LOBs on the remote to make sure they get pushed
-		removeLOBs(mastershaspercommit[2], originBinStore)
+		RemoveLOBsForTest(mastershaspercommit[2], originBinStore)
 
 		// now push master again, should be OK to skip over missing LOBs since on remote
 		filesTransferred = 0
