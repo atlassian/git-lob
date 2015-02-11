@@ -56,18 +56,6 @@ var _ = Describe("Push", func() {
 	}
 	var mastershaspercommit [][]string
 	var branch2shaspercommit [][]string
-	checkLOBsExist := func(shas []string, path string) {
-		for _, sha := range shas {
-			meta := filepath.Join(path, getLOBMetaRelativePath(sha))
-			_, err := os.Stat(meta)
-			Expect(err).To(BeNil(), "Meta file should exist")
-			// Assuming only one chunk for this test
-			chunk := filepath.Join(path, getLOBChunkRelativePath(sha, 0))
-			_, err = os.Stat(chunk)
-			Expect(err).To(BeNil(), "Chunk file should exist")
-		}
-
-	}
 	removeLOBs := func(shas []string, path string) {
 		for _, sha := range shas {
 			meta := filepath.Join(path, getLOBMetaRelativePath(sha))
@@ -182,8 +170,8 @@ var _ = Describe("Push", func() {
 		Expect(pushedSHA).To(Equal(tag1sha), "Pushed marker should be at Tag1")
 
 		// Confirm data exists on remote
-		checkLOBsExist(mastershaspercommit[0], originBinStore)
-		checkLOBsExist(mastershaspercommit[1], originBinStore)
+		CheckLOBsExistForTest(mastershaspercommit[0], originBinStore)
+		CheckLOBsExistForTest(mastershaspercommit[1], originBinStore)
 
 		// Now push all of master, should skip previous & upload new
 		filesTransferred = 0
@@ -196,7 +184,7 @@ var _ = Describe("Push", func() {
 		Expect(filesFailed).To(BeEquivalentTo(0), "No files should fail")
 		Expect(commitsNotFound).To(BeEquivalentTo(0), "No files should be not found")
 		// Confirm data exists on remote
-		checkLOBsExist(mastershaspercommit[2], originBinStore)
+		CheckLOBsExistForTest(mastershaspercommit[2], originBinStore)
 
 		pushedSHA, err = FindLatestAncestorWhereBinariesPushed("origin", mastersha)
 		Expect(err).To(BeNil(), "Should not be error finding latest pushed")
@@ -214,8 +202,8 @@ var _ = Describe("Push", func() {
 		Expect(filesFailed).To(BeEquivalentTo(0), "No files should fail")
 		Expect(commitsNotFound).To(BeEquivalentTo(0), "No files should be not found")
 		// Confirm data exists on remote
-		checkLOBsExist(branch2shaspercommit[0], originBinStore)
-		checkLOBsExist(branch2shaspercommit[1], originBinStore)
+		CheckLOBsExistForTest(branch2shaspercommit[0], originBinStore)
+		CheckLOBsExistForTest(branch2shaspercommit[1], originBinStore)
 
 		branch2sha, _ := GitRefToFullSHA("branch2")
 		pushedSHA, err = FindLatestAncestorWhereBinariesPushed("origin", branch2sha)
@@ -237,8 +225,8 @@ var _ = Describe("Push", func() {
 		Expect(filesFailed).To(BeEquivalentTo(0), "No files should fail")
 		Expect(commitsNotFound).To(BeEquivalentTo(0), "No files should be not found")
 		// Confirm data exists on remote
-		checkLOBsExist(mastershaspercommit[0], forkBinStore)
-		checkLOBsExist(mastershaspercommit[1], forkBinStore)
+		CheckLOBsExistForTest(mastershaspercommit[0], forkBinStore)
+		CheckLOBsExistForTest(mastershaspercommit[1], forkBinStore)
 		Expect(HasPushedBinaryState("fork")).To(BeTrue(), "Should have pushed state for fork")
 		pushedSHA, err = FindLatestAncestorWhereBinariesPushed("fork", mastersha)
 		Expect(err).To(BeNil(), "Should not be error finding latest pushed")
@@ -276,7 +264,7 @@ var _ = Describe("Push", func() {
 		Expect(filesFailed).To(BeEquivalentTo(0), "No files should fail")
 		Expect(commitsNotFound).To(BeEquivalentTo(0), "Should have no 'not found' files since found on remote")
 		// Confirm new data exists on remote
-		checkLOBsExist(mastershaspercommit[2], originBinStore)
+		CheckLOBsExistForTest(mastershaspercommit[2], originBinStore)
 		// Check that push cache has been updated (because missing files were OK on remote)
 		pushedSHA, err = FindLatestAncestorWhereBinariesPushed("origin", mastersha)
 		Expect(err).To(BeNil(), "Should not be error finding latest pushed")
@@ -314,7 +302,7 @@ var _ = Describe("Push", func() {
 		Expect(filesFailed).To(BeEquivalentTo(0), "No files should fail")
 		Expect(commitsNotFound).To(BeEquivalentTo(1), "One commit should have had missing files locally & on remote")
 		// Confirm new data exists on remote
-		checkLOBsExist(mastershaspercommit[2], originBinStore)
+		CheckLOBsExistForTest(mastershaspercommit[2], originBinStore)
 		// Check that push cache has been updated, but only to [0] (Tag0)
 		tag0sha, _ := GitRefToFullSHA("Tag0")
 		pushedSHA, err = FindLatestAncestorWhereBinariesPushed("origin", mastersha)

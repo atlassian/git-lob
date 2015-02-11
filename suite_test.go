@@ -351,3 +351,17 @@ func CreateManyCommitsForTest(filespercommit [][]string, commitOffset int, sizeF
 	return ret
 
 }
+
+// Checks that a meta file and at least one chunk exists for the given shas
+func CheckLOBsExistForTest(shas []string, rootlobpath string) {
+	for _, sha := range shas {
+		meta := filepath.Join(rootlobpath, getLOBMetaRelativePath(sha))
+		_, err := os.Stat(meta)
+		Expect(err).To(BeNil(), "Meta file should exist")
+		// Checking only one chunk for this test
+		chunk := filepath.Join(rootlobpath, getLOBChunkRelativePath(sha, 0))
+		_, err = os.Stat(chunk)
+		Expect(err).To(BeNil(), "Chunk file should exist")
+	}
+
+}
