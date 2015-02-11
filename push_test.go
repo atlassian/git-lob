@@ -130,6 +130,8 @@ var _ = Describe("Push", func() {
 		os.RemoveAll(root)
 		os.RemoveAll(originRoot)
 		os.RemoveAll(forkRoot)
+		os.RemoveAll(originBinStore)
+		os.RemoveAll(forkBinStore)
 		// Reset any option changes
 		GlobalOptions = NewOptions()
 	})
