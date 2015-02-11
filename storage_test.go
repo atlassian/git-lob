@@ -367,9 +367,12 @@ var _ = Describe("Storage", func() {
 
 	Describe("Retrieving a LOB", func() {
 		// Common git repo
+		var oldwd string
 		BeforeEach(func() {
+			oldwd, _ = os.Getwd()
 			// Set up git repo with some subfolders
 			CreateGitRepoForTest(root)
+			os.Chdir(root)
 
 			for _, f := range folders {
 				err := os.MkdirAll(f, 0755)
@@ -381,6 +384,7 @@ var _ = Describe("Storage", func() {
 		})
 
 		AfterEach(func() {
+			os.Chdir(oldwd)
 			// Delete repo
 			os.RemoveAll(root)
 		})
