@@ -80,7 +80,7 @@ func cmdFetch() int {
 
 	// 100 items in the queue should be good enough, this means that it won't block
 	callbackChan := make(chan *ProgressCallbackData, 100)
-	go func(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dryRun, force, recheck bool,
+	go func(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dryRun, force, prune bool,
 		progresschan chan<- *ProgressCallbackData) {
 
 		// Progress callback just passes the result back to the channel
@@ -90,7 +90,7 @@ func cmdFetch() int {
 			return false
 		}
 
-		err := Fetch(provider, remoteName, refspecs, dryRun, force, recheck, progress)
+		err := Fetch(provider, remoteName, refspecs, dryRun, force, prune, progress)
 
 		close(progresschan)
 
