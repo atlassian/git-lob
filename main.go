@@ -153,6 +153,12 @@ func mainImpl() int {
 			return 0
 		}
 		return cmdResetPushed()
+	case "last-pushed":
+		if GlobalOptions.HelpRequested {
+			cmdLastPushedHelp()
+			return 0
+		}
+		return cmdLastPushed()
 	default:
 		if GlobalOptions.HelpRequested {
 			cmdHelp()

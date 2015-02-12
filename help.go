@@ -147,6 +147,7 @@ const rootOptionsTxt = `Global Options:
 const plumbingCommandsHelpTxt = `Low-level plumbing commands:
   push-lob             Push an individual LOB to a remote by SHA
   fetch-lob            Fetch an individual LOB from a remote by SHA
+  last-pushed          Report the last pushed ancestor of a ref
   mark-pushed          Mark a commit as having being pushed to a remote
   reset-pushed         Reset the pushed flag for a commit
 

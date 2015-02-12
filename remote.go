@@ -160,6 +160,78 @@ Options:
 
 }
 
+// Command line low-level tool to report the last pushed ancestor of a ref
+func cmdLastPushed() int {
+	// git-lob last-pushed <remote> <ref>
+
+	// Validate custom options (none)
+	errorList := validateCustomOptions(GlobalOptions, nil, []string{})
+	if len(errorList) > 0 {
+		LogConsoleError(strings.Join(errorList, "\n"))
+		return 9
+	}
+
+	if len(GlobalOptions.Args) != 2 {
+		LogConsoleError("Wrong number of arguments; must supply a remote name and a ref")
+		return 9
+	}
+	// first parameter must be remote
+	remoteName := GlobalOptions.Args[0]
+	// Check valid remote
+	if !IsGitRemote(remoteName) {
+		LogConsoleError(remoteName, "is not a valid remote name")
+		return 9
+	}
+
+	ref := GlobalOptions.Args[1]
+	// Convert the ref into a SHA
+	commitSHA, err := GitRefToFullSHA(ref)
+	if err != nil {
+		LogConsoleErrorf("Invalid ref: %v: %v\n", ref, err.Error())
+		return 9
+	}
+
+	last, err := FindLatestAncestorWhereBinariesPushed(remoteName, commitSHA)
+	if err != nil {
+		LogErrorf("Unable to locate last pushed commit for %v at %v: %v\n", remoteName, ref, err.Error())
+		return 12
+	} else {
+		if last == "" {
+			LogConsolef("No ancestor of %v has been pushed to %v\n", ref, remoteName)
+		} else {
+			LogConsolef("Last ancestor of %v that has been pushed to %v: %v\n", ref, remoteName, last)
+		}
+	}
+
+	return 0
+
+}
+
+func cmdLastPushedHelp() {
+	LogConsole(`Usage: git-lob last-pushed [options] <remote> <ref>
+
+  Reports the most recent ancestor of <ref> where binaries are considered
+  to have been fully pushed to <remote>
+
+  git-lob stores a remote state cache so it doesn't have to check the whole
+  history when pushing. This command reports where git-lob will look back to
+  when asked to push to a given remote. See HISTORY CHECKING in the 
+  'git lob push --help' output for more information.
+
+
+Parameters:
+  <remote>: The name of the remote.
+
+     <ref>: The ref at which you want to start scanning backwards for the
+            last push marker. 
+
+Options:
+  --quiet, -q   Print less output
+  --verbose, -v Print more output
+
+`)
+}
+
 // Do we have a remote state cache for this remote yet?
 func hasRemoteStateCache(remoteName string) bool {
 	dir := filepath.Join(GetGitDir(), "git-lob", "state", "remotes", remoteName)
