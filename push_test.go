@@ -142,7 +142,7 @@ var _ = Describe("Push", func() {
 		Expect(HasPushedBinaryState("fork")).To(BeFalse(), "Should not have pushed state for fork")
 
 		// Start by pushing up to Tag1 so that we push only first 2 commits on master
-		err = PushBasic(originprovider, "origin", []*GitRefSpec{&GitRefSpec{Ref1: "Tag1"}}, false, false, false, callback)
+		err = Push(originprovider, "origin", []*GitRefSpec{&GitRefSpec{Ref1: "Tag1"}}, false, false, false, callback)
 		Expect(err).To(BeNil(), "Push should succeed")
 		// Files should equal 2 for each entry (meta + one chunk)
 		expectedFileCount := (len(masterfilespercommit[0]) + len(masterfilespercommit[1])) * 2
@@ -166,7 +166,7 @@ var _ = Describe("Push", func() {
 
 		// Now push all of master, should skip previous & upload new
 		filesTransferred = 0
-		err = PushBasic(originprovider, "origin", []*GitRefSpec{&GitRefSpec{Ref1: "master"}}, false, false, false, callback)
+		err = Push(originprovider, "origin", []*GitRefSpec{&GitRefSpec{Ref1: "master"}}, false, false, false, callback)
 		Expect(err).To(BeNil(), "Push should succeed")
 		// Files should equal 2 for each entry (meta + one chunk)
 		expectedFileCount = len(masterfilespercommit[2]) * 2
@@ -184,7 +184,7 @@ var _ = Describe("Push", func() {
 		// Now push a different branch
 		// Now push all of master, should skip previous & upload new
 		filesTransferred = 0
-		err = PushBasic(originprovider, "origin", []*GitRefSpec{&GitRefSpec{Ref1: "branch2"}}, false, false, false, callback)
+		err = Push(originprovider, "origin", []*GitRefSpec{&GitRefSpec{Ref1: "branch2"}}, false, false, false, callback)
 		Expect(err).To(BeNil(), "Push should succeed")
 		// Files should equal 2 for each entry (meta + one chunk)
 		expectedFileCount = (len(branch2filespercommit[0]) + len(branch2filespercommit[1])) * 2
@@ -207,7 +207,7 @@ var _ = Describe("Push", func() {
 		Expect(pushedSHA).To(Equal(""), "Pushed marker should not be set for fork")
 
 		filesTransferred = 0
-		err = PushBasic(originprovider, "fork", []*GitRefSpec{&GitRefSpec{Ref1: "master"}}, false, false, false, callback)
+		err = Push(originprovider, "fork", []*GitRefSpec{&GitRefSpec{Ref1: "master"}}, false, false, false, callback)
 		Expect(err).To(BeNil(), "Push should succeed")
 		// Files should equal 2 for each entry (meta + one chunk)
 		expectedFileCount = (len(masterfilespercommit[0]) + len(masterfilespercommit[1]) + len(masterfilespercommit[2])) * 2
@@ -242,7 +242,7 @@ var _ = Describe("Push", func() {
 
 		// now push master again, should be OK to skip over missing LOBs since on remote
 		filesTransferred = 0
-		err = PushBasic(originprovider, "origin", []*GitRefSpec{&GitRefSpec{Ref1: "master"}}, false, false, false, callback)
+		err = Push(originprovider, "origin", []*GitRefSpec{&GitRefSpec{Ref1: "master"}}, false, false, false, callback)
 		Expect(err).To(BeNil(), "Push should succeed")
 		// Files should equal 2 for each entry (meta + one chunk)
 		// We should transfer [2] because not on remote
@@ -280,7 +280,7 @@ var _ = Describe("Push", func() {
 		// now push master again, should be OK to skip over missing LOBs since on remote
 		filesTransferred = 0
 		filesSkipped = 0
-		err = PushBasic(originprovider, "origin", []*GitRefSpec{&GitRefSpec{Ref1: "master"}}, false, false, false, callback)
+		err = Push(originprovider, "origin", []*GitRefSpec{&GitRefSpec{Ref1: "master"}}, false, false, false, callback)
 		Expect(err).To(BeNil(), "Push should succeed")
 		// Files should equal 2 for each entry (meta + one chunk)
 		// We should transfer [2] because not on remote & present locally

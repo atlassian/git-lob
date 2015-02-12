@@ -124,13 +124,7 @@ func cmdPush() int {
 			return false
 		}
 
-		var err error
-		switch p := provider.(type) {
-		case SmartSyncProvider:
-			err = PushSmart(p, remoteName, refspecs, dryRun, force, recheck, progress)
-		default:
-			err = PushBasic(p, remoteName, refspecs, dryRun, force, recheck, progress)
-		}
+		err := Push(provider, remoteName, refspecs, dryRun, force, recheck, progress)
 
 		close(progresschan)
 
@@ -174,7 +168,7 @@ type PushCommitContentDetails struct {
 	Incomplete bool     // File list is not complete because of missing local data, we shouldn't mark this commit as pushed
 }
 
-func PushBasic(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dryRun, force, recheck bool,
+func Push(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dryRun, force, recheck bool,
 	callback ProgressCallback) error {
 
 	LogDebugf("Pushing to %v via %v\n", remoteName, provider.TypeID())
@@ -408,11 +402,6 @@ func PushBasic(provider SyncProvider, remoteName string, refspecs []*GitRefSpec,
 
 }
 
-func PushSmart(provider SmartSyncProvider, remoteName string, refspecs []*GitRefSpec, dryRun, force, recheck bool,
-	callback ProgressCallback) error {
-	// TODO
-	return nil
-}
 
 func cmdPushHelp() {
 	LogConsole(`Usage: git-lob push [options] [<remote> [<ref>...]]
