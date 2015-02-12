@@ -147,8 +147,6 @@ func cmdFetchLob() int {
 
 	// Determine remote
 	var remoteName string
-	// Ordered list of the commmits we're going to ls-tree to find binaries
-	var refspecs []*GitRefSpec
 
 	// first parameter must be remote
 	remoteName = GlobalOptions.Args[0]
@@ -186,7 +184,7 @@ func cmdFetchLob() int {
 
 	// 100 items in the queue should be good enough, this means that it won't block
 	callbackChan := make(chan *ProgressCallbackData, 100)
-	go func(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, force bool,
+	go func(provider SyncProvider, remoteName string, shas []string, force bool,
 		progresschan chan<- *ProgressCallbackData) {
 
 		// Progress callback just passes the result back to the channel
@@ -210,7 +208,7 @@ func cmdFetchLob() int {
 			fetcherr = err
 		}
 
-	}(provider, remoteName, refspecs, optForce, callbackChan)
+	}(provider, remoteName, shas, optForce, callbackChan)
 
 	// Report progress on operation every 0.5s
 	fetchCounts := ReportProgressToConsole(callbackChan, "Fetch", time.Millisecond*500)
@@ -680,7 +678,8 @@ func cmdFetchLobHelp() {
   Download a one or more binaries from a named remote.
 
   This is a low-level alternative to the main fetch command, allowing
-  you to manually download a specific binary identified by its SHA.
+  you to manually download a specific binary identified by its SHA. Files
+  already on the remote are still skipped unless you use --force.
 
   These files are stored in your local binary store (shared store if 
   configured) ready to be checked out into your working copy either with
