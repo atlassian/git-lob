@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -120,6 +121,112 @@ func cmdFetch() int {
 			LogConsole("Successfully fetched binaries from", remoteName)
 		}
 
+	}
+
+	return 0
+}
+
+// Low-level LOB fetch command
+func cmdFetchLob() int {
+
+	// git-lob fetch-lob [--force] <remote> <sha>...
+
+	// Validate custom options
+	errorList := validateCustomOptions(GlobalOptions, nil, []string{"force"})
+	if len(errorList) > 0 {
+		LogConsoleError(strings.Join(errorList, "\n"))
+		return 9
+	}
+
+	if len(GlobalOptions.Args) < 2 {
+		LogConsoleError("Too few arguments; must supply remote and at least one SHA")
+		return 9
+	}
+
+	optForce := GlobalOptions.BoolOpts.Contains("force")
+
+	// Determine remote
+	var remoteName string
+	// Ordered list of the commmits we're going to ls-tree to find binaries
+	var refspecs []*GitRefSpec
+
+	// first parameter must be remote
+	remoteName = GlobalOptions.Args[0]
+
+	// check the remote config to make sure it's valid
+	provider, err := GetProviderForRemote(remoteName)
+	if err != nil {
+		LogConsoleError(err.Error())
+		return 6
+	}
+	if err = provider.ValidateConfig(remoteName); err != nil {
+		LogConsoleErrorf("Remote %v has configuration problems:\n%v\n", remoteName, err)
+		return 6
+	}
+
+	// Remaining args are SHAs
+	shas := GlobalOptions.Args[1:]
+	// Validate that they are SHAs
+	shaRegex := regexp.MustCompile("^[A-Fa-f0-9]{40}$")
+	for _, sha := range shas {
+		if !shaRegex.MatchString(sha) {
+			LogConsoleErrorf("Invalid SHA: %v\n", sha)
+			return 9
+		}
+	}
+
+	LogConsole("Fetching binaries from", remoteName)
+
+	// Do the actual fetching in a Goroutine, because we want to update the download rate & time estimates
+	// on a regular schedule, regardless of whether any actual callbacks are received
+	// If we only updated when callbacks happened (ie when data was transferred), if the data transfer halts
+	// then we'd never update the rates / time estimates.
+
+	var fetcherr error
+
+	// 100 items in the queue should be good enough, this means that it won't block
+	callbackChan := make(chan *ProgressCallbackData, 100)
+	go func(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, force bool,
+		progresschan chan<- *ProgressCallbackData) {
+
+		// Progress callback just passes the result back to the channel
+		progress := func(data *ProgressCallbackData) (abort bool) {
+			progresschan <- data
+
+			return false
+		}
+
+		var err error
+		for _, sha := range shas {
+			err = FetchSingle(sha, provider, remoteName, force, progress)
+			if err != nil {
+				break
+			}
+		}
+
+		close(progresschan)
+
+		if err != nil {
+			fetcherr = err
+		}
+
+	}(provider, remoteName, refspecs, optForce, callbackChan)
+
+	// Report progress on operation every 0.5s
+	fetchCounts := ReportProgressToConsole(callbackChan, "Fetch", time.Millisecond*500)
+
+	if fetcherr != nil {
+		LogError("git-lob: fetch error(s):\n%v", fetcherr.Error())
+		return 12
+	}
+
+	// Warn if anything wasn't found or non-fatal errors
+	if fetchCounts.ErrorCount > 0 {
+		LogConsole("WARNING: non-fatal errors were encountered, not all data was retrieved.")
+	} else if fetchCounts.NotFoundCount > 0 {
+		LogConsole("WARNING: some requested data was not available on remote", remoteName)
+	} else {
+		LogConsole("Successfully fetched binaries from", remoteName)
 	}
 
 	return 0
@@ -565,5 +672,37 @@ REMOTES
 
 CONFIG
   Type 'git lob help config' for details, see the 'fetch' section
+`)
+}
+func cmdFetchLobHelp() {
+	LogConsole(`Usage: git-lob fetch-lob [options] <remote> <sha>...
+
+  Download a one or more binaries from a named remote.
+
+  This is a low-level alternative to the main fetch command, allowing
+  you to manually download a specific binary identified by its SHA.
+
+  These files are stored in your local binary store (shared store if 
+  configured) ready to be checked out into your working copy either with
+  'git checkout', or 'git-lob pull'.
+
+Parameters:
+  <remote>: The remote to download from. This should correspond to the 
+            name of a remote (no direct URLs permitted) which is configured
+            in .git/config. See REMOTES below for more details, additional
+            config parameters are required in the remote.
+
+     <sha>: One or more 40-character SHAs identifying a binary. Note this is
+            the SHA of the binary, not of a git commit object. If you want
+            to fetch binaries for a commit, use regular 'git lob fetch'
+
+Options:
+  --force       Always download files even if the provider believes the file is 
+                already present locally. 
+  --quiet, -q   Print less output
+  --verbose, -v Print more output
+
+REMOTES
+  Type 'git lob help remotes' for details
 `)
 }

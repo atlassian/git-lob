@@ -95,6 +95,12 @@ func mainImpl() int {
 			return 0
 		}
 		return cmdFetch()
+	case "fetch-lob":
+		if GlobalOptions.HelpRequested {
+			cmdFetchLobHelp()
+			return 0
+		}
+		return cmdFetchLob()
 	case "filter-smudge":
 		if GlobalOptions.HelpRequested {
 			cmdSmudgeFilterHelp()
