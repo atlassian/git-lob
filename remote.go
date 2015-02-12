@@ -7,7 +7,147 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 )
+
+// Command line low-level tool to manually mark a remote/commit combo as pushed
+func cmdMarkPushed() int {
+	// git-lob mark-pushed <remote> <ref>...
+
+	// Validate custom options (none)
+	errorList := validateCustomOptions(GlobalOptions, nil, []string{})
+	if len(errorList) > 0 {
+		LogConsoleError(strings.Join(errorList, "\n"))
+		return 9
+	}
+
+	if len(GlobalOptions.Args) < 2 {
+		LogConsoleError("Too few arguments; must supply remote and at least one ref")
+		return 9
+	}
+	// first parameter must be remote
+	remoteName := GlobalOptions.Args[0]
+
+	// Remaining args are refs
+	refs := GlobalOptions.Args[1:]
+	var expandedrefs []string
+	// expand refs
+	shaRegex := regexp.MustCompile("^[A-Fa-f0-9]{40}$")
+	for _, ref := range refs {
+		if shaRegex.MatchString(ref) {
+			// already a full sha
+			expandedrefs = append(expandedrefs, ref)
+		} else {
+			expanded, err := GitRefToFullSHA(ref)
+			if err != nil {
+				LogConsoleErrorf("Invalid ref '%v': %v\n", ref, err.Error())
+				return 12
+			}
+			expandedrefs = append(expandedrefs, expanded)
+		}
+	}
+
+	// If all refs were ok, do it
+	LogConsole("Marking", remoteName, "as pushed at", refs)
+
+	for i, sha := range expandedrefs {
+		err := SuccessfullyPushedBinariesForCommit(remoteName, sha)
+		if err != nil {
+			LogErrorf("Unable to mark %v as pushed at %v (%v): %v\n", remoteName, sha, refs[i], err.Error())
+		} else {
+			LogDebugf("Marked %v as pushed at %v (%v)\n", remoteName, sha, refs[i])
+		}
+	}
+
+	return 0
+
+}
+
+func cmdMarkPushedHelp() {
+	LogConsole(`Usage: git-lob mark-pushed [options] <remote> <ref>...
+
+  Manually marks a commit as pushed for a remote (and all its ancestors)
+
+  This is a low-level command which tells git-lob's remote state cache
+  that as at a given commit, it should assume that all binaries have been
+  pushed to the named remote. This means next time a 'git lob push' is 
+  performed for that remote, history won't be scanned earlier than this
+  commit. See HISTORY CHECKING in 'git lob push --help' for more details.
+
+  The most common case of using this command would be directly after adding
+  a secondary remote (e.g. a fork), assuming that the fork already has access
+  to all the binaries you have locally. Without doing this, the first push
+  of binaries to this fork will take much longer as it scans all history.
+
+Parameters:
+  <remote>: The name of the remote.
+
+     <ref>: One or more refs or commit SHAs at which to record as pushed. 
+     		Any ancestors of this ref are also assumed to be pushed. If
+     		you have many (open) branches that you intend to push from later
+     		then you should do this for each branch to avoid a full history
+     		scan the first time you push.
+
+Options:
+  --quiet, -q   Print less output
+  --verbose, -v Print more output
+
+`)
+
+}
+
+// Command line low-level tool to manually reset the pushed state of a remote
+func cmdResetPushed() int {
+	// git-lob reset-pushed <remote>
+
+	// Validate custom options (none)
+	errorList := validateCustomOptions(GlobalOptions, nil, []string{})
+	if len(errorList) > 0 {
+		LogConsoleError(strings.Join(errorList, "\n"))
+		return 9
+	}
+
+	if len(GlobalOptions.Args) < 1 {
+		LogConsoleError("Too few arguments; must supply remote name")
+		return 9
+	}
+	// first parameter must be remote
+	remoteName := GlobalOptions.Args[0]
+
+	err := ResetPushedBinaryState(remoteName)
+	if err != nil {
+		LogError("Unable to reset pushed marker for", remoteName, ": ", err.Error())
+		return 12
+	} else {
+		LogConsole("Successfully reset pushed markers for", remoteName)
+	}
+
+	return 0
+
+}
+
+func cmdResetPushedHelp() {
+	LogConsole(`Usage: git-lob reset-pushed [options] <remote>
+
+  Manually resets the cached pushed state for a remote
+
+  This is a low-level command which tells git-lob's remote state cache
+  to be cleared for a given remote. This means that the next 'git lob push'
+  for that remote will do a full history scan and so will take longer.
+
+  An alternative to this is to use the --recheck command on the next push.
+
+Parameters:
+  <remote>: The name of the remote.
+
+Options:
+  --quiet, -q   Print less output
+  --verbose, -v Print more output
+
+`)
+
+}
 
 // Do we have a remote state cache for this remote yet?
 func hasRemoteStateCache(remoteName string) bool {

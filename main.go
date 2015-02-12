@@ -141,6 +141,18 @@ func mainImpl() int {
 			return 0
 		}
 		return cmdPushLob()
+	case "mark-pushed":
+		if GlobalOptions.HelpRequested {
+			cmdMarkPushedHelp()
+			return 0
+		}
+		return cmdMarkPushed()
+	case "reset-pushed":
+		if GlobalOptions.HelpRequested {
+			cmdResetPushedHelp()
+			return 0
+		}
+		return cmdResetPushed()
 	default:
 		if GlobalOptions.HelpRequested {
 			cmdHelp()
