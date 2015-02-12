@@ -172,6 +172,16 @@ func GetGitRemotes() ([]string, error) {
 
 }
 
+func IsGitRemote(remoteName string) bool {
+	remotes, err := GetGitRemotes()
+	if err != nil {
+		return false
+	}
+	sort.Strings(remotes)
+	ret, _ := StringBinarySearch(remotes, remoteName)
+	return ret
+}
+
 var cachedCurrentBranch string
 
 // Get the name of the current branch

@@ -28,6 +28,11 @@ func cmdMarkPushed() int {
 	}
 	// first parameter must be remote
 	remoteName := GlobalOptions.Args[0]
+	// Check valid remote
+	if !IsGitRemote(remoteName) {
+		LogConsoleError(remoteName, "is not a valid remote name")
+		return 9
+	}
 
 	// Remaining args are refs
 	refs := GlobalOptions.Args[1:]
@@ -114,6 +119,12 @@ func cmdResetPushed() int {
 	}
 	// first parameter must be remote
 	remoteName := GlobalOptions.Args[0]
+
+	// Check valid remote
+	if !IsGitRemote(remoteName) {
+		LogConsoleError(remoteName, "is not a valid remote name")
+		return 9
+	}
 
 	err := ResetPushedBinaryState(remoteName)
 	if err != nil {
