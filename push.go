@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -154,6 +155,106 @@ func cmdPush() int {
 		} else {
 			LogConsole("Successfully pushed binaries to", remoteName)
 		}
+	}
+
+	return 0
+}
+
+// Low level push command line tool
+func cmdPushLob() int {
+
+	// git-lob push-lob [--force] <remote> <sha>...
+
+	// Validate custom options
+	errorList := validateCustomOptions(GlobalOptions, nil, []string{"force"})
+	if len(errorList) > 0 {
+		LogConsoleError(strings.Join(errorList, "\n"))
+		return 9
+	}
+
+	if len(GlobalOptions.Args) < 2 {
+		LogConsoleError("Too few arguments; must supply remote and at least one SHA")
+		return 9
+	}
+
+	optForce := GlobalOptions.BoolOpts.Contains("force")
+
+	// first parameter must be remote
+	remoteName := GlobalOptions.Args[0]
+
+	// check the remote config to make sure it's valid
+	provider, err := GetProviderForRemote(remoteName)
+	if err != nil {
+		LogConsoleError(err.Error())
+		return 6
+	}
+	if err = provider.ValidateConfig(remoteName); err != nil {
+		LogConsoleErrorf("Remote %v has configuration problems:\n%v\n", remoteName, err)
+		return 6
+	}
+
+	// Remaining args are SHAs
+	shas := GlobalOptions.Args[1:]
+	// Validate that they are SHAs
+	shaRegex := regexp.MustCompile("^[A-Fa-f0-9]{40}$")
+	for _, sha := range shas {
+		if !shaRegex.MatchString(sha) {
+			LogConsoleErrorf("Invalid SHA: %v\n", sha)
+			return 9
+		}
+	}
+
+	// Do the actual pushing in Goroutine, because we want to update the download rate & time estimates
+	// on a regular schedule, regardless of whether any actual callbacks are received
+	// If we only updated when callbacks happened (ie when data was transferred), if the data transfer halts
+	// then we'd never update the rates / time estimates.
+
+	var pusherr error
+
+	// 100 items in the queue should be good enough, this means that it won't block
+	callbackChan := make(chan *ProgressCallbackData, 100)
+	go func(provider SyncProvider, remoteName string, shas []string, force bool,
+		progresschan chan<- *ProgressCallbackData) {
+
+		// Progress callback just passes the result back to the channel
+		progress := func(data *ProgressCallbackData) (abort bool) {
+			progresschan <- data
+
+			return false
+		}
+
+		var err error
+		for _, sha := range shas {
+			err = PushSingle(sha, provider, remoteName, force, progress)
+			if err != nil {
+				break
+			}
+		}
+
+		close(progresschan)
+
+		if err != nil {
+			pusherr = err
+		}
+
+	}(provider, remoteName, shas, optForce, callbackChan)
+
+	LogConsole("Pushing binaries to", remoteName)
+
+	// Update the console once every half second regardless of how many callbacks
+	// (or zero callbacks, so we can reduce xfer rate)
+	pushCounts := ReportProgressToConsole(callbackChan, "Push", time.Millisecond*500)
+
+	if pusherr != nil {
+		LogErrorf("git-lob: push error(s):\n%v", pusherr.Error())
+		return 12
+	}
+	if pushCounts.ErrorCount > 0 {
+		LogConsole("WARNING: non-fatal errors were encountered, not all data was pushed.")
+	} else if pushCounts.NotFoundCount > 0 {
+		LogConsole("WARNING: some binaries referred to by commits to push were not found locally")
+	} else {
+		LogConsole("Successfully pushed binaries to", remoteName)
 	}
 
 	return 0
@@ -402,6 +503,58 @@ func Push(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dryR
 
 }
 
+// Push a single LOB to a remote
+func PushSingle(sha string, provider SyncProvider, remoteName string, force bool,
+	callback ProgressCallback) error {
+
+	filenames, basedir, totalSize, err := GetLOBFilenamesWithBaseDir([]string{sha}, true)
+	if err != nil {
+		return err
+	}
+
+	var lastFilename string
+	var lastFileBytes int64
+	var bytesFromFilesDoneSoFar int64
+	localcallback := func(fileInProgress string, progressType ProgressCallbackType, bytesDone, totalBytes int64) (abort bool) {
+		if lastFilename != fileInProgress {
+			// New file, always callback
+			if lastFilename != "" {
+				// we obviously never got a 100% call for previous file
+				bytesFromFilesDoneSoFar += lastFileBytes
+				callback(&ProgressCallbackData{ProgressTransferBytes, lastFilename, lastFileBytes, lastFileBytes,
+					bytesFromFilesDoneSoFar, totalSize})
+				lastFilename = ""
+			}
+			if progressType == ProgressSkip || progressType == ProgressNotFound {
+				// 'not found' will have caused an error earlier anyway so just pass through
+				bytesFromFilesDoneSoFar += totalBytes
+				callback(&ProgressCallbackData{progressType, fileInProgress, totalBytes, totalBytes,
+					bytesFromFilesDoneSoFar, totalSize})
+			} else {
+				// Start new file
+				callback(&ProgressCallbackData{ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
+					bytesFromFilesDoneSoFar + bytesDone, totalSize})
+				lastFilename = fileInProgress
+				lastFileBytes = totalBytes
+			}
+		} else {
+			if bytesDone == totalBytes {
+				// finished
+				bytesFromFilesDoneSoFar += totalBytes
+				callback(&ProgressCallbackData{ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
+					bytesFromFilesDoneSoFar, totalSize})
+				lastFilename = ""
+			} else {
+				// Otherwise this is a progress callback
+				return callback(&ProgressCallbackData{ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
+					bytesFromFilesDoneSoFar + bytesDone, totalSize})
+			}
+		}
+		return false
+	}
+
+	return provider.Upload(remoteName, filenames, basedir, force, localcallback)
+}
 
 func cmdPushHelp() {
 	LogConsole(`Usage: git-lob push [options] [<remote> [<ref>...]]
@@ -487,6 +640,39 @@ you would need to override the history checking is if the remote changed, for
 example if someone manually deleted the remote binary store, or you moved to 
 a new URL without copying the data and needed to re-populate it from your local
 repo.
+
+REMOTES
+  Type 'git lob help remotes' for details
+
+`)
+}
+func cmdPushLobHelp() {
+	LogConsole(`Usage: git-lob push-lob [options] <remote> <sha>...
+
+  Uploads one or more specific binaries to a remote, identified by shas.
+
+  This is a low-level alternative to the main push command, allowing
+  you to manually upload a specific binary identified by its SHA.
+  Files already on the remote are still skipped unless you use --force.
+
+  Does not check or update the remote state cache recording what we
+  think has already been pushed to this remote.
+
+Parameters:
+  <remote>: The destination to upload to. This should correspond to the 
+            name of a remote (no direct URLs permitted) which is configured
+            in .git/config. See REMOTES below for more details, additional
+            config parameters are required in the remote.
+
+     <sha>: One or more 40-character SHAs identifying a binary. Note this is
+            the SHA of the binary, not of a git commit object. If you want
+            to push binaries for a commit, use regular 'git lob push'
+
+Options:
+  --force       Always upload files even if the provider believes the file is 
+                already present on the remote. You shouldn't need this.
+  --quiet, -q   Print less output
+  --verbose, -v Print more output
 
 REMOTES
   Type 'git lob help remotes' for details

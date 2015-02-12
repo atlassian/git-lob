@@ -135,6 +135,12 @@ func mainImpl() int {
 			return 0
 		}
 		return cmdPush()
+	case "push-lob":
+		if GlobalOptions.HelpRequested {
+			cmdPushLobHelp()
+			return 0
+		}
+		return cmdPushLob()
 	default:
 		if GlobalOptions.HelpRequested {
 			cmdHelp()
