@@ -1,11 +1,6 @@
 // +build windows
 package main
 
-import (
-	"os"
-	"strconv"
-)
-
 // Get the maximum number of arguments we want to try passing to the command line
 func GetMaxCommandLineArguments() int {
 	// Git doesn't allow more than 4096 file arguments so use that as a low-water mark
