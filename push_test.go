@@ -72,9 +72,14 @@ var _ = Describe("Push", func() {
 		originPathUrl = "file://" + originPathUrl
 		forkPathUrl := strings.Replace(forkRoot, "\\", "/", -1)
 		forkPathUrl = "file://" + forkPathUrl
+		// Also replace backslashes with forward slashes for windows (git still expects forward)
+		originBinStoreGit := strings.Replace(originBinStore, "\\", "/", -1)
+		forkBinStoreGit := strings.Replace(forkBinStore, "\\", "/", -1)
+
 		f, err := os.OpenFile(filepath.Join(".git", "config"), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 		Expect(err).To(BeNil(), "Should not error trying to open config file")
-		f.WriteString(fmt.Sprintf(`[remote "origin"]
+		f.WriteString(fmt.Sprintf(`
+[remote "origin"]
     url = %v
     fetch = +refs/heads/*:refs/remotes/origin/*
     git-lob-path = %v
@@ -84,7 +89,7 @@ var _ = Describe("Push", func() {
     fetch = +refs/heads/*:refs/remotes/fork/*
     git-lob-path = %v
     git-lob-provider = filesystem
-`, originPathUrl, originBinStore, forkPathUrl, forkBinStore))
+`, originPathUrl, originBinStoreGit, forkPathUrl, forkBinStoreGit))
 		f.Close()
 
 		LoadConfig(GlobalOptions)
