@@ -159,14 +159,14 @@ func parseConfig(configmap map[string]string, opts *Options) {
 	if fetchincludes := configmap["git-lob.fetch-include"]; fetchincludes != "" {
 		// Split on comma
 		for _, inc := range strings.Split(fetchincludes, ",") {
-			inc = filepath.Clean(strings.TrimSpace(inc))
+			inc = strings.TrimSpace(inc)
 			opts.FetchIncludePaths = append(opts.FetchIncludePaths, inc)
 		}
 	}
 	if fetchexcludes := configmap["git-lob.fetch-exclude"]; fetchexcludes != "" {
 		// Split on comma
 		for _, ex := range strings.Split(fetchexcludes, ",") {
-			ex = filepath.Clean(strings.TrimSpace(ex))
+			ex = strings.TrimSpace(ex)
 			opts.FetchExcludePaths = append(opts.FetchExcludePaths, ex)
 		}
 	}
