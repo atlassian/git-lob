@@ -356,10 +356,10 @@ var _ = Describe("Checkout", func() {
 				"nested",
 			}
 			correctFiles := []string{
-				filepath.Join("some", "folder", "file211.dat"),
-				filepath.Join("some", "folder", "nested", "file3.dat"),
-				filepath.Join("some", "folder", "nested", "file31.dat"),
-				filepath.Join("some", "folder", "nested", "file32.dat"),
+				"some/folder/file211.dat",
+				"some/folder/nested/file3.dat",
+				"some/folder/nested/file31.dat",
+				"some/folder/nested/file32.dat",
 			}
 			err := Checkout(pathspecs, false, testCallback)
 			Expect(err).To(BeNil(), "Shouldn't fail calling checkout with pathspecs")
