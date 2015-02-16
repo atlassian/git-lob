@@ -535,7 +535,7 @@ var _ = Describe("Git", func() {
 			Expect(commit.CommitterName).To(Equal("Joe Bloggs"), "Committer should be correct")
 			Expect(commit.CommitterEmail).To(Equal("joe@bloggs.com"), "Committer email should be correct")
 			Expect(commit.Subject).To(Equal("This is a commit"), "Subject should be correct")
-			Expect(commit.CommitDate).To(BeTemporally("~", now, time.Second), "Commit date should be within a second of now")
+			Expect(commit.CommitDate).To(BeTemporally("~", now, time.Second*10), "Commit date should be within 10 seconds of now")
 			Expect(commit.AuthorDate).To(BeTemporally("~", time.Date(2010, 03, 01, 14, 12, 0, 0, time.UTC), time.Millisecond), "Author date should be correct")
 
 		})
@@ -559,7 +559,7 @@ var _ = Describe("Git", func() {
 			Expect(commit.CommitterName).To(Equal("Joe Bloggs"), "Committer should be correct")
 			Expect(commit.CommitterEmail).To(Equal("joe@bloggs.com"), "Committer email should be correct")
 			Expect(commit.Subject).To(Equal("This is |a commit|with pipes in it|"), "Subject should be correct")
-			Expect(commit.CommitDate).To(BeTemporally("~", now, time.Second), "Commit date should be within a second of now")
+			Expect(commit.CommitDate).To(BeTemporally("~", now, time.Second*10), "Commit date should be within 10 seconds of now")
 			Expect(commit.AuthorDate).To(BeTemporally("~", time.Date(2010, 03, 01, 14, 12, 0, 0, time.UTC), time.Millisecond), "Author date should be correct")
 
 		})
