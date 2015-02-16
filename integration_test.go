@@ -45,6 +45,8 @@ var _ = Describe("Integration", func() {
 		// Here we have to assume that go test is running in the root source folder
 		cwd, _ := os.Getwd()
 		gitlobbinarypath = filepath.Join(cwd, "git-lob")
+		// For windows we need to convert \ to / since Git doesn't allow backslashes
+		gitlobbinarypath = strings.Replace(gitlobbinarypath, "\\", "/", -1)
 		f.WriteString(fmt.Sprintf(`
 [filter "testlob"]
   clean = "%v filter-clean %%f"
