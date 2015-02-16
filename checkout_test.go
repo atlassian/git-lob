@@ -313,11 +313,13 @@ var _ = Describe("Checkout", func() {
 			filepath.Join("some", "folder", "nested"),
 			filepath.Join("second", "folder", "*6.*"),
 		}
+		// note callbacks always in git style ie forward slashes even on Windows
+		// But we still accept Windows style as parameters
 		correctFiles := []string{
-			filepath.Join("some", "folder", "nested", "file3.dat"),
-			filepath.Join("some", "folder", "nested", "file31.dat"),
-			filepath.Join("some", "folder", "nested", "file32.dat"),
-			filepath.Join("second", "folder", "file6.dat"),
+			"some/folder/nested/file3.dat",
+			"some/folder/nested/file31.dat",
+			"some/folder/nested/file32.dat",
+			"second/folder/file6.dat",
 		}
 		err := Checkout(pathspecs, false, testCallback)
 		Expect(err).To(BeNil(), "Shouldn't fail calling checkout with pathspecs")
