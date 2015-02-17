@@ -44,3 +44,8 @@ stage something else) and call 'git update-index <file>' to ensure the index has
 'git diff --cached <file>' still calls the clean filter for no goddamn reason I can understand.
 The only way I can stop it is to use 'git update-index --assume-unchanged <file>' which sucks, because it
 disables all detection of file status changes in git status.
+
+-- Update 17 Feb 2015
+Hmm, it doesn't seem too bad right now, after running with a repo for a while git diff --cached isn't calling clean filters very much except when you modify files, which is expected. Also if you call it a few times during edits, each time it's creating a new stored LOB so you want to run 'git lob prune' to remove these unnecessary & outdated ones later. 
+
+Keep this under review; right now it seems like it would cause more hassle than currently exists to stop the detection of modified files automatically. If we do add an option to --assume-unchanged later it probably shouldn't be the default.
