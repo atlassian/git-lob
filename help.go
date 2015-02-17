@@ -46,7 +46,6 @@ General settings:
   git-lob.logfile    Log file to write if logenabled (default: ~/git-lob.log)
   git-lob.logverbose Verbose logging in log file
                      (separate to console)
-  git-lob.chunksize  The size chunks to split binary files into in binary store
   git-lob.sharedstore
                      A shared folder in which to store binary content rather
                      than storing it inside each repo. This minimises storage

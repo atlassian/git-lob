@@ -247,7 +247,6 @@ var _ = Describe("Storage", func() {
 				Expect(err).To(BeNil(), "Shouldn't be error storing LOB")
 				Expect(lobinfo.Size).To(BeEquivalentTo(0), "Size should be correct")
 				Expect(lobinfo.NumChunks).To(BeEquivalentTo(0), "Should only be one chunk")
-				Expect(lobinfo.ChunkSize).To(BeEquivalentTo(GlobalOptions.ChunkSize), "Chunk size should be correct")
 				shaZero := sha1.New()
 				shaZeroStr := fmt.Sprintf("%x", string(shaZero.Sum(nil)))
 				Expect(lobinfo.SHA).To(Equal(shaZeroStr), "SHA should be the zero file content SHA")
@@ -262,16 +261,16 @@ var _ = Describe("Storage", func() {
 
 			BeforeEach(func() {
 				// Jig the chunk size for efficient testing
-				oldChunkSize = GlobalOptions.ChunkSize
-				GlobalOptions.ChunkSize = 200
-				CreateRandomFileForTest(GlobalOptions.ChunkSize, exact1)
-				CreateRandomFileForTest(GlobalOptions.ChunkSize*2, exact2)
+				oldChunkSize = ChunkSize
+				ChunkSize = 200
+				CreateRandomFileForTest(ChunkSize, exact1)
+				CreateRandomFileForTest(ChunkSize*2, exact2)
 
 			})
 			AfterEach(func() {
 				os.Remove(exact1)
 				os.Remove(exact2)
-				GlobalOptions.ChunkSize = oldChunkSize
+				ChunkSize = oldChunkSize
 			})
 
 			It("correctly stores files which are exact multiples of chunk size", func() {
@@ -288,9 +287,8 @@ var _ = Describe("Storage", func() {
 				}
 				lobinfo, err := StoreLOB(f, leader[:c])
 				Expect(err).To(BeNil(), "Shouldn't be error storing LOB")
-				Expect(lobinfo.Size).To(BeEquivalentTo(GlobalOptions.ChunkSize), "Size should be correct")
+				Expect(lobinfo.Size).To(BeEquivalentTo(ChunkSize), "Size should be correct")
 				Expect(lobinfo.NumChunks).To(BeEquivalentTo(1), "Should only be one chunk")
-				Expect(lobinfo.ChunkSize).To(BeEquivalentTo(GlobalOptions.ChunkSize), "Chunk size should be correct")
 				fileinfo, err := os.Stat(getLocalLOBChunkPath(lobinfo.SHA, 0))
 				Expect(err).To(BeNil(), "Shouldn't be error opening stored LOB")
 				Expect(fileinfo.Size()).To(Equal(lobinfo.Size), "Stored LOB should be correct size")
@@ -308,15 +306,14 @@ var _ = Describe("Storage", func() {
 				}
 				lobinfo, err = StoreLOB(f2, leader[:c])
 				Expect(err).To(BeNil(), "Shouldn't be error storing LOB")
-				Expect(lobinfo.Size).To(BeEquivalentTo(GlobalOptions.ChunkSize*2), "Size should be correct")
+				Expect(lobinfo.Size).To(BeEquivalentTo(ChunkSize*2), "Size should be correct")
 				Expect(lobinfo.NumChunks).To(BeEquivalentTo(2), "Should be 2 chunks")
-				Expect(lobinfo.ChunkSize).To(BeEquivalentTo(GlobalOptions.ChunkSize), "Chunk size should be correct")
 				fileinfo, err = os.Stat(getLocalLOBChunkPath(lobinfo.SHA, 0))
 				Expect(err).To(BeNil(), "Shouldn't be error opening stored LOB")
-				Expect(fileinfo.Size()).To(Equal(lobinfo.ChunkSize), "Stored LOB should be correct size")
+				Expect(fileinfo.Size()).To(Equal(ChunkSize), "Stored LOB should be correct size")
 				fileinfo, err = os.Stat(getLocalLOBChunkPath(lobinfo.SHA, 1))
 				Expect(err).To(BeNil(), "Shouldn't be error opening stored LOB")
-				Expect(fileinfo.Size()).To(Equal(lobinfo.ChunkSize), "Stored LOB should be correct size")
+				Expect(fileinfo.Size()).To(Equal(ChunkSize), "Stored LOB should be correct size")
 
 			})
 
@@ -353,9 +350,9 @@ var _ = Describe("Storage", func() {
 					fileinfo, err := os.Stat(getLocalLOBChunkPath(lobinfo.SHA, i))
 					Expect(err).To(BeNil(), "Shouldn't be error opening stored LOB #%v", i)
 					if i+1 < lobinfo.NumChunks {
-						Expect(fileinfo.Size()).To(BeEquivalentTo(GlobalOptions.ChunkSize), "Stored LOB #%v should be chunk limit size", i)
+						Expect(fileinfo.Size()).To(BeEquivalentTo(ChunkSize), "Stored LOB #%v should be chunk limit size", i)
 					} else {
-						Expect(fileinfo.Size()).To(BeEquivalentTo(lobinfo.Size%GlobalOptions.ChunkSize), "Stored LOB #%v should be correct size", i)
+						Expect(fileinfo.Size()).To(BeEquivalentTo(lobinfo.Size%ChunkSize), "Stored LOB #%v should be correct size", i)
 					}
 
 				}
@@ -483,45 +480,6 @@ var _ = Describe("Storage", func() {
 			})
 
 		})
-		Describe("Changing chunk size", func() {
-			var oldChunkSize int64
-
-			BeforeEach(func() {
-				// Jig the chunk size for efficient testing
-				oldChunkSize = GlobalOptions.ChunkSize
-				GlobalOptions.ChunkSize = 512
-
-			})
-			AfterEach(func() {
-				GlobalOptions.ChunkSize = oldChunkSize
-			})
-
-			It("correctly stores files which are exact multiples of chunk size", func() {
-				filename := path.Join(folders[1], "changesize.dat")
-				CreateRandomFileForTest(GlobalOptions.ChunkSize*4+120, filename)
-				storeinfo, err := StoreLOBForTest(filename)
-				if err != nil {
-					Fail(fmt.Sprintf("Failed to store %v: %v", filename, err))
-				}
-
-				// Change the chunk size (smaller) & retrieve
-				GlobalOptions.ChunkSize = 256
-				out, err := ioutil.TempFile("", "changesize.dat")
-				Expect(err).To(BeNil(), "Shouldn't be error creating temp file")
-				outFilename := out.Name()
-				retrieveinfo, err := RetrieveLOB(storeinfo.SHA, out)
-				Expect(err).To(BeNil(), "Shouldn't be error retrieving LOB")
-				out.Close()
-
-				Expect(retrieveinfo).To(Equal(storeinfo), "Chunk size should not be changed on retrieve")
-				// Check output file
-				stat, err := os.Stat(outFilename)
-				Expect(err).To(BeNil(), "Shouldn't be error checking output file")
-				Expect(stat.Size()).To(Equal(retrieveinfo.Size), "Size on disk should agree with metadata")
-
-			})
-
-		})
 
 	})
 
@@ -637,17 +595,17 @@ var _ = Describe("Storage", func() {
 					fileinfo, err := os.Stat(getLocalLOBChunkPath(lobinfo.SHA, i))
 					Expect(err).To(BeNil(), "Shouldn't be error opening stored LOB #%v", i)
 					if i+1 < lobinfo.NumChunks {
-						Expect(fileinfo.Size()).To(BeEquivalentTo(GlobalOptions.ChunkSize), "Stored LOB #%v should be chunk limit size", i)
+						Expect(fileinfo.Size()).To(BeEquivalentTo(ChunkSize), "Stored LOB #%v should be chunk limit size", i)
 					} else {
-						Expect(fileinfo.Size()).To(BeEquivalentTo(lobinfo.Size%GlobalOptions.ChunkSize), "Stored LOB #%v should be correct size", i)
+						Expect(fileinfo.Size()).To(BeEquivalentTo(lobinfo.Size%ChunkSize), "Stored LOB #%v should be correct size", i)
 					}
 					// Also check shared
 					fileinfo, err = os.Stat(getSharedLOBChunkPath(lobinfo.SHA, i))
 					Expect(err).To(BeNil(), "Shouldn't be error opening stored LOB #%v", i)
 					if i+1 < lobinfo.NumChunks {
-						Expect(fileinfo.Size()).To(BeEquivalentTo(GlobalOptions.ChunkSize), "Stored LOB #%v should be chunk limit size", i)
+						Expect(fileinfo.Size()).To(BeEquivalentTo(ChunkSize), "Stored LOB #%v should be chunk limit size", i)
 					} else {
-						Expect(fileinfo.Size()).To(BeEquivalentTo(lobinfo.Size%GlobalOptions.ChunkSize), "Stored LOB #%v should be correct size", i)
+						Expect(fileinfo.Size()).To(BeEquivalentTo(lobinfo.Size%ChunkSize), "Stored LOB #%v should be correct size", i)
 					}
 					links, err := GetHardLinkCount(getLocalLOBChunkPath(lobinfo.SHA, i))
 					Expect(err).To(BeNil(), "Shouldn't be error getting local LOB hard link info")
@@ -769,15 +727,15 @@ var _ = Describe("Storage", func() {
 
 			// Reduce global chunk size for test
 			// we need to test many chunks but let's not take lots of time
-			savedChunkSize = GlobalOptions.ChunkSize
-			GlobalOptions.ChunkSize = 16384
+			savedChunkSize = ChunkSize
+			ChunkSize = 16384
 
 			sizes := []int64{50, 150, 200,
-				GlobalOptions.ChunkSize + 100,
-				GlobalOptions.ChunkSize + 1200,
-				GlobalOptions.ChunkSize + 3400,
-				GlobalOptions.ChunkSize*3 - 200,
-				GlobalOptions.ChunkSize*3 - 1000}
+				ChunkSize + 100,
+				ChunkSize + 1200,
+				ChunkSize + 3400,
+				ChunkSize*3 - 200,
+				ChunkSize*3 - 1000}
 
 			smallFileIdx = []int{0, 1, 2}
 			midFileIdx = []int{3, 4, 5}
@@ -802,7 +760,7 @@ var _ = Describe("Storage", func() {
 			// Delete repo
 			os.RemoveAll(root)
 
-			GlobalOptions.ChunkSize = savedChunkSize
+			ChunkSize = savedChunkSize
 		})
 
 		It("Shallow checks LOB files", func() {
