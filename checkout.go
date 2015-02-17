@@ -83,7 +83,7 @@ func Checkout(pathspecs []string, dryRun bool, callback CheckoutCallback) error 
 	// deleted for example. We still check the content of the working copy if the file IS there
 	// in order to not overwrite modified files.
 
-	LogDebugf("Checking for missing binary files in working copy")
+	LogDebug("Checking for missing binary files in working copy")
 
 	// firstly convert any pathspecs to the root of the repo, in case this is being executed in a sub-folder
 	reporoot, _, err := GetRepoRoot()
@@ -194,7 +194,7 @@ func Checkout(pathspecs []string, dryRun bool, callback CheckoutCallback) error 
 	}
 
 	if retErr == nil {
-		LogDebugf("Successfully checked the working copy")
+		LogDebug("Successfully checked the working copy")
 	}
 
 	return retErr
