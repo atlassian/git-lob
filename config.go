@@ -13,6 +13,12 @@ import (
 	"strings"
 )
 
+// Chunk size that we split stored data into so it's easier to resume uploads/downloads
+// This used to be configurable, but it caused too many issues if different people had different
+// settings in a shared repository
+// This is only 'var' rather than 'const' to allow tests to modify
+var ChunkSize = int64(32 * 1024 * 1024)
+
 // Options (command line or config file)
 // Only general options, command-specific ones dealt with in commands
 type Options struct {
@@ -40,8 +46,6 @@ type Options struct {
 	LogFile string
 	// Log verbosely even if main Verbose option is disabled for console
 	VerboseLog bool
-	// The size we should split binary files into for storage
-	ChunkSize int64
 	// Shared folder in which to store binary files for all repos
 	SharedStore string
 	// Auto fetch (download) on checkout?
@@ -66,7 +70,6 @@ func NewOptions() *Options {
 		BoolOpts:                 NewStringSet(),
 		Args:                     make([]string, 0, 5),
 		GitConfig:                make(map[string]string),
-		ChunkSize:                32 * 1024 * 1024,
 		RecentRefsPeriodDays:     90,
 		RecentCommitsPeriodHEAD:  30,
 		RecentCommitsPeriodOther: 0,
@@ -101,14 +104,6 @@ func parseConfig(configmap map[string]string, opts *Options) {
 	}
 	if strings.ToLower(configmap["git-lob.logverbose"]) == "true" {
 		opts.VerboseLog = true
-	}
-	if chunkSizeStr := configmap["git-lob.chunksize"]; chunkSizeStr != "" {
-		val, err := ParseSize(chunkSizeStr)
-		if err != nil {
-			LogErrorf("Invalid size for git-lob.chunksize: %v\n", chunkSizeStr)
-		} else {
-			opts.ChunkSize = val
-		}
 	}
 	if sharedStore := configmap["git-lob.sharedstore"]; sharedStore != "" {
 		sharedStore = filepath.Clean(sharedStore)

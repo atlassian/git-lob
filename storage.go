@@ -24,8 +24,6 @@ type LOBInfo struct {
 	Size int64
 	// Number of chunks that make up the whole LOB (integrity check)
 	NumChunks int
-	// The chunk size that was used to divide this LOB (since can be configured separately)
-	ChunkSize int64
 }
 
 var cachedRepoRoot string
@@ -314,13 +312,13 @@ func RetrieveLOB(sha string, out io.Writer) (info *LOBInfo, err error) {
 	// Pre-validate all the files BEFORE we start streaming data to out
 	// if we fail part way through we don't want to have written partial
 	// data, should be all or nothing
-	lastChunkSize := fileSize - (int64(info.NumChunks-1) * info.ChunkSize)
+	lastChunkSize := fileSize - (int64(info.NumChunks-1) * ChunkSize)
 	// Check all files
 	for i := 0; i < info.NumChunks; i++ {
 		chunkFilename := getLocalLOBChunkPath(sha, i)
 		var expectedSize int64
 		if i+1 < info.NumChunks {
-			expectedSize = info.ChunkSize
+			expectedSize = ChunkSize
 		} else {
 			if info.NumChunks == 1 {
 				expectedSize = fileSize
@@ -498,9 +496,9 @@ func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
 			writeLeader = false
 		} else {
 			var bytesToRead int64 = BUFSIZE
-			if BUFSIZE+currentChunkSize > GlobalOptions.ChunkSize {
+			if BUFSIZE+currentChunkSize > ChunkSize {
 				// Read less than BUFSIZE so we stick to CHUNKLIMIT
-				bytesToRead = GlobalOptions.ChunkSize - currentChunkSize
+				bytesToRead = ChunkSize - currentChunkSize
 			}
 			c, err := in.Read(buf[:bytesToRead])
 			// Write any data to SHA & output
@@ -543,7 +541,7 @@ func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
 
 			// Read from incoming
 			// Deal with chunk limit
-			if currentChunkSize >= GlobalOptions.ChunkSize {
+			if currentChunkSize >= ChunkSize {
 				// Close this output, next iteration will create the next file
 				outf.Close()
 				outf = nil
@@ -569,12 +567,12 @@ func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
 	// We *may* now move the data to LOB dir
 	// We won't if it already exists & is the correct size
 	// Construct LOBInfo & write to final location
-	info := &LOBInfo{SHA: shaStr, Size: totalSize, NumChunks: len(chunkFilenames), ChunkSize: GlobalOptions.ChunkSize}
+	info := &LOBInfo{SHA: shaStr, Size: totalSize, NumChunks: len(chunkFilenames)}
 	err = storeLOBInfo(info)
 
 	// Check each chunk file
 	for i, f := range chunkFilenames {
-		sz := GlobalOptions.ChunkSize
+		sz := ChunkSize
 		if i+1 == len(chunkFilenames) {
 			// Last chunk, get size
 			sz = currentChunkSize
@@ -656,7 +654,7 @@ func GetLOBFilesForSHA(sha, basedir string, check bool, checkHash bool) (files [
 	if checkHash {
 		shaRecalc = sha1.New()
 	}
-	lastChunkSize := info.Size - (int64(info.NumChunks-1) * info.ChunkSize)
+	lastChunkSize := info.Size - (int64(info.NumChunks-1) * ChunkSize)
 	for i := 0; i < info.NumChunks; i++ {
 		relchunk := getLOBChunkRelativePath(sha, i)
 		ret = append(ret, relchunk)
@@ -665,7 +663,7 @@ func GetLOBFilesForSHA(sha, basedir string, check bool, checkHash bool) (files [
 			// Check size first
 			var expectedSize int64
 			if i+1 < info.NumChunks {
-				expectedSize = info.ChunkSize
+				expectedSize = ChunkSize
 			} else {
 				if info.NumChunks == 1 {
 					expectedSize = info.Size
@@ -809,12 +807,12 @@ func GetLOBFilenamesWithBaseDir(shas []string, check bool) (files []string, base
 // Get the correct size of a given chunk
 func getLOBExpectedChunkSize(info *LOBInfo, chunkIdx int) int64 {
 	if chunkIdx+1 < info.NumChunks {
-		return info.ChunkSize
+		return ChunkSize
 	} else {
 		if info.NumChunks == 1 {
 			return info.Size
 		} else {
-			return info.Size - (int64(info.NumChunks-1) * info.ChunkSize)
+			return info.Size - (int64(info.NumChunks-1) * ChunkSize)
 		}
 	}
 
