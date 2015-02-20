@@ -135,19 +135,19 @@ func parseConfig(configmap map[string]string, opts *Options) {
 	//git-lob.recent-commits-other default: 0 days
 	if recentrefs := configmap["git-lob.recent-refs"]; recentrefs != "" {
 		n, err := strconv.ParseInt(recentrefs, 10, 0)
-		if err != nil {
+		if err == nil {
 			opts.RecentRefsPeriodDays = int(n)
 		}
 	}
 	if recent := configmap["git-lob.recent-commits-head"]; recent != "" {
 		n, err := strconv.ParseInt(recent, 10, 0)
-		if err != nil {
+		if err == nil {
 			opts.RecentCommitsPeriodHEAD = int(n)
 		}
 	}
 	if recent := configmap["git-lob.recent-commits-other"]; recent != "" {
 		n, err := strconv.ParseInt(recent, 10, 0)
-		if err != nil {
+		if err == nil {
 			opts.RecentCommitsPeriodOther = int(n)
 		}
 	}
