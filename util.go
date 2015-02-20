@@ -107,9 +107,11 @@ func FormatFloat(f float32) string {
 	// Just adjust width & precision based on scale to be friendly
 	switch {
 	case f < 1000:
+		// Need %g to make after decimal place optional
 		return fmt.Sprintf("%.3g", f)
 	default:
-		return fmt.Sprintf("%g", f)
+		// Need %f here to kill exponent
+		return fmt.Sprintf("%4.0f", f)
 	}
 }
 

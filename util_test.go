@@ -23,6 +23,8 @@ var _ = Describe("Util", func() {
 			Expect(str).To(Equal("150MB"))
 			str = FormatSize(1048576000)
 			Expect(str).To(Equal("1000MB"))
+			str = FormatSize(1048576123)
+			Expect(str).To(Equal("1000MB"))
 			str = FormatSize(44023414784)
 			Expect(str).To(Equal("41GB"))
 			str = FormatSize(44475414800)
