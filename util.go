@@ -85,41 +85,46 @@ func ParseSize(str string) (int64, error) {
 
 }
 
+func FormatBytes(sz int64) (suffix string, scaled float32) {
+	switch {
+	case sz >= (1 << 50):
+		return "PB", float32(sz) / float32(1<<50)
+	case sz >= (1 << 40):
+		return "TB", float32(sz) / float32(1<<40)
+	case sz >= (1 << 30):
+		return "GB", float32(sz) / float32(1<<30)
+	case sz >= (1 << 20):
+		return "MB", float32(sz) / float32(1<<20)
+	case sz >= (1 << 10):
+		return "KB", float32(sz) / float32(1<<10)
+	default:
+		return "B", float32(sz)
+	}
+
+}
+
+func FormatFloat(f float32) string {
+	// Just adjust width & precision based on scale to be friendly
+	switch {
+	case f < 1000:
+		return fmt.Sprintf("%.3g", f)
+	default:
+		return fmt.Sprintf("%g", f)
+	}
+}
+
 // Format a number of bytes into a display format
 func FormatSize(sz int64) string {
 
-	switch {
-	case sz >= (1 << 50):
-		return fmt.Sprintf("%.3gPB", float32(sz)/float32(1<<50))
-	case sz >= (1 << 40):
-		return fmt.Sprintf("%.3gTB", float32(sz)/float32(1<<40))
-	case sz >= (1 << 30):
-		return fmt.Sprintf("%.3gGB", float32(sz)/float32(1<<30))
-	case sz >= (1 << 20):
-		return fmt.Sprintf("%.3gMB", float32(sz)/float32(1<<20))
-	case sz >= (1 << 10):
-		return fmt.Sprintf("%.3gKB", float32(sz)/float32(1<<10))
-	default:
-		return fmt.Sprintf("%dB", sz)
-	}
+	suffix, num := FormatBytes(sz)
+	return FormatFloat(num) + suffix
 }
 
 // Format a bytes per second transfer rate into a display format
 func FormatTransferRate(bytesPerSecond int64) string {
-	switch {
-	case bytesPerSecond >= (1 << 50): // yeah, right ;)
-		return fmt.Sprintf("%.3gPB/s", float32(bytesPerSecond)/float32(1<<50))
-	case bytesPerSecond >= (1 << 40):
-		return fmt.Sprintf("%.3gTB/s", float32(bytesPerSecond)/float32(1<<40))
-	case bytesPerSecond >= (1 << 30):
-		return fmt.Sprintf("%.3gGB/s", float32(bytesPerSecond)/float32(1<<30))
-	case bytesPerSecond >= (1 << 20):
-		return fmt.Sprintf("%.3gMB/s", float32(bytesPerSecond)/float32(1<<20))
-	case bytesPerSecond >= (1 << 10):
-		return fmt.Sprintf("%.3gKB/s", float32(bytesPerSecond)/float32(1<<10))
-	default:
-		return fmt.Sprintf("%dBytes/s", bytesPerSecond)
-	}
+
+	suffix, num := FormatBytes(bytesPerSecond)
+	return fmt.Sprintf("%v%v/s", FormatFloat(num), suffix)
 }
 
 // Calculates transfer rates by averaging over n samples
