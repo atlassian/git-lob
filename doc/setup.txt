@@ -19,7 +19,7 @@ Setting up Go environment
 5. Install gen for generics: http://clipperhouse.github.io/gen/
     go get github.com/clipperhouse/gen
 6. Install goamz for S3
-    go get github.com/goamz/goamz/s3
+    go get github.com/mitchellh/goamz/s3
 
    Set up a secondary remote https://github.com/sinbad/goamz.git, fetch and checkout master from there. This contains my modifications / fixes. See
    http://blog.campoy.cat/2014/03/github-and-go-forking-pull-requests-and.html for why I've done it like this
