@@ -3,7 +3,7 @@ Dependencies
 
 Runtime:
 
-github.com/mitchellh/goamz
+github.com/mitchellh/goamz & fork github.com/sinbad/goamz
    AWS library for Go. LGPLv3 with static/dynamic linking exception
 github.com/vaughan0/go-ini 
    Dependency of goamz. MIT license
