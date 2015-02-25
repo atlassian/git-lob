@@ -1,31 +1,38 @@
 package main
 
 import (
+	"fmt"
 	"github.com/mitchellh/goamz/aws"
 	"github.com/mitchellh/goamz/s3"
 	"github.com/mitchellh/goamz/testutil"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 )
 
 var _ = Describe("S3", func() {
-
 	Context("Mocked S3 tests", func() {
 		var testServer *testutil.HTTPServer
 		var auth = aws.Auth{"abc", "123", ""}
 		var s3sync *S3SyncProvider
 		BeforeEach(func() {
 			// Mock server
+			// No shutdown available so must only do this once
+			if testServer == nil {
+				testServer = testutil.NewHTTPServer()
+				testServer.Start()
+			}
 			// Hack the git config to mock destination
 			GlobalOptions.GitConfig["remote.origin.git-lob-s3-bucket"] = "thebucket"
-			testServer = testutil.NewHTTPServer()
-			testServer.Start()
 			// Manually configure provider to use test server
 			s3sync = &S3SyncProvider{}
 			s3sync.S3Connection = s3.New(auth, aws.Region{Name: "test-region-1", S3Endpoint: testServer.URL})
 		})
 		AfterEach(func() {
 			GlobalOptions = NewOptions()
+			testServer.Flush()
 		})
 
 		It("Detects whether files exist", func() {
@@ -64,6 +71,46 @@ var _ = Describe("S3", func() {
 			req = testServer.WaitRequest()
 			Expect(req.Method).To(Equal("HEAD"), "Should be correct HTTP method")
 			Expect(req.URL.Path).To(Equal("/thebucket/actuallyafile.txt"), "Requested path should be correct")
+
+		})
+
+		It("Uploads files to S3", func() {
+			var filesUploaded []string
+			var filesSkipped []string
+			callback := func(filename string, progressType ProgressCallbackType, bytesDone, totalBytes int64) (abort bool) {
+				if bytesDone == totalBytes {
+					if progressType == ProgressSkip {
+						filesSkipped = append(filesSkipped, filename)
+					} else {
+						filesUploaded = append(filesUploaded, filename)
+					}
+				}
+				return false
+			}
+
+			// Need 3 responses (unfortunately we have to know the internals of the requests here)
+			// 1 Check that bucket exists (OK)
+			testServer.Response(200, nil, "")
+			// 2 Check if file exists (404)
+			testServer.Response(404, nil, "")
+			// 3 Upload
+			testServer.Response(200, nil, "")
+			tmp, _ := ioutil.TempDir("", "s3test")
+			filename := filepath.Join(tmp, "file1.txt")
+			CreateRandomFileForTest(1500, filename)
+			err := s3sync.Upload("origin", []string{filepath.Base(filename)}, filepath.Dir(filename), false, callback)
+			os.Remove(filename)
+
+			Expect(err).To(BeNil(), "Should not be error uploading")
+			// Get 3rd response
+			testServer.WaitRequest()
+			testServer.WaitRequest()
+			req := testServer.WaitRequest()
+			Expect(req.Method).To(Equal("PUT"), "Should be correct HTTP method")
+			Expect(req.URL.Path).To(Equal(fmt.Sprintf("/thebucket/%v", filepath.Base(filename))), "Requested path should be correct")
+			Expect(req.Header["Content-Length"]).To(Equal([]string{"1500"}), "Should be correct content length")
+			Expect(filesSkipped).To(BeEmpty(), "No files should be skipped")
+			Expect(filesUploaded).To(ConsistOf([]string{"file1.txt"}), "Correct files should be uploaded")
 
 		})
 
