@@ -294,9 +294,9 @@ func (*FileSystemSyncProvider) downloadSingleFile(remoteName, filename, fromDir,
 		os.Remove(tmpfilename)
 		var msg string
 		if err != nil {
-			msg = fmt.Sprintf("Problem while downloading %v to %v: %v", srcfilename, remoteName, err)
+			msg = fmt.Sprintf("Problem while downloading %v from %v: %v", srcfilename, remoteName, err)
 		} else {
-			msg = fmt.Sprintf("Download error: number of bytes written to %v in download of %v does not agree (%d/%d)",
+			msg = fmt.Sprintf("Download error: number of bytes read from %v in download of %v does not agree (%d/%d)",
 				remoteName, srcfilename, copysize, srcfi.Size())
 		}
 		errorList = append(errorList, msg)
