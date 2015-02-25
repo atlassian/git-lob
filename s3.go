@@ -30,6 +30,8 @@ func (*S3SyncProvider) HelpTextDetail() string {
 
 Required parameters in remote section of .gitconfig:
     git-lob-s3-bucket   The bucket to use as the root remote store. Must already exist.
+
+Optional parameters in the remote section:
     git-lob-s3-region   The AWS region to use. If not specified will use region settings
                         from your ~/.aws/config. If no region is specified, uses US East.
     git-lob-s3-profile  The profile to use to authenticate for this remote. Can also 
