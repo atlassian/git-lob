@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"github.com/mitchellh/goamz/aws"
 	"github.com/mitchellh/goamz/s3"
+	"io"
+	"io/ioutil"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -300,7 +302,146 @@ func (self *S3SyncProvider) Upload(remoteName string, filenames []string, fromDi
 	return nil
 }
 
+func (*S3SyncProvider) downloadSingleFile(remoteName, filename string, bucket *s3.Bucket, toDir string,
+	force bool, callback SyncProgressCallback) (errorList []string, abort bool) {
+
+	// Query for existence & size first; we need the size either way to report d/l progress
+	key, err := bucket.GetKey(filename)
+	if err != nil {
+		// File missing on remote
+		if callback != nil {
+			if callback(filename, ProgressNotFound, 0, 0) {
+				return errorList, true
+			}
+		}
+		// Note how we don't add an error to the returned error list
+		// As per provider docs, we simply tell callback it happened & treat it
+		// as a skipped item otherwise, since caller can only request files & not know
+		// if they're on the remote or not
+		// Keep going with other files
+		return errorList, false
+	}
+
+	// Check to see if the file is already there, right size
+	destfilename := filepath.Join(toDir, filename)
+	if !force {
+		if destfi, err := os.Stat(destfilename); err == nil {
+			// File exists locally, check the size
+			if destfi.Size() == key.Size {
+				// File already present and correct size, skip
+				if callback != nil {
+					if callback(filename, ProgressSkip, destfi.Size(), destfi.Size()) {
+						return errorList, true
+					}
+				}
+				return errorList, false
+			}
+		}
+	}
+
+	// Make sure dest dir exists
+	parentDir := filepath.Dir(destfilename)
+	err = os.MkdirAll(parentDir, 0755)
+	if err != nil {
+		msg := fmt.Sprintf("Unable to create dir %v: %v", parentDir, err)
+		errorList = append(errorList, msg)
+		return errorList, false
+	}
+	// Create a temporary file to download, avoid issues with interruptions
+	// Note this isn't a valid thing to do in security conscious cases but this isn't one
+	// by opening the file we will get a unique temp file name (albeit a predictable one)
+	outf, err := ioutil.TempFile(parentDir, "tempdownload")
+	if err != nil {
+		msg := fmt.Sprintf("Unable to create temp file for download in %v: %v", parentDir, err)
+		errorList = append(errorList, msg)
+		return errorList, false
+	}
+	tmpfilename := outf.Name()
+	// This is safe to do even though we manually close & rename because both calls are no-ops if we succeed
+	defer func() {
+		outf.Close()
+		os.Remove(tmpfilename)
+	}()
+
+	inf, err := bucket.GetReader(filename)
+	if err != nil {
+		msg := fmt.Sprintf("Unable to read file %v from S3 bucket %v for download: %v", filename, bucket.Name, err)
+		errorList = append(errorList, msg)
+		return errorList, false
+	}
+	defer inf.Close()
+
+	// Initial callback
+	if callback != nil {
+		if callback(filename, ProgressTransferBytes, 0, key.Size) {
+			return errorList, true
+		}
+	}
+	var copysize int64 = 0
+	for {
+		var n int64
+		n, err = io.CopyN(outf, inf, BUFSIZE)
+		copysize += n
+		if n > 0 && callback != nil && key.Size > 0 {
+			if callback(filename, ProgressTransferBytes, copysize, key.Size) {
+				return errorList, true
+			}
+		}
+		if err != nil {
+			break
+		}
+	}
+	outf.Close()
+	inf.Close()
+	if copysize != key.Size {
+		os.Remove(tmpfilename)
+		var msg string
+		if err != nil {
+			msg = fmt.Sprintf("Problem while downloading %v from S3 bucket %v: %v", filename, bucket.Name, err)
+		} else {
+			msg = fmt.Sprintf("Download error: number of bytes read from S3 bucket %v in download of %v does not agree (%d/%d)",
+				bucket.Name, filename, copysize, key.Size)
+		}
+		errorList = append(errorList, msg)
+		return errorList, false
+	}
+	// Otherwise, file data is ok on remote
+	// Move to correct location - remove before to deal with force or bad size cases
+	os.Remove(destfilename)
+	os.Rename(tmpfilename, destfilename)
+	return errorList, false
+
+}
+
 func (self *S3SyncProvider) Download(remoteName string, filenames []string, toDir string, force bool, callback SyncProgressCallback) error {
-	// TODO
+
+	bucket, err := self.getBucket(remoteName)
+	if err != nil {
+		return err
+	}
+
+	LogDebug("Downloading from S3 bucket", bucket.Name)
+
+	// Check bucket exists (via HEAD endpoint)
+	// This saves us failing on every file
+	_, err = bucket.Head("/")
+	if err != nil {
+		return fmt.Errorf("Unable to access S3 bucket '%v' for remote '%v': %v", bucket.Name, err.Error())
+	}
+
+	var errorList []string
+	for _, filename := range filenames {
+		// Allow aborting
+		newerrs, abort := self.downloadSingleFile(remoteName, filename, bucket, toDir, force, callback)
+		errorList = append(errorList, newerrs...)
+		if abort {
+			break
+		}
+	}
+
+	if len(errorList) > 0 {
+		return errors.New(strings.Join(errorList, "\n"))
+	}
+
 	return nil
 }
