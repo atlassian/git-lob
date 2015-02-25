@@ -99,7 +99,6 @@ var _ = Describe("S3", func() {
 			filename := filepath.Join(tmp, "file1.txt")
 			CreateRandomFileForTest(1500, filename)
 			err := s3sync.Upload("origin", []string{filepath.Base(filename)}, filepath.Dir(filename), false, callback)
-			os.Remove(filename)
 
 			Expect(err).To(BeNil(), "Should not be error uploading")
 			// Get 3rd response
@@ -112,6 +111,21 @@ var _ = Describe("S3", func() {
 			Expect(filesSkipped).To(BeEmpty(), "No files should be skipped")
 			Expect(filesUploaded).To(ConsistOf([]string{"file1.txt"}), "Correct files should be uploaded")
 
+			// now test doesn't upload when already exists
+			filesUploaded = []string{}
+			// 1 Check that bucket exists (OK)
+			testServer.Response(200, nil, "")
+			// 2 Check if file exists OK & report size
+			testServer.Response(200, map[string]string{"Content-Length": "1500"}, "")
+
+			err = s3sync.Upload("origin", []string{filepath.Base(filename)}, filepath.Dir(filename), false, callback)
+
+			Expect(err).To(BeNil(), "Should not be error uploading")
+			testServer.Flush()
+			Expect(filesUploaded).To(BeEmpty(), "No files should be uploaded")
+			Expect(filesSkipped).To(ConsistOf([]string{"file1.txt"}), "Correct files should be skipped")
+
+			os.Remove(filename)
 		})
 
 	})
