@@ -167,7 +167,7 @@ func (self *SyncProgressReader) Read(p []byte) (n int, err error) {
 	for remainder := len(p); remainder > 0; {
 		readlen := BUFSIZE
 		if remainder < readlen {
-			readlen = readlen
+			readlen = remainder
 		}
 		var c int
 		c, err = self.internalReader.Read(p[pos : pos+readlen])
