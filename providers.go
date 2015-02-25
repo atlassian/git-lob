@@ -93,6 +93,7 @@ func GetSyncProvider(typeID string) (SyncProvider, error) {
 // Install the core providers
 func InitCoreProviders() {
 	RegisterSyncProvider(&FileSystemSyncProvider{})
+	RegisterSyncProvider(&S3SyncProvider{})
 }
 
 func cmdListProviders() int {

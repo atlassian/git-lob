@@ -297,3 +297,8 @@ func (self *S3SyncProvider) Upload(remoteName string, filenames []string, fromDi
 
 	return nil
 }
+
+func (self *S3SyncProvider) Download(remoteName string, filenames []string, toDir string, force bool, callback SyncProgressCallback) error {
+	// TODO
+	return nil
+}
