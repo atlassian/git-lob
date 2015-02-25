@@ -7,33 +7,53 @@ func cmdHelpUsage() {
 	// configured filter shouldn't be allowed to corrupt file output
 	LogConsoleError(usageTxt)
 }
+
+// Map from topic->help function
+// Replicate the help functions for all other commands here too
+var helpTopicMap = map[string]func(){
+	"topics":    cmdTopicsHelp,
+	"config":    cmdConfigHelp,
+	"commands":  cmdCommandsHelp,
+	"remotes":   cmdRemotesHelp,
+	"providers": cmdProvidersHelp,
+	"fetch":     cmdFetchHelp,
+	"pull":      cmdPullHelp,
+	"push":      cmdPushHelp,
+	"checkout":  cmdCheckoutHelp,
+	"prune":     cmdPruneHelp,
+}
+
 func cmdHelp() {
 	// See above for why this is stderr not stdout
 	if len(GlobalOptions.Args) > 0 {
 		// Topic or command-specific help requested
 		arg := GlobalOptions.Args[0]
-		switch arg {
-		case "topics":
-			LogConsoleError(topicsHelpTxt)
-		case "config":
-			LogConsoleError(configHelpTxt)
-		case "commands":
-			// Start with root commands, then add
-			LogConsoleError(rootHelpTxt)
-			LogConsoleError(plumbingCommandsHelpTxt)
-			LogConsoleError(rootOptionsTxt)
-		case "remotes":
-			LogConsoleError(remotesHelpTxt)
+
+		// Find in topics list
+		f, found := helpTopicMap[arg]
+
+		if found {
+			f()
+			return
+		} else {
+			// Also search the providers for anything called that & use their help
+			p, err := GetSyncProvider(arg)
+			if err == nil {
+				LogConsole(p.HelpTextDetail())
+				return
+			}
+
 		}
-	} else {
-		// Top-level help
-		LogConsoleError(rootHelpTxt)
-		LogConsoleError(rootOptionsTxt)
 	}
+
+	// Top-level help
+	LogConsoleError(rootHelpTxt)
+	LogConsoleError(rootOptionsTxt)
 
 }
 
-const configHelpTxt = `Config files:
+func cmdConfigHelp() {
+	LogConsole(`Config files:
 
   git-lob uses ~/.gitconfig and $REPO/.git/config to modify default behaviour.
   All settings are inside the [git-lob] section
@@ -90,15 +110,68 @@ Remote settings:
   Each provider will require other configuration options to fully specify the
   location. Run 'git lob help remotes' for more details.
 
-`
+`)
+}
 
-const topicsHelpTxt = `Usage: git lob help <topic>
+func cmdTopicsHelp() {
+	LogConsole(`Usage: git lob help <topic>
 Available topics:
   topics        Show this list
   config        Help with configuration options
   commands      List all the commands available
+  <command>     Same as git lob <command> --help
   remotes       General discussion of how remotes work with git-lob
-`
+  providers     Lists all the upload/download providers
+  <provider>    Detailed help on one provider
+`)
+}
+
+func cmdCommandsHelp() {
+	// Start with root commands, then add
+	LogConsole(rootHelpTxt)
+	LogConsole(plumbingCommandsHelpTxt)
+	LogConsole(rootOptionsTxt)
+}
+
+func cmdRemotesHelp() {
+	LogConsole(`How remotes work in git-lob
+
+Binaries in git-lob are not stored in the regular git repo, but a corresponding
+binary store must always exist to provide the actual binary content. A remote
+in git usually only gives you the real git repo, so git-lob needs to expand
+the configuration parameters to git remotes to specify the location of the 
+corresponding remote binary store. 
+
+The <remote> parameter to commands like push and fetch refers to a named remote
+in .git/config (plain URLs cannot be supported). The remote entry itself is the
+same as any normal git remote, except that it requires additional git-lob 
+specific parameters. The parameters depend on the type of binary storage 
+('provider') being used; see 'git-lob providers' for a list of available 
+providers and 'git-lob provider <provider>' for specific details of one 
+provider.
+
+As an example, let's take the 'filesystem' provider, which simply uses the OS's
+file system as a remote transport (obviously very simplistic):
+
+[remote "origin"]
+    # these 2 lines are standard git
+    url = ssh://git@bitbucket.org/something/somthing.git
+    fetch = +refs/heads/*:refs/remotes/origin/*
+    # these next 2 lines are required to configure the remote binary store
+    git-lob-provider = filesystem
+    git-lob-path = /Volumes/shared/something/something/binary/store
+    
+Other providers may require other parameters. It's important to note that you
+can share a binary store among multiple remote repos if you wish, much like
+the local git-lob.sharedstore option, since binaries are stored by SHA. 
+Identical file content in multiple repos can be stored only once this way.
+Of course, access control may be an issue to consider here though.
+`)
+}
+
+func cmdProvidersHelp() {
+	cmdListProviders()
+}
 
 const usageTxt = `Usage: git lob [command] [options] [file...]
 Type 'git lob help' for more information
@@ -108,7 +181,8 @@ const rootHelpTxt = `Usage: git lob [command] [options] [file...]
 
   git-lob improves handling of large objects (including binary files) in git
 
-  Use 'git lob <command> --help' or 'git lob help <topic>' for more details
+  Use 'git lob <command> --help' or 'git lob help <topic>' for more details.
+  'git lob help topics' lists topics available.
 
 Commands:
   help                Display this help. Append a topic for general info
@@ -150,37 +224,4 @@ const plumbingCommandsHelpTxt = `Low-level plumbing commands:
   mark-pushed          Mark a commit as having being pushed to a remote
   reset-pushed         Reset the pushed flag for a commit
 
-`
-const remotesHelpTxt = `How remotes work in git-lob
-
-Binaries in git-lob are not stored in the regular git repo, but a corresponding
-binary store must always exist to provide the actual binary content. A remote
-in git usually only gives you the real git repo, so git-lob needs to expand
-the configuration parameters to git remotes to specify the location of the 
-corresponding remote binary store. 
-
-The <remote> parameter to commands like push and fetch refers to a named remote
-in .git/config (plain URLs cannot be supported). The remote entry itself is the
-same as any normal git remote, except that it requires additional git-lob 
-specific parameters. The parameters depend on the type of binary storage 
-('provider') being used; see 'git-lob providers' for a list of available 
-providers and 'git-lob provider <provider>' for specific details of one 
-provider.
-
-As an example, let's take the 'filesystem' provider, which simply uses the OS's
-file system as a remote transport (obviously very simplistic):
-
-[remote "origin"]
-    # these 2 lines are standard git
-    url = ssh://git@bitbucket.org/something/somthing.git
-    fetch = +refs/heads/*:refs/remotes/origin/*
-    # these next 2 lines are required to configure the remote binary store
-    git-lob-provider = filesystem
-    git-lob-path = /Volumes/shared/something/something/binary/store
-    
-Other providers may require other parameters. It's important to note that you
-can share a binary store among multiple remote repos if you wish, much like
-the local git-lob.sharedstore option, since binaries are stored by SHA. 
-Identical file content in multiple repos can be stored only once this way.
-Of course, access control may be an issue to consider here though.
 `
