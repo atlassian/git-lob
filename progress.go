@@ -83,7 +83,6 @@ func ReportProgressToConsole(callbackChan <-chan *ProgressCallbackData, op strin
 					complete = true
 					break
 				}
-
 				// Some progress data is available
 				// May get many of these and we only want to display the last one
 				// unless it's general infoo or we're in verbose mode
@@ -101,6 +100,7 @@ func ReportProgressToConsole(callbackChan <-chan *ProgressCallbackData, op strin
 					results.NotFoundCount++
 					LogConsolef("Not found: %v (Continuing)\n", data.Desc)
 				case ProgressTransferBytes:
+					finalDownloadProgress = data
 					// Print completion in verbose mode
 					if data.ItemBytesDone == data.ItemBytes {
 						results.TransferredCount++
@@ -111,12 +111,9 @@ func ReportProgressToConsole(callbackChan <-chan *ProgressCallbackData, op strin
 							// Clear line on completion in verbose mode
 							// Don't do this as \n in string above since we need to clear spaces after
 							LogConsole("")
+							finalDownloadProgress = nil
+							lastProgress = nil
 						}
-						finalDownloadProgress = nil
-						lastProgress = nil
-					} else {
-						// Otherwise we only really want to display the last one
-						finalDownloadProgress = data
 					}
 				}
 			default:
