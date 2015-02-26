@@ -13,14 +13,25 @@ Setting up Go environment
    d. If you wish, add $GOPATH/bin to your PATH the same way
 3. If you want to cross-compile, install Gox (https://github.com/mitchellh/gox)
     go get github.com/mitchellh/gox
-4. Install Ginkgo for testing: http://onsi.github.io/ginkgo/
-    go get github.com/onsi/ginkgo/ginkgo
-    go get github.com/onsi/gomega
-5. Install gen for generics: http://clipperhouse.github.io/gen/
-    go get github.com/clipperhouse/gen
-6. Install goamz for S3
-    go get github.com/mitchellh/goamz/s3
+4. Make sure you cloned git-lob into $GOPATH/src/bitbucket.org/sinbad/git-lob 
 
-   Set up a secondary remote https://github.com/sinbad/goamz.git, fetch and checkout master from there. This contains my modifications / fixes. See
-   http://blog.campoy.cat/2014/03/github-and-go-forking-pull-requests-and.html for why I've done it like this
-7. Make sure you cloned git-lob into $GOPATH/src/bitbucket.org/sinbad/git-lob 
+A note about godep
+------------------
+
+In order to simplify setup, all 3rd-party dependencies are captured inside
+this repo using 'godep save -r'. See https://github.com/tools/godep
+
+'godep save' copies your dependencies from GOPATH into a _workspace subdir of
+the repo, snapshotting the dependencies and making it easier to set up the 
+project. 
+In addition, it's really useful for when you fork repos but don't change
+the library name (say because you're hoping the pull requests get accepted,
+see https://blog.splice.com/contributing-open-source-git-repositories-go/)
+
+The '-r' parameter re-writes import statements in git-lob to refer directly
+to the internal version, which means anyone building it doesn't have to 
+use 'godep restore' (which copies the internal version into their GOPATH, 
+which they might not want if other projects use a common lib), or the 
+alternative which is to add _workspace to your GOPATH, or to prefix all
+go commands with godep e.g. 'godep go build'. Rewriting the imports just
+means everything works as if nothing happened. 
