@@ -14,3 +14,10 @@ github.com/onsi/ginkgo
   Testing library. MIT license
 github.com/onsi/gomega
   Matcher library for Ginkgo. MIT license
+
+
+Dependencies are managed with godep. If you wish to add a dependency, add it
+in the usual GOPATH and import it from there, then once you're happy with 
+the state, run 'godep save -r' to take a snapshot. Note that this rewrites the 
+imports to refer to the local _workspace copy to  simplify using the 
+dependency from then on.

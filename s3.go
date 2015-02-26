@@ -3,8 +3,8 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/mitchellh/goamz/aws"
-	"github.com/mitchellh/goamz/s3"
+	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/mitchellh/goamz/aws"
+	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/mitchellh/goamz/s3"
 	"io"
 	"io/ioutil"
 	"os"
