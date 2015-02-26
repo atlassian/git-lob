@@ -2,8 +2,8 @@ package matchers_test
 
 import (
 	"testing"
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
+	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
 )
 
 type myStringer struct {

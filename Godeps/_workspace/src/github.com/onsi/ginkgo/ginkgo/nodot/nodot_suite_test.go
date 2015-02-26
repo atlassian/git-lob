@@ -1,8 +1,8 @@
 package nodot_test
 
 import (
-	"github.com/onsi/ginkgo"
-	"github.com/onsi/gomega"
+	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
+	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
 
 	"testing"
 )

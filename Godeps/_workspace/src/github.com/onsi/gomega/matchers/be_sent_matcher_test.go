@@ -2,10 +2,10 @@ package matchers_test
 
 import (
 	"time"
-	. "github.com/onsi/gomega/matchers"
+	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega/matchers"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
+	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
 )
 
 var _ = Describe("BeSent", func() {

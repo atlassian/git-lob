@@ -1,7 +1,7 @@
 package failer
 
 import (
-	"github.com/onsi/ginkgo/types"
+	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/types"
 	"sync"
 )
 

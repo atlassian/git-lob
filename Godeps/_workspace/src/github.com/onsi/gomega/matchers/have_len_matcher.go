@@ -2,7 +2,7 @@ package matchers
 
 import (
 	"fmt"
-	"github.com/onsi/gomega/format"
+	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega/format"
 )
 
 type HaveLenMatcher struct {

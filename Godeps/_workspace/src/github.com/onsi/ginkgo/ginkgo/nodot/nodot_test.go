@@ -1,7 +1,7 @@
 package nodot_test
 
 import (
-	. "github.com/onsi/ginkgo/ginkgo/nodot"
+	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/ginkgo/nodot"
 	"strings"
 )
 
