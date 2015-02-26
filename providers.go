@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 )
 
 // General interface that all sync providers must implement
@@ -92,6 +93,7 @@ func GetSyncProvider(typeID string) (SyncProvider, error) {
 // Install the core providers
 func InitCoreProviders() {
 	RegisterSyncProvider(&FileSystemSyncProvider{})
+	RegisterSyncProvider(&S3SyncProvider{})
 }
 
 func cmdListProviders() int {
@@ -147,4 +149,49 @@ func GetProviderForRemote(remoteName string) (SyncProvider, error) {
 		return nil, err
 	}
 	return provider, nil
+}
+
+// This is a passthrough reader that reports progress, for cases where you need to give a Reader to a lower level process
+type SyncProgressReader struct {
+	internalReader io.Reader
+	filename       string
+	totalBytes     int64
+	callback       SyncProgressCallback
+
+	Aborted   bool
+	BytesRead int64
+}
+
+func (self *SyncProgressReader) Read(p []byte) (n int, err error) {
+	// Make sure that we call progress callback on a reasonable frequency
+	pos := 0
+	n = 0
+	for remainder := len(p); remainder > 0; {
+		readlen := BUFSIZE
+		if remainder < readlen {
+			readlen = remainder
+		}
+		var c int
+		c, err = self.internalReader.Read(p[pos : pos+readlen])
+		n += c
+		self.BytesRead += int64(c)
+		if c > 0 && self.callback != nil && self.totalBytes > 0 {
+			if self.callback(self.filename, ProgressTransferBytes, int64(self.BytesRead), self.totalBytes) {
+				// Abort if requested
+				self.Aborted = true
+				return
+			}
+		}
+		if err != nil {
+			break
+		}
+		pos += c
+		remainder -= c
+
+	}
+	return
+}
+
+func NewSyncProgressReader(r io.Reader, filename string, totalBytes int64, callback SyncProgressCallback) *SyncProgressReader {
+	return &SyncProgressReader{r, filename, totalBytes, callback, false, 0}
 }
