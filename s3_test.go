@@ -97,7 +97,7 @@ var _ = Describe("S3", func() {
 			testServer.Response(200, nil, "")
 			tmp, _ := ioutil.TempDir("", "s3test")
 			filename := filepath.Join(tmp, "file1.txt")
-			CreateRandomFileForTest(1500, filename)
+			CreateRandomFileForTest(100, filename)
 			err := s3sync.Upload("origin", []string{filepath.Base(filename)}, filepath.Dir(filename), false, callback)
 
 			Expect(err).To(BeNil(), "Should not be error uploading")
@@ -107,7 +107,7 @@ var _ = Describe("S3", func() {
 			req := testServer.WaitRequest()
 			Expect(req.Method).To(Equal("PUT"), "Should be correct HTTP method")
 			Expect(req.URL.Path).To(Equal(fmt.Sprintf("/thebucket/%v", filepath.Base(filename))), "Requested path should be correct")
-			Expect(req.Header["Content-Length"]).To(Equal([]string{"1500"}), "Should be correct content length")
+			Expect(req.Header["Content-Length"]).To(Equal([]string{"100"}), "Should be correct content length")
 			Expect(filesSkipped).To(BeEmpty(), "No files should be skipped")
 			Expect(filesUploaded).To(ConsistOf([]string{"file1.txt"}), "Correct files should be uploaded")
 
@@ -116,7 +116,7 @@ var _ = Describe("S3", func() {
 			// 1 Check that bucket exists (OK)
 			testServer.Response(200, nil, "")
 			// 2 Check if file exists OK & report size
-			testServer.Response(200, map[string]string{"Content-Length": "1500"}, "")
+			testServer.Response(200, map[string]string{"Content-Length": "100"}, "")
 
 			err = s3sync.Upload("origin", []string{filepath.Base(filename)}, filepath.Dir(filename), false, callback)
 
@@ -128,11 +128,94 @@ var _ = Describe("S3", func() {
 			os.Remove(filename)
 		})
 
+		It("Downloads files from S3", func() {
+			var filesDownloaded []string
+			var filesSkipped []string
+			var filesNotFound []string
+			callback := func(filename string, progressType ProgressCallbackType, bytesDone, totalBytes int64) (abort bool) {
+				if progressType == ProgressNotFound {
+					filesNotFound = append(filesNotFound, filename)
+				} else {
+					if bytesDone == totalBytes {
+						if progressType == ProgressSkip {
+							filesSkipped = append(filesSkipped, filename)
+						} else {
+							filesDownloaded = append(filesDownloaded, filename)
+						}
+					}
+				}
+				return false
+			}
+
+			fileContent := "Hello from S3"
+			tmp, _ := ioutil.TempDir("", "s3test")
+			filename := "tests3file.txt"
+			absfile := filepath.Join(tmp, filename)
+
+			// First, missing file
+			// 1 Check that bucket exists (OK)
+			testServer.Response(200, nil, "")
+			// 2 Check if file exists (404)
+			testServer.Response(404, nil, "")
+			err := s3sync.Download("origin", []string{filepath.Base(filename)}, tmp, false, callback)
+			// No error even though file doesn't exist, should just be reported as missing & continue
+			Expect(err).To(BeNil(), "Should not be error downloading")
+			testServer.WaitRequest()
+			testServer.WaitRequest()
+			Expect(filesSkipped).To(BeEmpty(), "No files should be skipped")
+			Expect(filesDownloaded).To(BeEmpty(), "No files should be downloaded")
+			Expect(filesNotFound).To(ConsistOf([]string{"tests3file.txt"}), "Correct files should be not found")
+
+			// reset
+			filesNotFound = []string{}
+			testServer.Flush()
+
+			// Now test when really there
+			// 1 Check that bucket exists (OK)
+			testServer.Response(200, nil, "")
+			// 2 Check if file exists OK & report size
+			testServer.Response(200, map[string]string{"Content-Length": fmt.Sprintf("%d", len(fileContent))}, "")
+			// 3 Download
+			testServer.Response(200, map[string]string{"Content-Length": fmt.Sprintf("%d", len(fileContent))}, fileContent)
+
+			err = s3sync.Download("origin", []string{filepath.Base(filename)}, tmp, false, callback)
+			// No error even though file doesn't exist, should just be reported as missing & continue
+			Expect(err).To(BeNil(), "Should not be error downloading")
+			testServer.WaitRequest()
+			testServer.WaitRequest()
+			testServer.WaitRequest()
+			Expect(filesSkipped).To(BeEmpty(), "No files should be skipped")
+			Expect(filesNotFound).To(BeEmpty(), "No files should be not found")
+			Expect(filesDownloaded).To(ConsistOf([]string{"tests3file.txt"}), "Correct files should be downloaded")
+			// Check file content
+			dl, err := ioutil.ReadFile(absfile)
+			Expect(err).To(BeNil(), "Should not be error checking downloaded file content")
+			Expect(string(dl)).To(Equal(fileContent), "Downloaded file content should be correct")
+
+			// Test skips when repeated without force
+			filesDownloaded = []string{}
+			testServer.Flush()
+
+			// 1 Check that bucket exists (OK)
+			testServer.Response(200, nil, "")
+			// 2 Check if file exists OK & report size
+			testServer.Response(200, map[string]string{"Content-Length": fmt.Sprintf("%d", len(fileContent))}, "")
+			// (download shouldn't be called)
+
+			err = s3sync.Download("origin", []string{filepath.Base(filename)}, tmp, false, callback)
+			// No error even though file doesn't exist, should just be reported as missing & continue
+			Expect(err).To(BeNil(), "Should not be error downloading")
+			testServer.WaitRequest()
+			testServer.WaitRequest()
+			Expect(filesDownloaded).To(BeEmpty(), "No files should be downloaded")
+			Expect(filesNotFound).To(BeEmpty(), "No files should be not found")
+			Expect(filesSkipped).To(ConsistOf([]string{"tests3file.txt"}), "Correct files should be skipped")
+
+			os.Remove(absfile)
+		})
+
 	})
 
-	Context("Real S3 tests", func() {
-
-	})
 	/*
 		It("Simple S3 smoke tests", func() {
 			sync := S3SyncProvider{}
