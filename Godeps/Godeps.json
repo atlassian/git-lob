@@ -1,6 +1,6 @@
 {
 	"ImportPath": "bitbucket.org/sinbad/git-lob",
-	"GoVersion": "go1.3.3",
+	"GoVersion": "go1.4.2",
 	"Deps": [
 		{
 			"ImportPath": "github.com/mitchellh/go-homedir",
