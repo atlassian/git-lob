@@ -15,23 +15,7 @@ Setting up Go environment
     go get github.com/mitchellh/gox
 4. Make sure you cloned git-lob into $GOPATH/src/bitbucket.org/sinbad/git-lob 
 
-A note about godep
-------------------
+A note about dependencies
+-------------------------
 
-In order to simplify setup, all 3rd-party dependencies are captured inside
-this repo using 'godep save -r'. See https://github.com/tools/godep
-
-'godep save' copies your dependencies from GOPATH into a _workspace subdir of
-the repo, snapshotting the dependencies and making it easier to set up the 
-project. 
-In addition, it's really useful for when you fork repos but don't change
-the library name (say because you're hoping the pull requests get accepted,
-see https://blog.splice.com/contributing-open-source-git-repositories-go/)
-
-The '-r' parameter re-writes import statements in git-lob to refer directly
-to the internal version, which means anyone building it doesn't have to 
-use 'godep restore' (which copies the internal version into their GOPATH, 
-which they might not want if other projects use a common lib), or the 
-alternative which is to add _workspace to your GOPATH, or to prefix all
-go commands with godep e.g. 'godep go build'. Rewriting the imports just
-means everything works as if nothing happened. 
+Dependencies are managed with godep, see dependencies.txt
