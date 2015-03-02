@@ -1,9 +1,9 @@
 package main
 
 import (
-	"fmt"
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -654,7 +654,6 @@ var _ = Describe("Git", func() {
 			commitAtDate(headCommitsIncludedDate.Add(time.Hour*48), "Non-LOB commit")
 
 			// Create another feature branch that we'll include, but not all the commits
-			exec.Command("git", "tag", "feature/1/start").Run()
 			exec.Command("git", "checkout", "-b", "feature/1").Run()
 			ioutil.WriteFile(filepath.Join(root, "file3.txt"),
 				[]byte(fmt.Sprintf("git-lob: %v", lobshas[7])), 0644) // excluded
@@ -680,7 +679,6 @@ var _ = Describe("Git", func() {
 			exec.Command("git", "checkout", "master").Run()
 
 			// Create another feature branch that we'll include, but not all the commits
-			exec.Command("git", "tag", "feature/2/start").Run()
 			exec.Command("git", "checkout", "-b", "feature/2").Run()
 			ioutil.WriteFile(filepath.Join(root, "file4.txt"),
 				[]byte(fmt.Sprintf("git-lob: %v", lobshas[10])), 0644) // excluded
