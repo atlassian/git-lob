@@ -69,6 +69,16 @@ func cmdPrune() int {
 }
 
 func cmdPruneShared() int {
+
+	// Quick pre-flight check
+	shared := GetSharedLOBRoot()
+	if shared == "" {
+		LogConsoleError("No shared store has been configured for this repo, cannot prune it.")
+		return 9
+	} else if !DirExists(shared) {
+		LogConsoleErrorf("Configured shared store '%v' doesn't exist, cannot prune.\n", shared)
+		return 9
+	}
 	callback := func() {
 		LogConsoleSpinner("Processing: ")
 	}
