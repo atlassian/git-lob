@@ -108,6 +108,12 @@ Options:
   --verbose, -v        Print more output
   --dry-run            Don't actually delete anything, just report
 
+DEFINITION OF "PUSHED"
+  A binary is considered 'pushed' if it has been pushed to 'origin'. You can
+  change the remote which is checked via the setting
+  git-lob.prune-check-remote, which can be set to another remote name, or '*'
+  to allow any remote to count.
+
 SHARED STORE
   If you are using a shared store, when a file is pruned locally, if there 
   are no other repos referencing this binary file then it is also deleted 

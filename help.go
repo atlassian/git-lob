@@ -110,6 +110,19 @@ Remote settings:
   Each provider will require other configuration options to fully specify the
   location. Run 'git lob help remotes' for more details.
 
+Prune settings:
+
+  git-lob.recent-refs          These 3 settings are the same as in the above
+  git-lob.recent-commits-head  fetch settings. Binaries which are outside this
+  git-lob.recent-commits-other range will be pruned so long as they have been 
+                               pushed.
+
+  git-lob.prune-check-remote   The remote to check whether binaries have been
+                               pushed to before pruning. Default: origin
+                               You can set this to a remote name, or '*' to
+                               allow any remote to count.
+                               
+
 `)
 }
 
