@@ -21,33 +21,46 @@ func cmdPrune() int {
 
 	optOnlyUnreferenced := GlobalOptions.BoolOpts.Contains("unreferenced")
 
+	callback := func() {
+		LogConsoleSpinner("Processing: ")
+	}
+
 	var shas []string
 	var err error
 	if optOnlyUnreferenced {
 		// Only purge unreferenced
-		shas, err = PruneUnreferenced(GlobalOptions.DryRun)
+		LogConsole("Pruning unreferenced binaries...")
+		shas, err = PruneUnreferenced(GlobalOptions.DryRun, callback)
+		LogConsoleSpinnerFinish("Processing: ")
 		if err != nil {
 			LogErrorf("Prune failed: %v\n", err)
 			return 3
 		}
 	} else {
 		// Purge old & unreferenced
+		LogConsole("Pruning old binaries...")
+		shas, err = PruneOld(GlobalOptions.DryRun, callback)
+		LogConsoleSpinnerFinish("Processing: ")
+		if err != nil {
+			LogErrorf("Prune failed: %v\n", err)
+			return 3
+		}
 
 	}
 	if GlobalOptions.DryRun {
 		if GlobalOptions.Verbose {
-			LogConsolef("%d LOBs would have been deleted:\n", len(shas))
+			LogConsolef("%d binaries would have been deleted:\n", len(shas))
 			LogConsole(strings.Join(shas, "\n"))
 		} else {
-			LogConsolef("%d LOBs would have been deleted.\n", len(shas))
+			LogConsolef("%d binaries would have been deleted.\n", len(shas))
 		}
 		LogConsole("Run command again without --dry-run to actually perform the deletion.")
 	} else {
 		if GlobalOptions.Verbose {
-			LogConsolef("%d LOBs were deleted:\n", len(shas))
+			LogConsolef("%d binaries were deleted:\n", len(shas))
 			LogConsoleDebug(strings.Join(shas, "\n"))
 		} else {
-			LogConsolef("%d LOBs were deleted.\n", len(shas))
+			LogConsolef("%d binaries were deleted.\n", len(shas))
 		}
 	}
 
@@ -56,7 +69,12 @@ func cmdPrune() int {
 }
 
 func cmdPruneShared() int {
-	shas, err := PruneSharedStore(GlobalOptions.DryRun)
+	callback := func() {
+		LogConsoleSpinner("Processing: ")
+	}
+	LogConsole("Pruning shared store...")
+	shas, err := PruneSharedStore(GlobalOptions.DryRun, callback)
+	LogConsoleSpinnerFinish("Processing: ")
 	if err != nil {
 		LogErrorf("Prune failed: %v\n", err)
 		return 3
@@ -242,7 +260,8 @@ func lobReferenceFromDiffLine(line string) string {
 // Delete unreferenced binary files from local store
 // For a file to be deleted it needs to not be referenced by any (reachable) commit
 // Returns a list of SHAs that were deleted (unless dryRun = true)
-func PruneUnreferenced(dryRun bool) ([]string, error) {
+// Callback is a simple 'tick' to let caller know we're doing something
+func PruneUnreferenced(dryRun bool, callback func()) ([]string, error) {
 	// Purging requires full git on the command line, no way around this really
 	cmd := exec.Command("git", "log", "--all", "--no-color", "--oneline", "-p", "-G", SHALineRegex)
 	stdout, err := cmd.StdoutPipe()
@@ -262,6 +281,7 @@ func PruneUnreferenced(dryRun bool) ([]string, error) {
 		if sha := lobReferenceFromDiffLine(line); sha != "" {
 			referencedSHAs.Add(sha)
 		}
+		callback()
 	}
 	cmd.Wait()
 
@@ -300,15 +320,20 @@ func PruneUnreferenced(dryRun bool) ([]string, error) {
 }
 
 // Remove LOBs from the local store if they fall outside the range we would normally fetch for
-func PruneOld(dryRun bool) {
+// Returns a list of SHAs that were deleted (unless dryRun = true)
+// callback is a basic function to let caller know something is happening
+func PruneOld(dryRun bool, callback func()) ([]string, error) {
 	// TODO
 	LogConsole("PSA: Prune functionality is not implemented yet")
+
+	return []string{}, nil
 }
 
 // Prune the shared store of all LOBs with only 1 hard link (itself)
 // DeleteLOB will do this for individual LOBs we prune, but if the user
 // manually deletes a repo then unreferenced shared LOBs may never be cleaned up
-func PruneSharedStore(dryRun bool) ([]string, error) {
+// callback is a basic function to let caller know something is happening
+func PruneSharedStore(dryRun bool, callback func()) ([]string, error) {
 	fileSHAs, err := getAllSharedLOBSHAs()
 	if err == nil {
 		ret := make([]string, 0, 10)
@@ -334,7 +359,7 @@ func PruneSharedStore(dryRun bool) ([]string, error) {
 						LogDebugf("Deleted shared file %v\n", n)
 					}
 				}
-
+				callback()
 			}
 			if deleted {
 				ret = append(ret, string(sha))

@@ -1,9 +1,9 @@
 package main
 
 import (
-	"fmt"
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
+	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -33,7 +33,7 @@ var _ = Describe("Prune", func() {
 
 		Context("No files", func() {
 			It("does nothing when no files present", func() {
-				shasToDelete, err := PruneUnreferenced(false)
+				shasToDelete, err := PruneUnreferenced(false, func() {})
 				Expect(err).To(BeNil(), "PruneUnreferenced should succeed")
 				Expect(shasToDelete).To(BeEmpty(), "Should report no files to prune")
 			})
@@ -71,7 +71,7 @@ var _ = Describe("Prune", func() {
 			Context("prunes all files when no references", func() {
 				// Because we've created no commits, all LOBs should be eligible for deletion
 				It("lists files but doesn't act on it in dry run mode", func() {
-					shasToDelete, err := PruneUnreferenced(true)
+					shasToDelete, err := PruneUnreferenced(true, func() {})
 					Expect(err).To(BeNil(), "PruneUnreferenced should succeed")
 					// Use sets to compare so ordering doesn't matter
 					actualset := NewStringSetFromSlice(shasToDelete)
@@ -84,7 +84,7 @@ var _ = Describe("Prune", func() {
 
 				})
 				It("deletes files when not in dry run mode", func() {
-					shasToDelete, err := PruneUnreferenced(false)
+					shasToDelete, err := PruneUnreferenced(false, func() {})
 					Expect(err).To(BeNil(), "PruneUnreferenced should succeed")
 					// Use sets to compare so ordering doesn't matter
 					actualset := NewStringSetFromSlice(shasToDelete)
@@ -142,7 +142,7 @@ var _ = Describe("Prune", func() {
 					//shasShouldKeep := NewStringSetFromSlice(lobshas[0:14])
 					shasShouldDelete := NewStringSetFromSlice(lobshas[14:])
 
-					deletedSlice, err := PruneUnreferenced(false)
+					deletedSlice, err := PruneUnreferenced(false, func() {})
 					Expect(err).To(BeNil(), "PruneUnreferenced should succeed")
 					shasDidDelete := NewStringSetFromSlice(deletedSlice)
 
@@ -205,7 +205,7 @@ var _ = Describe("Prune", func() {
 			Context("prunes all files when no references", func() {
 				// Because we've created no commits, all LOBs should be eligible for deletion
 				It("lists files but doesn't act on it in dry run mode", func() {
-					shasToDelete, err := PruneUnreferenced(true)
+					shasToDelete, err := PruneUnreferenced(true, func() {})
 					Expect(err).To(BeNil(), "PruneUnreferenced should succeed")
 					// Use sets to compare so ordering doesn't matter
 					actualset := NewStringSetFromSlice(shasToDelete)
@@ -219,7 +219,7 @@ var _ = Describe("Prune", func() {
 
 				})
 				It("deletes files when not in dry run mode", func() {
-					shasToDelete, err := PruneUnreferenced(false)
+					shasToDelete, err := PruneUnreferenced(false, func() {})
 					Expect(err).To(BeNil(), "PruneUnreferenced should succeed")
 					// Use sets to compare so ordering doesn't matter
 					actualset := NewStringSetFromSlice(shasToDelete)
@@ -278,7 +278,7 @@ var _ = Describe("Prune", func() {
 					//shasShouldKeep := NewStringSetFromSlice(lobshas[0:14])
 					shasShouldDelete := NewStringSetFromSlice(lobshas[14:])
 
-					deletedSlice, err := PruneUnreferenced(false)
+					deletedSlice, err := PruneUnreferenced(false, func() {})
 					Expect(err).To(BeNil(), "PruneUnreferenced should succeed")
 					shasDidDelete := NewStringSetFromSlice(deletedSlice)
 
@@ -334,7 +334,7 @@ var _ = Describe("Prune", func() {
 			Context("prunes all files when no references", func() {
 				// Because we've created no hard links to the shared store, everything should be available for deletion
 				It("lists files but doesn't act on it in dry run mode", func() {
-					shasToDelete, err := PruneSharedStore(true)
+					shasToDelete, err := PruneSharedStore(true, func() {})
 					Expect(err).To(BeNil(), "PruneSharedStore should succeed")
 					// Use sets to compare so ordering doesn't matter
 					actualset := NewStringSetFromSlice(shasToDelete)
@@ -348,7 +348,7 @@ var _ = Describe("Prune", func() {
 
 				})
 				It("deletes files when not in dry run mode", func() {
-					shasToDelete, err := PruneSharedStore(false)
+					shasToDelete, err := PruneSharedStore(false, func() {})
 					Expect(err).To(BeNil(), "PruneSharedStore should succeed")
 					// Use sets to compare so ordering doesn't matter
 					actualset := NewStringSetFromSlice(shasToDelete)
@@ -387,14 +387,14 @@ var _ = Describe("Prune", func() {
 				})
 
 				It("does nothing in dry run mode", func() {
-					PruneSharedStore(true)
+					PruneSharedStore(true, func() {})
 					for _, sharedfile := range sharedlobfiles {
 						exists, _ := FileOrDirExists(sharedfile)
 						Expect(exists).To(BeTrue(), "Should not have deleted %v", sharedfile)
 					}
 				})
 				It("correctly identifies referenced and unreferenced shared files", func() {
-					PruneSharedStore(false)
+					PruneSharedStore(false, func() {})
 					for i, sharedfile := range sharedlobfiles {
 						exists, _ := FileOrDirExists(sharedfile)
 						if i <= referenceUpTo {
