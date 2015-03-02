@@ -13,56 +13,108 @@ import (
 )
 
 func cmdPrune() int {
-	files, err := PruneUnreferenced(GlobalOptions.DryRun)
-	if err != nil {
-		LogErrorf("Prune failed: %v\n", err)
-		return 3
+	errorList := validateCustomOptions(GlobalOptions, nil, []string{"unreferenced"})
+	if len(errorList) > 0 {
+		LogConsoleError(strings.Join(errorList, "\n"))
+		return 9
+	}
+
+	optOnlyUnreferenced := GlobalOptions.BoolOpts.Contains("unreferenced")
+
+	var shas []string
+	var err error
+	if optOnlyUnreferenced {
+		// Only purge unreferenced
+		shas, err = PruneUnreferenced(GlobalOptions.DryRun)
+		if err != nil {
+			LogErrorf("Prune failed: %v\n", err)
+			return 3
+		}
+	} else {
+		// Purge old & unreferenced
+
 	}
 	if GlobalOptions.DryRun {
-		LogConsole("LOBs which would have been deleted:")
-		LogConsole(strings.Join(files, "\n"))
+		if GlobalOptions.Verbose {
+			LogConsolef("%d LOBs would have been deleted:\n", len(shas))
+			LogConsole(strings.Join(shas, "\n"))
+		} else {
+			LogConsolef("%d LOBs would have been deleted.\n", len(shas))
+		}
+		LogConsole("Run command again without --dry-run to actually perform the deletion.")
 	} else {
-		LogConsoleDebug("Deleted LOBs:")
-		LogConsoleDebug(strings.Join(files, "\n"))
+		if GlobalOptions.Verbose {
+			LogConsolef("%d LOBs were deleted:\n", len(shas))
+			LogConsoleDebug(strings.Join(shas, "\n"))
+		} else {
+			LogConsolef("%d LOBs were deleted.\n", len(shas))
+		}
 	}
+
 	return 0
 
 }
 
 func cmdPruneShared() int {
-	files, err := PruneSharedStore(GlobalOptions.DryRun)
+	shas, err := PruneSharedStore(GlobalOptions.DryRun)
 	if err != nil {
 		LogErrorf("Prune failed: %v\n", err)
 		return 3
 	}
 	if GlobalOptions.DryRun {
-		LogConsole("LOBs which would have been deleted:")
-		LogConsole(strings.Join(files, "\n"))
+		if GlobalOptions.Verbose {
+			LogConsolef("%d LOBs would have been deleted:\n", len(shas))
+			LogConsole(strings.Join(shas, "\n"))
+		} else {
+			LogConsolef("%d LOBs would have been deleted.\n", len(shas))
+		}
+		LogConsole("Run command again without --dry-run to actually perform the deletion.")
 	} else {
-		LogConsoleDebug("Deleted LOBs:")
-		LogConsoleDebug(strings.Join(files, "\n"))
+		if GlobalOptions.Verbose {
+			LogConsolef("%d LOBs were deleted:\n", len(shas))
+			LogConsoleDebug(strings.Join(shas, "\n"))
+		} else {
+			LogConsolef("%d LOBs were deleted.\n", len(shas))
+		}
 	}
 	return 0
 }
 
 func cmdPruneHelp() {
-	LogConsole(`Usage: git-lob Prune [options]
+	LogConsole(`Usage: git-lob prune [options]
 
-  Removes binaries unreferenced by any commit or the index from the local repo
-  binary store (and shared if no other usage).
+  Removes old and unreferenced binaries from local storage.
 
-  To do this, git-lob scans all reachable commits and your staged changes, then
-  deletes any files in the binary store not referenced by one of these. If your
-  repository is quite large, this might take a little time.
+  A binary will NOT BE PRUNED if:
+    1. It is referenced by a reachable commit which is 'recent' as defined by 
+       what 'git lob fetch' would download, OR
+    2. It is referenced by a commit for which the binaries haven't been pushed
 
-  If you are using a shared store, then once the local repo's hard link is
-  deleted, if there are no other repos referencing this binary file then it is
-  also deleted from the shared store.
+  To put that another way, a binary WILL BE PRUNED if:
+    1. It is not referenced by any reachable commit, or only by a reachable 
+       commit which is not 'recent' as defined by 'git lob fetch'
+    2. If referenced by an older commit, it has been pushed (i.e. the local
+    	copy is not the only one)
+
+  The meaning of 'reachable commit' is as defined in Git, that the commit would
+  be found by working backwards from at least one reference (e.g. branch/tag).
+
+  See 'git lob fetch --help' to see the definition of 'recent commit' and the
+  settings which control it.
 
 Options:
+  --unreferenced       Only prune totally unreferenced binaries, not old ones
   --quiet, -q          Print less output
   --verbose, -v        Print more output
   --dry-run            Don't actually delete anything, just report
+
+SHARED STORE
+  If you are using a shared store, when a file is pruned locally, if there 
+  are no other repos referencing this binary file then it is also deleted 
+  from the shared store.
+
+  If you manually deleted a repository and want to only clean up the shared
+  store, use 'git lob prune-shared'
 `)
 }
 
