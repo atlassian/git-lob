@@ -202,3 +202,18 @@ func ShutDownLogging() {
 	}
 
 }
+
+var spinnerCycle = 0
+var spinnerChars = []byte{'|', '/', '-', '\\'}
+
+// Render a 'spinner' in the console, with optional prefix (which must stay constant between calls unless you clear the line)
+func LogConsoleSpinner(prefix string) {
+	LogConsoleOverwrite(fmt.Sprintf("%v%c", prefix, spinnerChars[spinnerCycle]), len(prefix)+1)
+	spinnerCycle = (spinnerCycle + 1) % len(spinnerChars)
+}
+
+// Finish a spinner progress with a check mark and a newline
+func LogConsoleSpinnerFinish(prefix string) {
+	LogConsoleOverwrite(fmt.Sprintf("%v%c\n", prefix, '\u2714'), len(prefix)+1)
+	spinnerCycle = (spinnerCycle + 1) % len(spinnerChars)
+}
