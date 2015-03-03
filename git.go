@@ -627,21 +627,29 @@ func GetGitAllLOBsToCheckoutInRefSpec(refspec *GitRefSpec, includePaths, exclude
 // ancestor of it within a number of days of that commit date (not today's date)
 // Note that if a LOB was modified to the same SHA more than once, duplicates may appear in the return
 // They are not routinely eliminated for performance, so perform your own dupe removal if you need it
-func GetGitAllLOBsToCheckoutAtCommitAndRecent(commit string, days int, includePaths, excludePaths []string) ([]string, error) {
+// as well as a list of LOBs, returns the commit SHA of the earliest change that was included in the scan.
+// Since this is the first *change* included (which would be removing the previous SHA), the earliest LOB
+// SHA included is from the *parent* of this commit.
+func GetGitAllLOBsToCheckoutAtCommitAndRecent(commit string, days int, includePaths,
+	excludePaths []string) (lobs []string, earliestChangeCommit string, reterr error) {
 	// All LOBs at the commit itself
 	shasAtCommit, err := GetGitAllLOBsToCheckoutAtCommit(commit, includePaths, excludePaths)
 	if err != nil {
-		return []string{}, err
+		return []string{}, "", err
 	}
 
 	// days == 0 means we only snapshot latest
 	if days == 0 {
-		return shasAtCommit, nil
+		earliest := commit
+		if !GitRefIsFullSHA(earliest) {
+			earliest, _ = GitRefToFullSHA(earliest)
+		}
+		return shasAtCommit, earliest, nil
 	} else {
 		// get the commit date
 		commitDetails, err := GetGitCommitSummary(commit)
 		if err != nil {
-			return []string{}, err
+			return []string{}, "", err
 		}
 		sinceDate := commitDetails.CommitDate.AddDate(0, 0, -days)
 		// Now use git log to scan backwards
@@ -657,20 +665,22 @@ func GetGitAllLOBsToCheckoutAtCommitAndRecent(commit string, days int, includePa
 		cmd := exec.Command("git", args...)
 		outp, err := cmd.StdoutPipe()
 		if err != nil {
-			return []string{}, errors.New(fmt.Sprintf("Unable to call git-log: %v", err.Error()))
+			return []string{}, "", errors.New(fmt.Sprintf("Unable to call git-log: %v", err.Error()))
 		}
 		cmd.Start()
 
 		// Looking backwards, so removals
 		commitsWithLOBs := scanGitLogOutputForLOBReferences(outp, false, true, includePaths, excludePaths)
 		ret := shasAtCommit
+		earliestCommit := commit
 		for _, lobcommit := range commitsWithLOBs {
 			ret = append(ret, lobcommit.lobSHAs...)
+			earliestCommit = lobcommit.commit
 		}
 
 		cmd.Wait()
 
-		return ret, nil
+		return ret, earliestCommit, nil
 	}
 
 }

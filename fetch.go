@@ -250,7 +250,7 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 				int64(0), int64(1), 0, 0})
 		}
 		// Get HEAD LOBs first
-		headlobs, err := GetGitAllLOBsToCheckoutAtCommitAndRecent("HEAD", GlobalOptions.RecentCommitsPeriodHEAD,
+		headlobs, _, err := GetGitAllLOBsToCheckoutAtCommitAndRecent("HEAD", GlobalOptions.RecentCommitsPeriodHEAD,
 			GlobalOptions.FetchIncludePaths, GlobalOptions.FetchExcludePaths)
 		if err != nil {
 			return errors.New(fmt.Sprintf("Error determining recent HEAD commits: %v", err.Error()))
@@ -274,7 +274,7 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 				if ref == headSHA {
 					continue
 				}
-				recentreflobs, err := GetGitAllLOBsToCheckoutAtCommitAndRecent(ref, GlobalOptions.RecentCommitsPeriodOther,
+				recentreflobs, _, err := GetGitAllLOBsToCheckoutAtCommitAndRecent(ref, GlobalOptions.RecentCommitsPeriodOther,
 					GlobalOptions.FetchIncludePaths, GlobalOptions.FetchExcludePaths)
 				if err != nil {
 					return errors.New(fmt.Sprintf("Error determining recent commits on %v: %v", ref, err.Error()))

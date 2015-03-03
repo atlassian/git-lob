@@ -579,6 +579,9 @@ var _ = Describe("Git", func() {
 		var correctLOBsMaster []string
 		var correctLOBsFeature1 []string
 		var correctLOBsFeature2 []string
+		var firstMasterCommit string
+		var firstFeature1Commit string
+		var firstFeature2Commit string
 
 		BeforeEach(func() {
 			CreateGitRepoForTest(root)
@@ -650,6 +653,10 @@ var _ = Describe("Git", func() {
 			// include commit 2
 			commitAtDate(headCommitsIncludedDate.Add(time.Hour*24), "Third commit")
 			correctLOBsMaster = append(correctLOBsMaster, lobshas[5], lobshas[6])
+			// This will therefore be the first commit that the scan backwards sees
+			revout, _ := exec.Command("git", "rev-parse", "HEAD").CombinedOutput()
+			firstMasterCommit = strings.TrimSpace(string(revout))
+
 			// Also include commit that references NO shas
 			commitAtDate(headCommitsIncludedDate.Add(time.Hour*48), "Non-LOB commit")
 
@@ -674,6 +681,9 @@ var _ = Describe("Git", func() {
 			// Also include unchanged file1.txt at this state and old state of file2.txt
 			correctLOBsFeature1 = append(correctLOBsFeature1, lobshas[2], lobshas[5])
 			exec.Command("git", "tag", "afeaturetag").Run()
+			// This will be the first commit that the scan backwards sees
+			revout, _ = exec.Command("git", "rev-parse", "HEAD").CombinedOutput()
+			firstFeature1Commit = strings.TrimSpace(string(revout))
 
 			// Back to master
 			exec.Command("git", "checkout", "master").Run()
@@ -697,6 +707,9 @@ var _ = Describe("Git", func() {
 			correctLOBsFeature2 = append(correctLOBsFeature2, lobshas[12])
 			// Also include unchanged files on this branch: file1-3.txt last state & included versions
 			correctLOBsFeature2 = append(correctLOBsFeature2, lobshas[5], lobshas[6], lobshas[2])
+			// This will be the first commit that the scan backwards sees
+			revout, _ = exec.Command("git", "rev-parse", "HEAD").CombinedOutput()
+			firstFeature2Commit = strings.TrimSpace(string(revout))
 
 			// Back to master to finish
 			exec.Command("git", "checkout", "master").Run()
@@ -759,17 +772,20 @@ var _ = Describe("Git", func() {
 			Expect(err).To(BeNil(), "Should not error calling GetGitRecentRefs")
 			Expect(recentrefs).To(ConsistOf(correctRefsOriginOnly), "Recent refs (only origin remote) should be correct")
 
-			lobs, err := GetGitAllLOBsToCheckoutAtCommitAndRecent("master", GlobalOptions.RecentCommitsPeriodHEAD, nil, nil)
+			lobs, earliestCommit, err := GetGitAllLOBsToCheckoutAtCommitAndRecent("master", GlobalOptions.RecentCommitsPeriodHEAD, nil, nil)
 			Expect(err).To(BeNil(), "Should not error getting lobs")
 			Expect(lobs).To(ConsistOf(correctLOBsMaster), fmt.Sprintf("LOBs on master should be correct; all LOBS were:\n%v", strings.Join(lobshas, "\n")))
+			Expect(earliestCommit).To(Equal(firstMasterCommit), "Earliest commit for master should be first commit")
 
 			// It's harder to visualise the feature branches because unchanged files from other branches are included
-			lobs, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("feature/1", GlobalOptions.RecentCommitsPeriodOther, nil, nil)
+			lobs, earliestCommit, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("feature/1", GlobalOptions.RecentCommitsPeriodOther, nil, nil)
 			Expect(err).To(BeNil(), "Should not error getting lobs")
 			Expect(lobs).To(ConsistOf(correctLOBsFeature1), fmt.Sprintf("LOBs on feature/1 should be correct; all LOBS were:\n%v", strings.Join(lobshas, "\n")))
-			lobs, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("feature/2", GlobalOptions.RecentCommitsPeriodOther, nil, nil)
+			Expect(earliestCommit).To(Equal(firstFeature1Commit), "Earliest commit for feature1 should be first commit")
+			lobs, earliestCommit, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("feature/2", GlobalOptions.RecentCommitsPeriodOther, nil, nil)
 			Expect(err).To(BeNil(), "Should not error getting lobs")
 			Expect(lobs).To(ConsistOf(correctLOBsFeature2), fmt.Sprintf("LOBs on feature/2 should be correct; all LOBS were:\n%v", strings.Join(lobshas, "\n")))
+			Expect(earliestCommit).To(Equal(firstFeature2Commit), "Earliest commit for feature2 should be first commit")
 
 		})
 
@@ -857,7 +873,7 @@ var _ = Describe("Git", func() {
 			lobs, err := GetGitAllLOBsToCheckoutAtCommit("HEAD", nil, nil)
 			Expect(err).To(BeNil(), "Should not be error calling GetGitAllLOBsToCheckoutAtCommit")
 			Expect(lobs).To(HaveLen(len(filenames)), "All the most recent LOBs should be included")
-			lobs, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("HEAD", 10, nil, nil)
+			lobs, _, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("HEAD", 10, nil, nil)
 			Expect(err).To(BeNil(), "Should not be error calling GetGitAllLOBsToCheckoutAtCommitAndRecent")
 			Expect(lobs).To(HaveLen(len(filenames)*2), "All LOBs including old versions should be included with no filtering")
 			commits, err := GetGitCommitsReferencingLOBsInRange("", "HEAD", nil, nil)
@@ -870,7 +886,7 @@ var _ = Describe("Git", func() {
 			lobs, err = GetGitAllLOBsToCheckoutAtCommit("HEAD", include, nil)
 			Expect(err).To(BeNil(), "Should not be error calling GetGitAllLOBsToCheckoutAtCommit")
 			shouldHaveLOBFiles(lobs, fileIdxs, false, fmt.Sprintf("GetGitAllLOBsToCheckoutAtCommit -> Include: %v", include))
-			lobs, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("HEAD", 10, include, nil)
+			lobs, _, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("HEAD", 10, include, nil)
 			Expect(err).To(BeNil(), "Should not be error calling GetGitAllLOBsToCheckoutAtCommitAndRecent")
 			shouldHaveLOBFiles(lobs, fileIdxs, true, fmt.Sprintf("GetGitAllLOBsToCheckoutAtCommitAndRecent -> Include: %v", include))
 			commits, err = GetGitCommitsReferencingLOBsInRange("", "HEAD", include, nil)
@@ -882,7 +898,7 @@ var _ = Describe("Git", func() {
 			include = []string{"fold*"}
 			Expect(err).To(BeNil(), "Should not be error calling GetGitAllLOBsToCheckoutAtCommit")
 			Expect(lobs).To(HaveLen(len(filenames)), "All the most recent LOBs should be included")
-			lobs, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("HEAD", 10, nil, nil)
+			lobs, _, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("HEAD", 10, nil, nil)
 			Expect(err).To(BeNil(), "Should not be error calling GetGitAllLOBsToCheckoutAtCommitAndRecent")
 			Expect(lobs).To(HaveLen(len(filenames)*2), "All LOBs including old versions should be included with no filtering")
 			commits, err = GetGitCommitsReferencingLOBsInRange("", "HEAD", nil, nil)
@@ -895,7 +911,7 @@ var _ = Describe("Git", func() {
 			lobs, err = GetGitAllLOBsToCheckoutAtCommit("HEAD", include, nil)
 			Expect(err).To(BeNil(), "Should not be error calling GetGitAllLOBsToCheckoutAtCommit")
 			shouldHaveLOBFiles(lobs, fileIdxs, false, fmt.Sprintf("GetGitAllLOBsToCheckoutAtCommit -> Include: %v", include))
-			lobs, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("HEAD", 10, include, nil)
+			lobs, _, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("HEAD", 10, include, nil)
 			Expect(err).To(BeNil(), "Should not be error calling GetGitAllLOBsToCheckoutAtCommitAndRecent")
 			shouldHaveLOBFiles(lobs, fileIdxs, true, fmt.Sprintf("GetGitAllLOBsToCheckoutAtCommitAndRecent -> Include: %v", include))
 			commits, err = GetGitCommitsReferencingLOBsInRange("", "HEAD", include, nil)
@@ -909,7 +925,7 @@ var _ = Describe("Git", func() {
 			lobs, err = GetGitAllLOBsToCheckoutAtCommit("HEAD", nil, exclude)
 			Expect(err).To(BeNil(), "Should not be error calling GetGitAllLOBsToCheckoutAtCommit")
 			shouldHaveLOBFiles(lobs, fileIdxs, false, fmt.Sprintf("GetGitAllLOBsToCheckoutAtCommit -> Exclude: %v", exclude))
-			lobs, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("HEAD", 10, nil, exclude)
+			lobs, _, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("HEAD", 10, nil, exclude)
 			Expect(err).To(BeNil(), "Should not be error calling GetGitAllLOBsToCheckoutAtCommit")
 			shouldHaveLOBFiles(lobs, fileIdxs, true, fmt.Sprintf("GetGitAllLOBsToCheckoutAtCommitAndRecent -> Exclude: %v", exclude))
 			commits, err = GetGitCommitsReferencingLOBsInRange("", "HEAD", nil, exclude)
@@ -923,7 +939,7 @@ var _ = Describe("Git", func() {
 			lobs, err = GetGitAllLOBsToCheckoutAtCommit("HEAD", nil, exclude)
 			Expect(err).To(BeNil(), "Should not be error calling GetGitAllLOBsToCheckoutAtCommit")
 			shouldHaveLOBFiles(lobs, fileIdxs, false, fmt.Sprintf("GetGitAllLOBsToCheckoutAtCommit -> Exclude: %v", exclude))
-			lobs, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("HEAD", 10, nil, exclude)
+			lobs, _, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("HEAD", 10, nil, exclude)
 			Expect(err).To(BeNil(), "Should not be error calling GetGitAllLOBsToCheckoutAtCommit")
 			shouldHaveLOBFiles(lobs, fileIdxs, true, fmt.Sprintf("GetGitAllLOBsToCheckoutAtCommitAndRecent -> Exclude: %v", exclude))
 			commits, err = GetGitCommitsReferencingLOBsInRange("", "HEAD", nil, exclude)
@@ -937,7 +953,7 @@ var _ = Describe("Git", func() {
 			lobs, err = GetGitAllLOBsToCheckoutAtCommit("HEAD", nil, exclude)
 			Expect(err).To(BeNil(), "Should not be error calling GetGitAllLOBsToCheckoutAtCommit")
 			shouldHaveLOBFiles(lobs, fileIdxs, false, fmt.Sprintf("GetGitAllLOBsToCheckoutAtCommit -> Exclude: %v", exclude))
-			lobs, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("HEAD", 10, nil, exclude)
+			lobs, _, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("HEAD", 10, nil, exclude)
 			Expect(err).To(BeNil(), "Should not be error calling GetGitAllLOBsToCheckoutAtCommit")
 			shouldHaveLOBFiles(lobs, fileIdxs, true, fmt.Sprintf("GetGitAllLOBsToCheckoutAtCommitAndRecent -> Exclude: %v", exclude))
 			commits, err = GetGitCommitsReferencingLOBsInRange("", "HEAD", nil, exclude)
@@ -952,7 +968,7 @@ var _ = Describe("Git", func() {
 			lobs, err = GetGitAllLOBsToCheckoutAtCommit("HEAD", include, exclude)
 			Expect(err).To(BeNil(), "Should not be error calling GetGitAllLOBsToCheckoutAtCommit")
 			shouldHaveLOBFiles(lobs, fileIdxs, false, fmt.Sprintf("GetGitAllLOBsToCheckoutAtCommit -> Include: %v Exclude: %v", include, exclude))
-			lobs, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("HEAD", 10, include, exclude)
+			lobs, _, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("HEAD", 10, include, exclude)
 			Expect(err).To(BeNil(), "Should not be error calling GetGitAllLOBsToCheckoutAtCommit")
 			shouldHaveLOBFiles(lobs, fileIdxs, true, fmt.Sprintf("GetGitAllLOBsToCheckoutAtCommitAndRecent -> Include: %v Exclude: %v", include, exclude))
 			commits, err = GetGitCommitsReferencingLOBsInRange("", "HEAD", include, exclude)
