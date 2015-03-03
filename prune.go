@@ -381,3 +381,14 @@ func PruneSharedStore(dryRun bool, callback func()) ([]string, error) {
 	}
 
 }
+
+// Perform the default prune after fetching or pulling
+// Only call this if pruning was requested & not dry running
+func PostFetchPullPrune() ([]string, error) {
+	pruneCallback := func() {
+		LogConsoleSpinner("Processing: ")
+	}
+	shas, err := PruneOld(false, pruneCallback)
+	LogConsoleSpinnerFinish("Processing: ")
+	return shas, err
+}

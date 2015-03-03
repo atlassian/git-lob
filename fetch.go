@@ -347,14 +347,10 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 
 	LogDebugf("Successfully fetched from %v via %v\n", remoteName, provider.TypeID())
 
-	if prune {
-		callback(&ProgressCallbackData{ProgressCalculate, "Performing post-fetch prune (can abort)",
+	if prune && !dryRun {
+		callback(&ProgressCallbackData{ProgressCalculate, "Performing post-fetch prune...",
 			int64(len(refspecs)), int64(len(refspecs)), 0, 0})
-		pruneCallback := func() {
-			LogConsoleSpinner("Processing: ")
-		}
-		PruneOld(dryRun, pruneCallback)
-		LogConsoleSpinnerFinish("Processing: ")
+		PostFetchPullPrune()
 	}
 
 	return nil
