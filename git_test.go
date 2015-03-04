@@ -573,15 +573,31 @@ var _ = Describe("Git", func() {
 		root := filepath.Join(os.TempDir(), "GitTest")
 		var oldwd string
 		lobshas := GetListOfRandomSHAsForTest(16)
-		var correctRefsNoRemotes []string
-		var correctRefsAll []string
-		var correctRefsOriginOnly []string
+		var correctRefsNoRemotes []*GitRef
+		var correctRefsAll []*GitRef
+		var correctRefsOriginOnly []*GitRef
 		var correctLOBsMaster []string
 		var correctLOBsFeature1 []string
 		var correctLOBsFeature2 []string
 		var firstMasterCommit string
 		var firstFeature1Commit string
 		var firstFeature2Commit string
+
+		var refNamesToGitRefs = func(names []string) []*GitRef {
+			ret := make([]*GitRef, 0, len(names))
+			for _, name := range names {
+				sha, _ := GitRefToFullSHA(name)
+				t := GitRefTypeLocalBranch
+				if strings.HasPrefix(name, "origin/") ||
+					strings.HasPrefix(name, "remote2/") {
+					t = GitRefTypeRemoteBranch
+				} else if strings.HasSuffix(name, "tag") {
+					t = GitRefTypeLocalTag
+				}
+				ret = append(ret, &GitRef{name, t, sha})
+			}
+			return ret
+		}
 
 		BeforeEach(func() {
 			CreateGitRepoForTest(root)
@@ -750,9 +766,9 @@ var _ = Describe("Git", func() {
 			ioutil.WriteFile(filepath.Join(root, ".git", "refs", "remotes", "remote2", "master"),
 				[]byte(otherremotebranchsha), 0644)
 
-			correctRefsNoRemotes = []string{"master", "feature/1", "feature/2", "aheadtag", "afeaturetag"}
-			correctRefsAll = []string{"master", "feature/1", "feature/2", "aheadtag", "afeaturetag", "origin/master", "origin/feature/remoteonly", "remote2/master"}
-			correctRefsOriginOnly = []string{"master", "feature/1", "feature/2", "aheadtag", "afeaturetag", "origin/master", "origin/feature/remoteonly"}
+			correctRefsNoRemotes = refNamesToGitRefs([]string{"master", "feature/1", "feature/2", "aheadtag", "afeaturetag"})
+			correctRefsAll = refNamesToGitRefs([]string{"master", "feature/1", "feature/2", "aheadtag", "afeaturetag", "origin/master", "origin/feature/remoteonly", "remote2/master"})
+			correctRefsOriginOnly = refNamesToGitRefs([]string{"master", "feature/1", "feature/2", "aheadtag", "afeaturetag", "origin/master", "origin/feature/remoteonly"})
 
 		})
 		AfterEach(func() {

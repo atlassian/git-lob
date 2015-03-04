@@ -36,15 +36,16 @@ type GitCommitSummary struct {
 	Subject        string
 }
 
-const (
-	GitRefTypeLocalBranch  = iota
-	GitRefTypeRemoteBranch = iota
-	GitRefTypeLocalTag     = iota
-	GitRefTypeRemoteTag    = iota
-	GitRefTypeHEAD         = iota // current checkout
-)
-
 type GitRefType int
+
+const (
+	GitRefTypeLocalBranch  = GitRefType(iota)
+	GitRefTypeRemoteBranch = GitRefType(iota)
+	GitRefTypeLocalTag     = GitRefType(iota)
+	GitRefTypeRemoteTag    = GitRefType(iota)
+	GitRefTypeHEAD         = GitRefType(iota) // current checkout
+	GitRefTypeOther        = GitRefType(iota) // stash or unknown
+)
 
 // A git reference (branch, tag etc)
 type GitRef struct {
@@ -852,37 +853,43 @@ func GetGitCommitSummary(commit string) (*GitCommitSummary, error) {
 // Get a list of refs (branches, tags) that have received commits in the last numdays
 // remoteName is optional but if specified and includeRemoteBranches is true, will only include
 // remote branches on that remote
-func GetGitRecentRefs(numdays int, includeRemoteBranches bool, remoteName string) ([]string, error) {
+func GetGitRecentRefs(numdays int, includeRemoteBranches bool, remoteName string) ([]*GitRef, error) {
+	// Include %(objectname) AND %(*objectname), the latter only returns something if it's a tag
+	// and that will be the dereferenced SHA ie the actual commit SHA instead of the tag SHA
 	cmd := exec.Command("git", "for-each-ref",
 		`--sort=-committerdate`,
-		`--format=%(refname) %(objectname:short)`,
+		`--format=%(refname) %(objectname) %(*objectname)`,
 		"refs")
 	outp, err := cmd.StdoutPipe()
 	if err != nil {
 		msg := fmt.Sprintf("Unable to call git for-each-ref: %v", err.Error())
-		return []string{}, errors.New(msg)
+		return []*GitRef{}, errors.New(msg)
 	}
 	cmd.Start()
 	scanner := bufio.NewScanner(outp)
 
 	// Output is like this:
-	// refs/heads/master 22be911
-	// refs/remotes/origin/master fa392f7
-	// refs/tags/blah 34c653b
-	// We don't need the SHA
+	// refs/heads/master 69d144416abf89b79f6a6fd21c2621dd9c13ead1
+	// refs/remotes/origin/master ad3b29b773e46ad6870fdf08796c33d97190fe93
+	// refs/tags/blah fa392f757dddf9fa7c3bb1717d0bf0c4762326fc
 
 	// Output is ordered by latest commit date first, so we can stop at the threshold
 	earliestDate := time.Now().AddDate(0, 0, -numdays)
 
-	regex := regexp.MustCompile(`^refs/([^/]+)/(\S+)`)
+	regex := regexp.MustCompile(`^(refs/[^/]+/\S+)\s+([0-9A-Za-z]{40})(?:\s+([0-9A-Za-z]{40}))?`)
 
-	var ret []string
+	var ret []*GitRef
 	for scanner.Scan() {
 		line := scanner.Text()
 		if match := regex.FindStringSubmatch(line); match != nil {
-			reftype := match[1]
-			ref := match[2]
-			if reftype == "remotes" {
+			fullref := match[1]
+			sha := match[2]
+			// test for dereferenced tags, use commit SHA
+			if len(match) > 3 && match[3] != "" {
+				sha = match[3]
+			}
+			reftype, ref := ParseGitRefToTypeAndName(fullref)
+			if reftype == GitRefTypeRemoteBranch || reftype == GitRefTypeRemoteTag {
 				if !includeRemoteBranches {
 					continue
 				}
@@ -890,7 +897,7 @@ func GetGitRecentRefs(numdays int, includeRemoteBranches bool, remoteName string
 					continue
 				}
 			}
-			// This is aref we might use
+			// This is a ref we might use
 			// Check the date
 			commit, err := GetGitCommitSummary(ref)
 			if err != nil {
@@ -900,7 +907,7 @@ func GetGitRecentRefs(numdays int, includeRemoteBranches bool, remoteName string
 				// the end
 				break
 			}
-			ret = append(ret, ref)
+			ret = append(ret, &GitRef{ref, reftype, sha})
 		}
 	}
 	cmd.Wait()
@@ -938,6 +945,35 @@ func GitRefreshIndexForFiles(files []string) error {
 
 }
 
+// Get the type & name of a git reference
+func ParseGitRefToTypeAndName(fullref string) (t GitRefType, name string) {
+	const localPrefix = "refs/heads/"
+	const remotePrefix = "refs/remotes/"
+	const remoteTagPrefix = "refs/remotes/tags/"
+	const localTagPrefix = "refs/tags/"
+
+	if fullref == "HEAD" {
+		name = fullref
+		t = GitRefTypeHEAD
+	} else if strings.HasPrefix(fullref, localPrefix) {
+		name = fullref[len(localPrefix):]
+		t = GitRefTypeLocalBranch
+	} else if strings.HasPrefix(fullref, remotePrefix) {
+		name = fullref[len(remotePrefix):]
+		t = GitRefTypeRemoteBranch
+	} else if strings.HasPrefix(fullref, remoteTagPrefix) {
+		name = fullref[len(remoteTagPrefix):]
+		t = GitRefTypeRemoteTag
+	} else if strings.HasPrefix(fullref, localTagPrefix) {
+		name = fullref[len(localTagPrefix):]
+		t = GitRefTypeLocalTag
+	} else {
+		name = fullref
+		t = GitRefTypeOther
+	}
+	return
+}
+
 // get all refs in the repo (branches, tags, stashes)
 func GetGitAllRefs() ([]*GitRef, error) {
 	cmd := exec.Command("git", "show-ref", "--head", "--dereference")
@@ -964,29 +1000,8 @@ func GetGitAllRefs() ([]*GitRef, error) {
 		if len(f) == 2 {
 			sha := f[0]
 			fullref := f[1]
-			var name string
-			var t GitRefType
-			const localPrefix = "refs/heads/"
-			const remotePrefix = "refs/remotes/"
-			const remoteTagPrefix = "refs/remotes/tags/"
-			const localTagPrefix = "refs/tags/"
-
-			if fullref == "HEAD" {
-				name = fullref
-				t = GitRefTypeHEAD
-			} else if strings.HasPrefix(fullref, localPrefix) {
-				name = fullref[len(localPrefix):]
-				t = GitRefTypeLocalBranch
-			} else if strings.HasPrefix(fullref, remotePrefix) {
-				name = fullref[len(remotePrefix):]
-				t = GitRefTypeRemoteBranch
-			} else if strings.HasPrefix(fullref, remoteTagPrefix) {
-				name = fullref[len(remoteTagPrefix):]
-				t = GitRefTypeRemoteTag
-			} else if strings.HasPrefix(fullref, localTagPrefix) {
-				name = fullref[len(localTagPrefix):]
-				t = GitRefTypeLocalTag
-			} else {
+			t, name := ParseGitRefToTypeAndName(fullref)
+			if t == GitRefTypeOther {
 				// skip all others (including Stash)
 				continue
 			}

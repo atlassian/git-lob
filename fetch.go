@@ -271,10 +271,10 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 			headSHA, _ := GitRefToFullSHA("HEAD")
 			for i, ref := range recentrefs {
 				// Don't duplicate HEAD commit though
-				if ref == headSHA {
+				if ref.CommitSHA == headSHA {
 					continue
 				}
-				recentreflobs, _, err := GetGitAllLOBsToCheckoutAtCommitAndRecent(ref, GlobalOptions.RecentCommitsPeriodOther,
+				recentreflobs, _, err := GetGitAllLOBsToCheckoutAtCommitAndRecent(ref.Name, GlobalOptions.RecentCommitsPeriodOther,
 					GlobalOptions.FetchIncludePaths, GlobalOptions.FetchExcludePaths)
 				if err != nil {
 					return errors.New(fmt.Sprintf("Error determining recent commits on %v: %v", ref, err.Error()))
