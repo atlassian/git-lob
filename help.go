@@ -86,12 +86,12 @@ Checkout settings:
 
 Fetch settings:
 
-  git-lob.recent-refs          What is considered a recent branch/tag from the
-                               current date. Default 90 (days).
-  git-lob.recent-commits-head  Recent commit period for fetching prior versions
+  git-lob.fetch-refs           Which refs other than HEAD to fetch binaries for
+                               compared to current date. Default 30 (days).
+  git-lob.fetch-commits-head   Recent commit period for fetching prior versions
                                on your current HEAD (from latest commit)
-                               Default 30 (days)
-  git-lob.recent-commits-other Recent commit period for fetching prior versions
+                               Default 7 (days)
+  git-lob.fetch-commits-other  Recent commit period for fetching prior versions
                                on other branches (from latest commit)
                                Default 0 (fetch only latest)
   git-lob.fetch-include        Limits binaries fetched to only matching paths.
@@ -112,16 +112,24 @@ Remote settings:
 
 Prune settings:
 
-  git-lob.recent-refs          These 3 settings are the same as in the above
-  git-lob.recent-commits-head  fetch settings. Binaries which are outside this
-  git-lob.recent-commits-other range will be pruned so long as they have been 
-                               pushed.
+  git-lob.retention-period-refs  Period for which binaries on branches other 
+                                 than HEAD will be retained, compared to 
+                                 current date. Should be >=
+                                 git-lob.fetch-refs. Default 30 days.
+  git-lob.retention-period-head  Period for which prior versions of binaries on
+                                 HEAD will be retained (before last commit).
+                                 Should be >= fetch-commits-head. Default 7 
+                                 days.
+  git-lob.retention-period-other Period for which prior versions of binaries 
+                                 on other branches will be retained (vs last 
+                                 commit). Should be >= fetch-commits-other.
+                                 Default 0 (prune all but latest)                       
 
   git-lob.prune-check-remote   The remote to check whether binaries have been
                                pushed to before pruning. Default: origin
                                You can set this to a remote name, or '*' to
                                allow any remote to count.
-                               
+
 
 `)
 }

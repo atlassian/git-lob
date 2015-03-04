@@ -1,9 +1,9 @@
 package main
 
 import (
-	"fmt"
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -35,17 +35,17 @@ var _ = Describe("Fetch", func() {
 		// feature/1 and feature/2 only have the tip included (default 0 days so no history)
 
 		// add one hour forward to the threshold date so we always create commits within time of test run
-		refsIncludedDate := time.Now().AddDate(0, 0, -defaultOptions.RecentRefsPeriodDays).Add(time.Hour)
+		refsIncludedDate := time.Now().AddDate(0, 0, -defaultOptions.FetchRefsPeriodDays).Add(time.Hour)
 		refsExcludedDate := refsIncludedDate.Add(-time.Hour * 2)
 		// Commit inclusion is based on the latest commit made - so make sure latest commit is before today for test
 		latestHEADCommitDate := time.Now().AddDate(0, -2, -3)
 		latestFeature1CommitDate := time.Now().AddDate(0, 0, -4)
 		latestFeature2CommitDate := time.Now().AddDate(0, -1, 0)
 		latestFeature3CommitDate := refsExcludedDate.AddDate(0, -1, 0) // will be excluded
-		headCommitsIncludedDate := latestHEADCommitDate.AddDate(0, 0, -defaultOptions.RecentCommitsPeriodHEAD).Add(time.Hour)
+		headCommitsIncludedDate := latestHEADCommitDate.AddDate(0, 0, -defaultOptions.FetchCommitsPeriodHEAD).Add(time.Hour)
 		headCommitsExcludedDate := headCommitsIncludedDate.Add(-time.Hour * 2)
-		feature1CommitsIncludedDate := latestFeature1CommitDate.AddDate(0, 0, -defaultOptions.RecentCommitsPeriodOther).Add(time.Hour)
-		feature2CommitsIncludedDate := latestFeature2CommitDate.AddDate(0, 0, -defaultOptions.RecentCommitsPeriodOther).Add(time.Hour)
+		feature1CommitsIncludedDate := latestFeature1CommitDate.AddDate(0, 0, -defaultOptions.FetchCommitsPeriodOther).Add(time.Hour)
+		feature2CommitsIncludedDate := latestFeature2CommitDate.AddDate(0, 0, -defaultOptions.FetchCommitsPeriodOther).Add(time.Hour)
 
 		// Function to commit at a specific date
 		commitAtDate := func(t time.Time, msg string) error {
@@ -192,9 +192,9 @@ var _ = Describe("Fetch", func() {
 
 		// Need to load config to load remote but reset recent params
 		LoadConfig(GlobalOptions)
-		GlobalOptions.RecentCommitsPeriodHEAD = defaultOptions.RecentCommitsPeriodHEAD
-		GlobalOptions.RecentCommitsPeriodOther = defaultOptions.RecentCommitsPeriodOther
-		GlobalOptions.RecentRefsPeriodDays = defaultOptions.RecentRefsPeriodDays
+		GlobalOptions.FetchCommitsPeriodHEAD = defaultOptions.FetchCommitsPeriodHEAD
+		GlobalOptions.FetchCommitsPeriodOther = defaultOptions.FetchCommitsPeriodOther
+		GlobalOptions.FetchRefsPeriodDays = defaultOptions.FetchRefsPeriodDays
 		InitCoreProviders()
 
 		// move data, so we have no data locally & it's all on remote

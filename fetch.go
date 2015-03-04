@@ -250,7 +250,7 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 				int64(0), int64(1), 0, 0})
 		}
 		// Get HEAD LOBs first
-		headlobs, _, err := GetGitAllLOBsToCheckoutAtCommitAndRecent("HEAD", GlobalOptions.RecentCommitsPeriodHEAD,
+		headlobs, _, err := GetGitAllLOBsToCheckoutAtCommitAndRecent("HEAD", GlobalOptions.FetchCommitsPeriodHEAD,
 			GlobalOptions.FetchIncludePaths, GlobalOptions.FetchExcludePaths)
 		if err != nil {
 			return errors.New(fmt.Sprintf("Error determining recent HEAD commits: %v", err.Error()))
@@ -260,9 +260,9 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 				0, 0, 0, 0})
 		}
 		lobsNeeded = headlobs
-		if GlobalOptions.RecentRefsPeriodDays > 0 {
+		if GlobalOptions.FetchRefsPeriodDays > 0 {
 			// Find recent other refs (only include remote branches for this remote)
-			recentrefs, err := GetGitRecentRefs(GlobalOptions.RecentRefsPeriodDays, true, remoteName)
+			recentrefs, err := GetGitRecentRefs(GlobalOptions.FetchRefsPeriodDays, true, remoteName)
 			if err != nil {
 				return errors.New(fmt.Sprintf("Error determining recent refs: %v", err.Error()))
 			}
@@ -277,7 +277,7 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 				}
 				refSHAsDone.Add(ref.CommitSHA)
 
-				recentreflobs, _, err := GetGitAllLOBsToCheckoutAtCommitAndRecent(ref.Name, GlobalOptions.RecentCommitsPeriodOther,
+				recentreflobs, _, err := GetGitAllLOBsToCheckoutAtCommitAndRecent(ref.Name, GlobalOptions.FetchCommitsPeriodOther,
 					GlobalOptions.FetchIncludePaths, GlobalOptions.FetchExcludePaths)
 				if err != nil {
 					return errors.New(fmt.Sprintf("Error determining recent commits on %v: %v", ref, err.Error()))
@@ -663,11 +663,11 @@ how this behaves, see CONFIG below.
 
 Recent commits means:
   * The current HEAD, plus
-  * Any ancestors of HEAD within git-lob.recent_commits_head days of its last
+  * Any ancestors of HEAD within git-lob.fetch-commits-head days of its last
     commit date
   * Any branches (local and remote) or tags which have a commit within
-    git-lob.recent_refs days of the current date
-  * Any ancestors of those branches/tags within git-lob.recent_commits_other
+    git-lob.fetch-refs days of the current date
+  * Any ancestors of those branches/tags within git-lob.fetch-commits-other
     days of its last commit date
 
 REMOTES

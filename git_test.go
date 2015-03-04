@@ -603,6 +603,9 @@ var _ = Describe("Git", func() {
 			CreateGitRepoForTest(root)
 			oldwd, _ = os.Getwd()
 			os.Chdir(root)
+			GlobalOptions.FetchRefsPeriodDays = 90
+			GlobalOptions.FetchCommitsPeriodHEAD = 30
+			GlobalOptions.FetchCommitsPeriodOther = 0
 
 			// The setup:
 			// master, feature/1 and feature/2 are 'recent refs', 'feature/3' is not
@@ -610,17 +613,17 @@ var _ = Describe("Git", func() {
 			// feature/1 and feature/2 only have the tip included (default 0 days so no history)
 
 			// add one hour forward to the threshold date so we always create commits within time of test run
-			refsIncludedDate := time.Now().AddDate(0, 0, -GlobalOptions.RecentRefsPeriodDays).Add(time.Hour)
+			refsIncludedDate := time.Now().AddDate(0, 0, -GlobalOptions.FetchRefsPeriodDays).Add(time.Hour)
 			refsExcludedDate := refsIncludedDate.Add(-time.Hour * 2)
 			// Commit inclusion is based on the latest commit made - so make sure latest commit is before today for test
 			latestHEADCommitDate := time.Now().AddDate(0, -2, -3)
 			latestFeature1CommitDate := time.Now().AddDate(0, 0, -4)
 			latestFeature2CommitDate := time.Now().AddDate(0, -1, 0)
 			latestFeature3CommitDate := refsExcludedDate.AddDate(0, -1, 0) // will be excluded
-			headCommitsIncludedDate := latestHEADCommitDate.AddDate(0, 0, -GlobalOptions.RecentCommitsPeriodHEAD).Add(time.Hour)
+			headCommitsIncludedDate := latestHEADCommitDate.AddDate(0, 0, -GlobalOptions.FetchCommitsPeriodHEAD).Add(time.Hour)
 			headCommitsExcludedDate := headCommitsIncludedDate.Add(-time.Hour * 2)
-			feature1CommitsIncludedDate := latestFeature1CommitDate.AddDate(0, 0, -GlobalOptions.RecentCommitsPeriodOther).Add(time.Hour)
-			feature2CommitsIncludedDate := latestFeature2CommitDate.AddDate(0, 0, -GlobalOptions.RecentCommitsPeriodOther).Add(time.Hour)
+			feature1CommitsIncludedDate := latestFeature1CommitDate.AddDate(0, 0, -GlobalOptions.FetchCommitsPeriodOther).Add(time.Hour)
+			feature2CommitsIncludedDate := latestFeature2CommitDate.AddDate(0, 0, -GlobalOptions.FetchCommitsPeriodOther).Add(time.Hour)
 
 			// Function to commit at a specific date
 			commitAtDate := func(t time.Time, msg string) error {
@@ -774,31 +777,32 @@ var _ = Describe("Git", func() {
 		AfterEach(func() {
 			os.Chdir(oldwd)
 			os.RemoveAll(root)
+			GlobalOptions = NewOptions()
 		})
 		It("Retrieves recent git refs & LOBs", func() {
-			recentrefs, err := GetGitRecentRefs(GlobalOptions.RecentRefsPeriodDays, false, "")
+			recentrefs, err := GetGitRecentRefs(GlobalOptions.FetchRefsPeriodDays, false, "")
 			Expect(err).To(BeNil(), "Should not error calling GetGitRecentRefs")
 			Expect(recentrefs).To(ConsistOf(correctRefsNoRemotes), "Recent refs (local only) should be correct")
 
-			recentrefs, err = GetGitRecentRefs(GlobalOptions.RecentRefsPeriodDays, true, "")
+			recentrefs, err = GetGitRecentRefs(GlobalOptions.FetchRefsPeriodDays, true, "")
 			Expect(err).To(BeNil(), "Should not error calling GetGitRecentRefs")
 			Expect(recentrefs).To(ConsistOf(correctRefsAll), "Recent refs (all) should be correct")
 
-			recentrefs, err = GetGitRecentRefs(GlobalOptions.RecentRefsPeriodDays, true, "origin")
+			recentrefs, err = GetGitRecentRefs(GlobalOptions.FetchRefsPeriodDays, true, "origin")
 			Expect(err).To(BeNil(), "Should not error calling GetGitRecentRefs")
 			Expect(recentrefs).To(ConsistOf(correctRefsOriginOnly), "Recent refs (only origin remote) should be correct")
 
-			lobs, earliestCommit, err := GetGitAllLOBsToCheckoutAtCommitAndRecent("master", GlobalOptions.RecentCommitsPeriodHEAD, nil, nil)
+			lobs, earliestCommit, err := GetGitAllLOBsToCheckoutAtCommitAndRecent("master", GlobalOptions.FetchCommitsPeriodHEAD, nil, nil)
 			Expect(err).To(BeNil(), "Should not error getting lobs")
 			Expect(lobs).To(ConsistOf(correctLOBsMaster), fmt.Sprintf("LOBs on master should be correct; all LOBS were:\n%v", strings.Join(lobshas, "\n")))
 			Expect(earliestCommit).To(Equal(firstMasterCommit), "Earliest commit for master should be first commit")
 
 			// It's harder to visualise the feature branches because unchanged files from other branches are included
-			lobs, earliestCommit, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("feature/1", GlobalOptions.RecentCommitsPeriodOther, nil, nil)
+			lobs, earliestCommit, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("feature/1", GlobalOptions.FetchCommitsPeriodOther, nil, nil)
 			Expect(err).To(BeNil(), "Should not error getting lobs")
 			Expect(lobs).To(ConsistOf(correctLOBsFeature1), fmt.Sprintf("LOBs on feature/1 should be correct; all LOBS were:\n%v", strings.Join(lobshas, "\n")))
 			Expect(earliestCommit).To(Equal(firstFeature1Commit), "Earliest commit for feature1 should be first commit")
-			lobs, earliestCommit, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("feature/2", GlobalOptions.RecentCommitsPeriodOther, nil, nil)
+			lobs, earliestCommit, err = GetGitAllLOBsToCheckoutAtCommitAndRecent("feature/2", GlobalOptions.FetchCommitsPeriodOther, nil, nil)
 			Expect(err).To(BeNil(), "Should not error getting lobs")
 			Expect(lobs).To(ConsistOf(correctLOBsFeature2), fmt.Sprintf("LOBs on feature/2 should be correct; all LOBS were:\n%v", strings.Join(lobshas, "\n")))
 			Expect(earliestCommit).To(Equal(firstFeature2Commit), "Earliest commit for feature2 should be first commit")
