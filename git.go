@@ -871,7 +871,8 @@ func GetGitRecentRefs(numdays int, includeRemoteBranches bool, remoteName string
 	// Output is like this:
 	// refs/heads/master 69d144416abf89b79f6a6fd21c2621dd9c13ead1
 	// refs/remotes/origin/master ad3b29b773e46ad6870fdf08796c33d97190fe93
-	// refs/tags/blah fa392f757dddf9fa7c3bb1717d0bf0c4762326fc
+	// refs/tags/blah fa392f757dddf9fa7c3bb1717d0bf0c4762326fc c34b29b773e46ad6870fdf08796c33d97190fe93
+	// note the second SHA when it's a tag but not otherwise
 
 	// Output is ordered by latest commit date first, so we can stop at the threshold
 	earliestDate := time.Now().AddDate(0, 0, -numdays)
