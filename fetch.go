@@ -268,12 +268,15 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 			}
 			// Now each other ref, they should be in reverse date order from GetGitRecentRefs so we're doing
 			// things by priority, HEAD first then most recent
-			headSHA, _ := GitRefToFullSHA("HEAD")
+			refSHAsDone := NewStringSet()
 			for i, ref := range recentrefs {
-				// Don't duplicate HEAD commit though
-				if ref.CommitSHA == headSHA {
+				// Don't duplicate work when >1 ref has the same SHA
+				// Most common with HEAD if not detached but also tags
+				if refSHAsDone.Contains(ref.CommitSHA) {
 					continue
 				}
+				refSHAsDone.Add(ref.CommitSHA)
+
 				recentreflobs, _, err := GetGitAllLOBsToCheckoutAtCommitAndRecent(ref.Name, GlobalOptions.RecentCommitsPeriodOther,
 					GlobalOptions.FetchIncludePaths, GlobalOptions.FetchExcludePaths)
 				if err != nil {
