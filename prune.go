@@ -114,27 +114,36 @@ func cmdPruneHelp() {
   Removes old and unreferenced binaries from local storage.
 
   A binary will NOT BE PRUNED if:
-    1. It is referenced by a reachable commit which is 'recent' as defined by 
-       what 'git lob fetch' would download, OR
+    1. It is referenced by a reachable commit which is inside the 'retention 
+       period' as defined below OR
     2. It is referenced by a commit for which the binaries haven't been pushed
 
   To put that another way, a binary WILL BE PRUNED if:
     1. It is not referenced by any reachable commit, or only by a reachable 
-       commit which is not 'recent' as defined by 'git lob fetch'
+       commit which is outside the 'retention period' AND
     2. If referenced by an older commit, it has been pushed (i.e. the local
-    	copy is not the only one)
-
-  The meaning of 'reachable commit' is as defined in Git, that the commit would
-  be found by working backwards from at least one reference (e.g. branch/tag).
-
-  See 'git lob fetch --help' to see the definition of 'recent commit' and the
-  settings which control it.
+       copy is not the only one)
 
 Options:
   --unreferenced       Only prune totally unreferenced binaries, not old ones
   --quiet, -q          Print less output
   --verbose, -v        Print more output
   --dry-run            Don't actually delete anything, just report
+
+REACHABLE COMMITS & THE RETENTION PERIOD
+
+  Binaries are retained if:
+    * They're used by current HEAD, OR
+    * They're referenced by an ancestor of HEAD within the number of days given
+      by git-lob.retention-period-head of HEAD's last commit date OR
+    * They're used the head of antother branch (local and remote) or tag which
+      has a commit within git-lob.retention-period-refs days of the current date
+    * They're used by other commits on those branches within 
+      git-lob.retention-period-other days of the branch's last commit date
+
+  See 'git lob help config' for a summary of these settings & their defaults, 
+  in the 'prune' section.
+
 
 DEFINITION OF "PUSHED"
   A binary is considered 'pushed' if it has been pushed to 'origin'. You can
@@ -149,6 +158,10 @@ SHARED STORE
 
   If you manually deleted a repository and want to only clean up the shared
   store, use 'git lob prune-shared'
+
+CONFIG
+  Type 'git lob help config' for details, see the 'prune' section
+
 `)
 }
 
