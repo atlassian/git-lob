@@ -850,7 +850,9 @@ func GetGitCommitSummary(commit string) (*GitCommitSummary, error) {
 
 }
 
-// Get a list of refs (branches, tags) that have received commits in the last numdays
+// Get a list of refs (branches, tags) that have received commits in the last numdays, ordered
+// by most recent first
+// You can also set numdays to -1 to not have any limit but still get them in reverse order
 // remoteName is optional but if specified and includeRemoteBranches is true, will only include
 // remote branches on that remote
 func GetGitRecentRefs(numdays int, includeRemoteBranches bool, remoteName string) ([]*GitRef, error) {
@@ -875,7 +877,10 @@ func GetGitRecentRefs(numdays int, includeRemoteBranches bool, remoteName string
 	// note the second SHA when it's a tag but not otherwise
 
 	// Output is ordered by latest commit date first, so we can stop at the threshold
-	earliestDate := time.Now().AddDate(0, 0, -numdays)
+	var earliestDate time.Time
+	if numdays >= 0 {
+		earliestDate = time.Now().AddDate(0, 0, -numdays)
+	}
 
 	regex := regexp.MustCompile(`^(refs/[^/]+/\S+)\s+([0-9A-Za-z]{40})(?:\s+([0-9A-Za-z]{40}))?`)
 
@@ -899,14 +904,16 @@ func GetGitRecentRefs(numdays int, includeRemoteBranches bool, remoteName string
 				}
 			}
 			// This is a ref we might use
-			// Check the date
-			commit, err := GetGitCommitSummary(ref)
-			if err != nil {
-				return ret, err
-			}
-			if commit.CommitDate.Before(earliestDate) {
-				// the end
-				break
+			if numdays >= 0 {
+				// Check the date
+				commit, err := GetGitCommitSummary(ref)
+				if err != nil {
+					return ret, err
+				}
+				if commit.CommitDate.Before(earliestDate) {
+					// the end
+					break
+				}
 			}
 			ret = append(ret, &GitRef{ref, reftype, sha})
 		}
