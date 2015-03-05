@@ -130,6 +130,51 @@ func WalkGitHistory(startSHA string, callback func(currentSHA, parentSHA string)
 	return callbackError
 }
 
+// Walk git history from startSHA but only commits which reference LOBs
+// Use 'additions' & 'removals' to control which side of the diff used to pull out LOBs
+// First call will only be startSHA if it references LOBs itself, otherwise the
+// first call will be the first parent of startSHA which does
+// Walking will stop when there are no more parents referencing LOBs or when callback returns quit=true
+func WalkGitHistoryReferencingLOBs(startSHA string, additions, removals bool, callback func(commitLOB *CommitLOBRef) (quit bool, err error)) error {
+
+	quit := false
+	currentLogHEAD := startSHA
+	var callbackError error
+	for !quit {
+		// get 50 parents
+		args := []string{"log", `--format=commitsha: %H %P`, "-p",
+			"--topo-order", "--first-parent",
+			"--reverse", // we want to list them in ascending order
+			"-G", SHALineRegex,
+			currentLogHEAD}
+
+		// format as <SHA> <PARENT> so we can detect the end of history
+		cmd := exec.Command("git", args...)
+
+		outp, err := cmd.StdoutPipe()
+		if err != nil {
+			return errors.New(fmt.Sprintf("Unable to list commits from %v: %v", currentLogHEAD, err.Error()))
+		}
+		cmd.Start()
+
+		commitLOBs, parentSHA := scanGitLogOutputForLOBReferences(outp, additions, removals, []string{}, []string{})
+
+		cmd.Wait()
+
+		for _, commitLOB := range commitLOBs {
+			quit, callbackError = callback(&commitLOB)
+		}
+
+		// End of history
+		if parentSHA == "" {
+			break
+		} else {
+			currentLogHEAD = parentSHA
+		}
+	}
+	return callbackError
+}
+
 // Gets the default push remote for the working dir
 // Determined from branch.*.remote configuration for the
 // current branch if present, or defaults to origin.
@@ -456,7 +501,7 @@ func GetGitCommitsReferencingLOBsInRange(from, to string, includePaths, excludeP
 // additions/removals controls whether we report only diffs with '+' lines of git-lob, '-' lines, or both
 func getGitCommitsReferencingLOBsInRange(from, to string, additions, removals bool, includePaths, excludePaths []string) ([]CommitLOBRef, error) {
 
-	args := []string{"log", `--format=commitsha: %H`, "-p",
+	args := []string{"log", `--format=commitsha: %H %P`, "-p",
 		"--topo-order", "--first-parent",
 		"--reverse", // we want to list them in ascending order
 		"-G", SHALineRegex}
@@ -479,7 +524,7 @@ func getGitCommitsReferencingLOBsInRange(from, to string, additions, removals bo
 	}
 	cmd.Start()
 
-	ret := scanGitLogOutputForLOBReferences(outp, additions, removals, includePaths, excludePaths)
+	ret, _ := scanGitLogOutputForLOBReferences(outp, additions, removals, includePaths, excludePaths)
 
 	cmd.Wait()
 
@@ -488,13 +533,16 @@ func getGitCommitsReferencingLOBsInRange(from, to string, additions, removals bo
 }
 
 // Internal utility for scanning git-log output for git-lob references
-// Log output must be formated like this: `--format=commitsha: %H`
+// Log output must be formated like this: `--format=commitsha: %H %P`
 // outp must be output from a running git log task
-func scanGitLogOutputForLOBReferences(outp io.Reader, additions, removals bool, includePaths, excludePaths []string) []CommitLOBRef {
+// Also returns the parent SHA for the last commit encountered, if any
+// existingLOBs can be used to pass in an existing list to append to on return
+func scanGitLogOutputForLOBReferences(outp io.Reader, additions, removals bool,
+	includePaths, excludePaths []string) (commitLOBs []CommitLOBRef, parentSHA string) {
 	// Sadly we still get more output than we actually need, but this is the minimum we can get
 	// For each commit we'll get something like this:
 	/*
-	   COMMITSHA:af2607421c9fee2e430cde7e7073a7dad07be559
+	   COMMITSHA:af2607421c9fee2e430cde7e7073a7dad07be559 22be911a626eb9cf2e2760b1b8b092441771cb9d
 
 	   diff --git a/atheneNormalMap.png b/atheneNormalMap.png
 	   new file mode 100644
@@ -520,7 +568,7 @@ func scanGitLogOutputForLOBReferences(outp io.Reader, additions, removals bool, 
 	}
 	fileHeaderRegex := regexp.MustCompile(`diff --git a\/(.+?)\s+b\/(.+)`)
 	fileMergeHeaderRegex := regexp.MustCompile(`diff --cc (.+)`)
-	commitHeaderRegex := regexp.MustCompile(`^commitsha: ([A-Fa-f0-9]{40})`)
+	commitHeaderRegex := regexp.MustCompile(`^commitsha: ([A-Fa-f0-9]{40}) ([A-Fa-f0-9]{40})?`)
 
 	scanner := bufio.NewScanner(outp)
 
@@ -528,11 +576,15 @@ func scanGitLogOutputForLOBReferences(outp io.Reader, additions, removals bool, 
 	var currentFilename string
 	currentFileIncluded := true
 	var ret []CommitLOBRef
+	var lastParent string
 	for scanner.Scan() {
 		line := scanner.Text()
 		if match := commitHeaderRegex.FindStringSubmatch(line); match != nil {
 			// Commit header
 			sha := match[1]
+			if len(match) > 2 {
+				lastParent = match[2]
+			}
 			// Set commit context
 			if currentCommit != nil {
 				if len(currentCommit.lobSHAs) > 0 {
@@ -571,7 +623,7 @@ func scanGitLogOutputForLOBReferences(outp io.Reader, additions, removals bool, 
 		currentCommit = nil
 	}
 
-	return ret
+	return ret, lastParent
 }
 
 // Gets a list of LOB SHAs for all binary files that are needed when checking out any of
@@ -658,7 +710,7 @@ func GetGitAllLOBsToCheckoutAtCommitAndRecent(commit string, days int, includePa
 		// we're looking for *previous* SHAs, which means we're looking for diffs
 		// with a '-' line. So SHAs replaced in the latest commit are old versions too
 		// that we haven't included yet in shasAtCommit
-		args := []string{"log", `--format=commitsha: %H`, "-p",
+		args := []string{"log", `--format=commitsha: %H %P`, "-p",
 			fmt.Sprintf("--since=%v", FormatGitDate(sinceDate)),
 			"-G", SHALineRegex,
 			commit}
@@ -671,7 +723,7 @@ func GetGitAllLOBsToCheckoutAtCommitAndRecent(commit string, days int, includePa
 		cmd.Start()
 
 		// Looking backwards, so removals
-		commitsWithLOBs := scanGitLogOutputForLOBReferences(outp, false, true, includePaths, excludePaths)
+		commitsWithLOBs, _ := scanGitLogOutputForLOBReferences(outp, false, true, includePaths, excludePaths)
 		ret := shasAtCommit
 		earliestCommit := commit
 		for _, lobcommit := range commitsWithLOBs {
