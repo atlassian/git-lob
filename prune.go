@@ -351,21 +351,21 @@ func PruneOld(dryRun bool, callback func()) ([]string, error) {
 	// Build a list to keep, then delete all else (includes deleting unreferenced)
 	// Can't just look at diffs (just like fetch) since LOB changed 3 years ago but still valid = recent
 
-	getLOBsToKeep := func(ref string, days int, notPushedScanOnly bool) ([]string, error) {
+	getLOBsToKeep := func(commit string, days int, notPushedScanOnly bool, remotesToCheck []string) ([]string, error) {
 		var lobs []string
 		var err error
 		var earliestCommit string
 		var lsfilesSnapshotDone bool
 		if notPushedScanOnly {
 			// We only want to include lobs from this ref if not pushed
-			earliestCommit = ref
+			earliestCommit = commit
 			// we haven't YET snapshotted the file system using lsfiles (depends on pushed state)
 			lsfilesSnapshotDone = false
 		} else {
 			// This ref is itself included so perform usual 'all lobs at checkout + n days history' query
-			lobs, earliestCommit, err = GetGitAllLOBsToCheckoutAtCommitAndRecent(ref, days, []string{}, []string{})
+			lobs, earliestCommit, err = GetGitAllLOBsToCheckoutAtCommitAndRecent(commit, days, []string{}, []string{})
 			if err != nil {
-				return []string{}, fmt.Errorf("Error determining recent commits on %v: %v", ref, err.Error())
+				return []string{}, fmt.Errorf("Error determining recent commits from %v: %v", commit, err.Error())
 			}
 			// the above query includes a snapshot of lobs at ref, so only diffs to process
 			lsfilesSnapshotDone = true
@@ -397,19 +397,59 @@ func PruneOld(dryRun bool, callback func()) ([]string, error) {
 		//    If any before that are pushed we would stop & not add their '+' SHAs
 		//
 		// This switching between using '-' and '+' lines of diff might seem odd but using
-		// the '-' lines is the easieset way to get required state in between commits. When
+		// the '-' lines is the easiest way to get required state in between commits. When
 		// your threshold date is in between commits you actually want the SHA from the commit
 		// before which changed that file, which is awkward & could be different for every file.
 		// Using the '-' lines eliminates that issue & also lets us just use git log --since.
+		// When you're looking at commits (rather than between them) you can use '+' which is easier
 
-		_ = earliestCommit
+		// Walk backwards through history finding the last pushed & adding lobs as we go
+		// Push only marks commits referencing binaries as pushed anyway so walk just commits with lobs
+		walkHistoryFunc := func(commitLOB *CommitLOBRef) (quit bool, err error) {
+			// keep going backwards
+			pushed := false
+			for _, remoteName := range remotesToCheck {
+				if !ShouldPushBinariesForCommit(remoteName, commitLOB.commit) {
+					pushed = true
+					break // if >1 remote (i.e. config was '*'), count as pushed if pushed to ANY
+				}
+			}
 
-		if !lsfilesSnapshotDone {
-			// Must take snapshot here before processing diffs
-			// TODO
+			if pushed {
+				// Nothing more to do, quit
+				return true, nil
+			}
 
-			lsfilesSnapshotDone = true
+			// If we're not pushed, we have to add contents
+			if !lsfilesSnapshotDone {
+				// Must take snapshot here before processing any diffs
+				snapshotLOBs, err := GetGitAllLOBsToCheckoutAtCommit(commitLOB.commit, []string{}, []string{})
+				if err != nil {
+					return true, fmt.Errorf("Error determining recent commits from %v: %v", commitLOB.commit, err.Error())
+				}
+				for _, l := range snapshotLOBs {
+					lobs = append(lobs, l)
+				}
+				// the above query includes a snapshot of lobs at ref, so only diffs to process
+				lsfilesSnapshotDone = true
+			} else {
+				// we asked to be told about the '+' side of the diff for LOBs while doing this walk,
+				// so that it corresponds with the push flag. Snapshots above include that already, so
+				// here we only deal with differences.
+				// We have to use the '-' diffs *between* commits (arbitrary date), but can use '+' when *on* commits
+				for _, l := range commitLOB.lobSHAs {
+					lobs = append(lobs, l)
+				}
+			}
+
+			return false, nil
+
 		}
+
+		// In this case we walk the diffs looking for additions
+		err = WalkGitHistoryReferencingLOBs(earliestCommit, true, false, walkHistoryFunc)
+
+		// WHAT IF RETENTION IS BEFORE FIRST COMMIT
 
 		// TODO
 
@@ -426,12 +466,24 @@ func PruneOld(dryRun bool, callback func()) ([]string, error) {
 
 	}
 
+	// What remote(s) do we check for push?
+	var remotes []string
+	remoteCheckCfg := strings.TrimSpace(GlobalOptions.GitConfig["git-lob.prune-check-remote"])
+	if remoteCheckCfg == "" {
+		remotes = []string{"origin"}
+	} else if remoteCheckCfg == "*" {
+		remotes, _ = GetGitRemotes()
+		// ignore errors, empty remote list will default safely (not pushed, so keep)
+	} else {
+		remotes = []string{remoteCheckCfg}
+	}
+
 	// First, include HEAD (we always want to keep that)
-	headlobs, err := getLOBsToKeep("HEAD", GlobalOptions.RetentionCommitsPeriodHEAD, false)
+	headsha, _ := GitRefToFullSHA("HEAD")
+	headlobs, err := getLOBsToKeep(headsha, GlobalOptions.RetentionCommitsPeriodHEAD, false, remotes)
 	if err != nil {
 		return []string{}, err
 	}
-	headsha, _ := GitRefToFullSHA("HEAD")
 	refSHAsDone.Add(headsha)
 
 	retainSet := NewStringSetFromSlice(headlobs)
@@ -473,7 +525,7 @@ func PruneOld(dryRun bool, callback func()) ([]string, error) {
 		}
 
 		// LOBs to keep for this ref
-		lobs, err := getLOBsToKeep(ref.CommitSHA, GlobalOptions.RetentionCommitsPeriodOther, notPushedScanOnly)
+		lobs, err := getLOBsToKeep(ref.CommitSHA, GlobalOptions.RetentionCommitsPeriodOther, notPushedScanOnly, remotes)
 		if err != nil {
 			return []string{}, fmt.Errorf("Error determining LOBs to keep for %v: %v", err.Error())
 		}
