@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 )
 
 func cmdPrune() int {
@@ -346,10 +347,147 @@ func PruneUnreferenced(dryRun bool, callback func()) ([]string, error) {
 // Returns a list of SHAs that were deleted (unless dryRun = true)
 // callback is a basic function to let caller know something is happening
 func PruneOld(dryRun bool, callback func()) ([]string, error) {
-	// TODO
-	LogConsole("PSA: Prune functionality is not implemented yet")
+	refSHAsDone := NewStringSet()
+	// Build a list to keep, then delete all else (includes deleting unreferenced)
+	// Can't just look at diffs (just like fetch) since LOB changed 3 years ago but still valid = recent
 
-	return []string{}, nil
+	getLOBsToKeep := func(ref string, days int, notPushedScanOnly bool) ([]string, error) {
+		var lobs []string
+		var err error
+		var earliestCommit string
+		var lsfilesSnapshotDone bool
+		if notPushedScanOnly {
+			// We only want to include lobs from this ref if not pushed
+			earliestCommit = ref
+			// we haven't YET snapshotted the file system using lsfiles (depends on pushed state)
+			lsfilesSnapshotDone = false
+		} else {
+			// This ref is itself included so perform usual 'all lobs at checkout + n days history' query
+			lobs, earliestCommit, err = GetGitAllLOBsToCheckoutAtCommitAndRecent(ref, days, []string{}, []string{})
+			if err != nil {
+				return []string{}, fmt.Errorf("Error determining recent commits on %v: %v", ref, err.Error())
+			}
+			// the above query includes a snapshot of lobs at ref, so only diffs to process
+			lsfilesSnapshotDone = true
+		}
+
+		// earliestCommit is the earliest one which changed (replaced) a binary SHA
+		// and therefore the SHA we pulled out of it applied UP TO that point
+		// If this commit is pushed then we're OK, if not we have to go backwards
+		// until we find the one that is.
+		// A pushed commit indicates the SHA pulled out of the *following* commit
+		// has been pushed:
+		//
+		// Binary A <-- --> B          B <-- --> C               C <-- --> D
+		// ------------|-----------|--------|-------------------------|
+		// Commit      1           |        2                         3
+		// "Retention"             R
+		//
+		// Given 3 commits (1/2/3) each changing a binary through states A/B/C/D
+		// 1. We retrieve state D through ls-files
+		// 2. We retrieve statees B and C through log --since=R, since we pick up
+		//    commits 2 and 3 and hence the SHAs for C and then B from the '-' side of the diff
+		// 3. 'Earliest commit' is 2, but lets say 2 isn't pushed
+		// 4. If 1 is pushed, then we're actually OK since 1 introduced B, and when
+		//    pushing we're pushing the '+' side of the diff
+		// 5. If 1 isn't pushed then we need to continue to move backwards and pull out
+		//    the binary SHA from the '+' side of the diff for each ANCESTOR of 1,
+		//    until we find one which is pushed, at which point we stop (and don't add
+		//    to retention). Assuming 0 added A and is not pushed we will retain A.
+		//    If any before that are pushed we would stop & not add their '+' SHAs
+		//
+		// This switching between using '-' and '+' lines of diff might seem odd but using
+		// the '-' lines is the easieset way to get required state in between commits. When
+		// your threshold date is in between commits you actually want the SHA from the commit
+		// before which changed that file, which is awkward & could be different for every file.
+		// Using the '-' lines eliminates that issue & also lets us just use git log --since.
+
+		_ = earliestCommit
+
+		if !lsfilesSnapshotDone {
+			// Must take snapshot here before processing diffs
+			// TODO
+
+			lsfilesSnapshotDone = true
+		}
+
+		// TODO
+
+		// 1. ls-files at ref
+
+		// 2. scan backwards in time for all changes back to recent date
+		//    (earliest commit included is >= recent date)
+		// 3. check if this commit is marked as pushed
+		// 3a. If so, then we've collected all SHAs we need to keep for this ref
+		// 3b. If not, walk backwards from this commit until we find pushed (or until no more parents)
+		//     Then include all LOBs referenced from that commit to the earliest commit >= recent date
+
+		return lobs, nil
+
+	}
+
+	// First, include HEAD (we always want to keep that)
+	headlobs, err := getLOBsToKeep("HEAD", GlobalOptions.RetentionCommitsPeriodHEAD, false)
+	if err != nil {
+		return []string{}, err
+	}
+	headsha, _ := GitRefToFullSHA("HEAD")
+	refSHAsDone.Add(headsha)
+
+	retainSet := NewStringSetFromSlice(headlobs)
+
+	// Get all refs - we get all refs and not just recent refs like fetch, because we should
+	// not purge binaries in old refs if they are not pushed. However we get them in date order
+	// so that we don't have to check date once we cross retention-period-refs threshold
+	refs, err := GetGitRecentRefs(-1, true, "")
+	if err != nil {
+		return []string{}, err
+	}
+	outsideRefRetention := false
+	earliestRefDate := time.Now().AddDate(0, 0, -GlobalOptions.RetentionRefsPeriod)
+	for _, ref := range refs {
+		// Don't duplicate work when >1 ref has the same SHA
+		// Most common with HEAD if not detached but also tags
+		if refSHAsDone.Contains(ref.CommitSHA) {
+			continue
+		}
+		refSHAsDone.Add(ref.CommitSHA)
+
+		notPushedScanOnly := false
+		// Is the ref out of the retention-period-refs window already? If so jump straight to push check
+		// refs are reverse date ordered so once we've found one that's outside, all following are too
+		if outsideRefRetention {
+			// previus ref being ouside ref retention manes this one is too (date ordered), save time
+			notPushedScanOnly = true
+		} else {
+			// check individual date
+			commit, err := GetGitCommitSummary(ref.CommitSHA)
+			if err != nil {
+				// We can't tell when this was last committed, so be safe & assume it's recent
+			} else if commit.CommitDate.Before(earliestRefDate) {
+				// this ref is already out of retention, so only keep if not pushed
+				notPushedScanOnly = true
+				// all subseqent refs are earlier
+				outsideRefRetention = true
+			}
+		}
+
+		// LOBs to keep for this ref
+		lobs, err := getLOBsToKeep(ref.CommitSHA, GlobalOptions.RetentionCommitsPeriodOther, notPushedScanOnly)
+		if err != nil {
+			return []string{}, fmt.Errorf("Error determining LOBs to keep for %v: %v", err.Error())
+		}
+		for _, lob := range lobs {
+			retainSet.Add(lob)
+		}
+
+	}
+
+	// Now iterate over LOBs in storage and remove if not in retainSet
+	// TODO
+	var removedList []string
+
+	return removedList, nil
 }
 
 // Prune the shared store of all LOBs with only 1 hard link (itself)
