@@ -47,15 +47,6 @@ var _ = Describe("Fetch", func() {
 		feature1CommitsIncludedDate := latestFeature1CommitDate.AddDate(0, 0, -defaultOptions.FetchCommitsPeriodOther).Add(time.Hour)
 		feature2CommitsIncludedDate := latestFeature2CommitDate.AddDate(0, 0, -defaultOptions.FetchCommitsPeriodOther).Add(time.Hour)
 
-		// Function to commit at a specific date
-		commitAtDate := func(t time.Time, msg string) error {
-			cmd := exec.Command("git", "commit", "--allow-empty", "-m", msg)
-			env := os.Environ()
-			// set GIT_COMMITTER_DATE environment var e.g. "Fri Jun 21 20:26:41 2013 +0900"
-			env = append(env, fmt.Sprintf("GIT_COMMITTER_DATE=%v", FormatGitDate(t)))
-			cmd.Env = env
-			return cmd.Run()
-		}
 		// Simple constant size for all files (not testing chunks)
 		sz := int64(300)
 		// Master branch (which will be HEAD)
@@ -66,7 +57,7 @@ var _ = Describe("Fetch", func() {
 		lobshas = append(lobshas, info.SHA)
 		exec.Command("git", "add", "file1.txt", "file2.txt").Run()
 		// exclude commit 1
-		commitAtDate(headCommitsExcludedDate.Add(-time.Hour*24*30), "Initial")
+		CommitAtDateForTest(headCommitsExcludedDate.Add(-time.Hour*24*30), "Initial")
 
 		info = CreateAndStoreLOBFileForTest(sz, filepath.Join(root, "file1.txt"))
 		lobshas = append(lobshas, info.SHA)
@@ -74,7 +65,7 @@ var _ = Describe("Fetch", func() {
 		lobshas = append(lobshas, info.SHA)
 		exec.Command("git", "add", "file1.txt", "file2.txt").Run()
 		// commit 2 will be excluded,
-		commitAtDate(headCommitsExcludedDate.Add(-time.Hour*24*15), "Second commit")
+		CommitAtDateForTest(headCommitsExcludedDate.Add(-time.Hour*24*15), "Second commit")
 		correctLOBsMaster = append(correctLOBsMaster, lobshas[2], lobshas[3])
 
 		exec.Command("git", "tag", "start").Run()
@@ -84,7 +75,7 @@ var _ = Describe("Fetch", func() {
 		lobshas = append(lobshas, info.SHA)
 		exec.Command("git", "add", "file20.txt").Run()
 		// We'll never see this commit or the branch
-		commitAtDate(latestFeature3CommitDate, "Feature 3 commit")
+		CommitAtDateForTest(latestFeature3CommitDate, "Feature 3 commit")
 		// Back to master
 		exec.Command("git", "checkout", "master").Run()
 
@@ -95,10 +86,10 @@ var _ = Describe("Fetch", func() {
 		lobshas = append(lobshas, info.SHA)
 		exec.Command("git", "add", "file2.txt", "file3.txt").Run()
 		// include commit 2
-		commitAtDate(headCommitsIncludedDate.Add(time.Hour*24), "Third commit")
+		CommitAtDateForTest(headCommitsIncludedDate.Add(time.Hour*24), "Third commit")
 		correctLOBsMaster = append(correctLOBsMaster, lobshas[5], lobshas[6])
 		// Also include commit that references NO shas
-		commitAtDate(headCommitsIncludedDate.Add(time.Hour*48), "Non-LOB commit")
+		CommitAtDateForTest(headCommitsIncludedDate.Add(time.Hour*48), "Non-LOB commit")
 
 		// Create another feature branch that we'll include, but not all the commits
 		exec.Command("git", "tag", "feature/1/start").Run()
@@ -107,17 +98,17 @@ var _ = Describe("Fetch", func() {
 		lobshas = append(lobshas, info.SHA)
 		exec.Command("git", "add", "file3.txt").Run()
 		// We'll never see this commit but we will see the branch (commit later)
-		commitAtDate(feature1CommitsIncludedDate.Add(-time.Hour*48), "Feature 1 excluded commit")
+		CommitAtDateForTest(feature1CommitsIncludedDate.Add(-time.Hour*48), "Feature 1 excluded commit")
 		info = CreateAndStoreLOBFileForTest(sz, filepath.Join(root, "file3.txt"))
 		lobshas = append(lobshas, info.SHA)
 		exec.Command("git", "add", "file3.txt").Run()
-		commitAtDate(feature1CommitsIncludedDate.Add(-time.Hour*4), "Feature 1 included commit")
+		CommitAtDateForTest(feature1CommitsIncludedDate.Add(-time.Hour*4), "Feature 1 included commit")
 
 		info = CreateAndStoreLOBFileForTest(sz, filepath.Join(root, "file3.txt"))
 		lobshas = append(lobshas, info.SHA)
 		exec.Command("git", "add", "file3.txt").Run()
 		// We'll see this commit because the next commit will be the tip & range will include it
-		commitAtDate(latestFeature1CommitDate, "Feature 1 tip commit")
+		CommitAtDateForTest(latestFeature1CommitDate, "Feature 1 tip commit")
 		correctLOBsFeature1 = append(correctLOBsFeature1, lobshas[9])
 		// Also include unchanged file1.txt at this state and old state of file2.txt
 		correctLOBsFeature1 = append(correctLOBsFeature1, lobshas[2], lobshas[5])
@@ -133,16 +124,16 @@ var _ = Describe("Fetch", func() {
 		lobshas = append(lobshas, info.SHA)
 		exec.Command("git", "add", "file4.txt").Run()
 		// We'll never see this commit but we will see the branch (commit later)
-		commitAtDate(feature2CommitsIncludedDate.Add(-time.Hour*24*3), "Feature 2 excluded commit")
+		CommitAtDateForTest(feature2CommitsIncludedDate.Add(-time.Hour*24*3), "Feature 2 excluded commit")
 		info = CreateAndStoreLOBFileForTest(sz, filepath.Join(root, "file4.txt"))
 		lobshas = append(lobshas, info.SHA)
 		exec.Command("git", "add", "file4.txt").Run()
-		commitAtDate(feature2CommitsIncludedDate.Add(-time.Hour*24*2), "Feature 2 excluded commit")
+		CommitAtDateForTest(feature2CommitsIncludedDate.Add(-time.Hour*24*2), "Feature 2 excluded commit")
 		info = CreateAndStoreLOBFileForTest(sz, filepath.Join(root, "file4.txt"))
 		lobshas = append(lobshas, info.SHA)
 		exec.Command("git", "add", "file4.txt").Run()
 		// We'll see this commit
-		commitAtDate(latestFeature2CommitDate, "Feature 2 tip commit")
+		CommitAtDateForTest(latestFeature2CommitDate, "Feature 2 tip commit")
 		correctLOBsFeature2 = append(correctLOBsFeature2, lobshas[12])
 		// Also include unchanged files on this branch: file1-3.txt last state & included versions
 		correctLOBsFeature2 = append(correctLOBsFeature2, lobshas[5], lobshas[6], lobshas[2])
@@ -153,20 +144,20 @@ var _ = Describe("Fetch", func() {
 		info = CreateAndStoreLOBFileForTest(sz, filepath.Join(root, "file6.txt"))
 		lobshas = append(lobshas, info.SHA)
 		exec.Command("git", "add", "file6.txt").Run()
-		commitAtDate(headCommitsIncludedDate.Add(time.Hour*24*3), "Master commit")
+		CommitAtDateForTest(headCommitsIncludedDate.Add(time.Hour*24*3), "Master commit")
 		correctLOBsMaster = append(correctLOBsMaster, lobshas[13])
 
 		info = CreateAndStoreLOBFileForTest(sz, filepath.Join(root, "file5.txt"))
 		lobshas = append(lobshas, info.SHA)
 		exec.Command("git", "add", "file5.txt").Run()
-		commitAtDate(refsIncludedDate.Add(time.Hour*5), "Master penultimate commit")
+		CommitAtDateForTest(refsIncludedDate.Add(time.Hour*5), "Master penultimate commit")
 		correctLOBsMaster = append(correctLOBsMaster, lobshas[14])
 		exec.Command("git", "tag", "aheadtag").Run()
 
 		info = CreateAndStoreLOBFileForTest(sz, filepath.Join(root, "file5.txt"))
 		lobshas = append(lobshas, info.SHA)
 		exec.Command("git", "add", "file5.txt").Run()
-		commitAtDate(latestHEADCommitDate, "Master tip commit")
+		CommitAtDateForTest(latestHEADCommitDate, "Master tip commit")
 		correctLOBsMaster = append(correctLOBsMaster, lobshas[15])
 
 		// now that we've stored all the data locally, let's move it to a remote so we have to fetch it

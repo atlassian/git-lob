@@ -1,13 +1,13 @@
 package main
 
 import (
+	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
+	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
 	"bufio"
 	"bytes"
 	cryptorand "crypto/rand"
 	"crypto/sha1"
 	"fmt"
-	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
-	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestAll(t *testing.T) {
@@ -56,6 +57,16 @@ func CreateGitRepoWithSeparateGitDirForTest(path string, gitDir string) {
 	if err != nil {
 		Fail("Unable to create git repo at " + path + ": " + err.Error())
 	}
+}
+
+// Simplistic fire & forget running of git command - returns combined output
+func RunGitCommandForTest(failureCheck bool, args ...string) string {
+	outp, err := exec.Command("git", args...).CombinedOutput()
+	if failureCheck && err != nil {
+		Fail(fmt.Sprintf("Error running git command 'git %v': %v", strings.Join(args, " "), err.Error()))
+	}
+	return string(outp)
+
 }
 
 // Create a small LOB file  ready for storing in the LOB area
@@ -388,4 +399,87 @@ func RemoveLOBsForTest(shas []string, rootlobpath string) {
 		os.Remove(chunk)
 	}
 
+}
+
+// Input struct for defining commits for test setup
+type TestCommitSetupInput struct {
+	// Date that we should commit on (optional, leave blank for 'now')
+	CommitDate time.Time
+	// List of files to have LOB contents inserted at this commit
+	Files []string
+	// Optional list of sizes for the above files; if not specified defaults to 100 bytes
+	FileSizes []int64
+	// List of parent branches (all branches must have been created in a previous)
+	// Can be omitted to just use the parent of the previous commit
+	ParentBranches []string
+	// Name of a new branch we should create at this commit (optional - master not required)
+	NewBranch string
+}
+
+// Corresponding output struct for TestCommitSetupInput after test state is set up
+type TestCommitSetupOutput struct {
+	// Commit SHA
+	CommitSHA string
+	// SHAs of the LOBs that were created
+	FileLOBSHAs []string
+}
+
+func CommitAtDateForTest(t time.Time, msg string) error {
+	cmd := exec.Command("git", "commit", "--allow-empty", "-m", msg)
+	env := os.Environ()
+	// set GIT_COMMITTER_DATE environment var e.g. "Fri Jun 21 20:26:41 2013 +0900"
+	env = append(env, fmt.Sprintf("GIT_COMMITTER_DATE=%v", FormatGitDate(t)))
+	cmd.Env = env
+	return cmd.Run()
+}
+
+func SetupRepoForTest(inputs []*TestCommitSetupInput) []*TestCommitSetupOutput {
+	// Used to check whether we need to checkout another commit before
+	lastBranch := "master"
+	outputs := make([]*TestCommitSetupOutput, 0, len(inputs))
+
+	for i, input := range inputs {
+		output := &TestCommitSetupOutput{}
+		// first, are we on the correct branch
+		if len(input.ParentBranches) > 0 {
+			if input.ParentBranches[0] != lastBranch {
+				RunGitCommandForTest(true, "checkout", input.ParentBranches[0])
+				lastBranch = input.ParentBranches[0]
+			}
+		}
+		// Is this a merge?
+		if len(input.ParentBranches) > 1 {
+			// Always take the *other* side in a merge so we adopt changes
+			// also don't automatically commit, we'll do that below
+			args := []string{"merge", "--no-ff", "--no-commit", "--strategy-option=theirs"}
+			args = append(args, input.ParentBranches[1:]...)
+			RunGitCommandForTest(false, args...)
+		} else if input.NewBranch != "" {
+			RunGitCommandForTest(true, "checkout", "-b", input.NewBranch)
+			lastBranch = input.NewBranch
+		}
+		// Any files to write?
+		for fi, filename := range input.Files {
+			sz := int64(100)
+			if len(input.FileSizes) > fi {
+				sz = input.FileSizes[fi]
+			}
+			info := CreateAndStoreLOBFileForTest(sz, filename)
+			output.FileLOBSHAs = append(output.FileLOBSHAs, info.SHA)
+			RunGitCommandForTest(true, "add", filename)
+		}
+		// Now commit
+		if input.CommitDate.IsZero() {
+			RunGitCommandForTest(true, "commit", "-m", fmt.Sprintf("Test commit %d", i))
+		} else {
+			CommitAtDateForTest(input.CommitDate, fmt.Sprintf("Test commit %d", i))
+		}
+		commit, err := GitRefToFullSHA("HEAD")
+		if err != nil {
+			Fail("Error determining commit SHA: " + err.Error())
+		}
+		output.CommitSHA = commit
+		outputs = append(outputs, output)
+	}
+	return outputs
 }
