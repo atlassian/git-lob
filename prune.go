@@ -522,9 +522,20 @@ func PruneOld(dryRun bool, callback func()) ([]string, error) {
 
 	}
 
-	// Now iterate over LOBs in storage and remove if not in retainSet
-	// TODO
 	var removedList []string
+	localLOBs, err := getAllLocalLOBSHAs()
+	if err == nil {
+		for _, sha := range localLOBs {
+			if !retainSet.Contains(sha) {
+				removedList = append(removedList, string(sha))
+				if !dryRun {
+					DeleteLOB(string(sha))
+				}
+			}
+		}
+	} else {
+		return []string{}, errors.New("Unable to get list of binary files: " + err.Error())
+	}
 
 	return removedList, nil
 }
