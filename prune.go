@@ -192,18 +192,16 @@ var (
 )
 
 // Retrieve the full set of SHAs that currently have files locally (complete or not)
-// returned as map[string]bool for fast lookup
-func getAllLocalLOBSHAs() (StringSet, error) {
+func getAllLocalLOBSHAs() ([]string, error) {
 	return getAllLOBSHAsInDir(GetLocalLOBRoot())
 }
 
 // Retrieve the full set of SHAs that currently have files in the shared store (complete or not)
-// returned as map[string]bool for fast lookup
-func getAllSharedLOBSHAs() (StringSet, error) {
+func getAllSharedLOBSHAs() ([]string, error) {
 	return getAllLOBSHAsInDir(GetSharedLOBRoot())
 }
 
-func getAllLOBSHAsInDir(lobroot string) (StringSet, error) {
+func getAllLOBSHAsInDir(lobroot string) ([]string, error) {
 
 	// os.File.Readdirnames is the most efficient
 	// os.File.Readdir retrieves extra info we don't usually need but in case other unexpected files
@@ -213,46 +211,46 @@ func getAllLOBSHAsInDir(lobroot string) (StringSet, error) {
 	if lobFilenameRegex == nil {
 		lobFilenameRegex = regexp.MustCompile(`^([A-Za-z0-9]{40})_(meta|\d+)$`)
 	}
-	set := NewStringSet()
+	var ret []string
 
 	// We only need to support a 2-folder structure here & know that all files are at the bottom level
 	// We always work on the local LOB folder (either only copy or hard link)
 	rootf, err := os.Open(lobroot)
 	if err != nil {
-		return set, errors.New(fmt.Sprintf("Unable to open LOB root: %v\n", err))
+		return ret, errors.New(fmt.Sprintf("Unable to open LOB root: %v\n", err))
 	}
 	dir1, err := rootf.Readdir(0)
 	if err != nil {
-		return set, errors.New(fmt.Sprintf("Unable to read first level LOB dir: %v\n", err))
+		return ret, errors.New(fmt.Sprintf("Unable to read first level LOB dir: %v\n", err))
 	}
 	for _, dir1fi := range dir1 {
 		if dir1fi.IsDir() {
 			dir1path := filepath.Join(lobroot, dir1fi.Name())
 			dir1f, err := os.Open(dir1path)
 			if err != nil {
-				return set, errors.New(fmt.Sprintf("Unable to open LOB dir: %v\n", err))
+				return ret, errors.New(fmt.Sprintf("Unable to open LOB dir: %v\n", err))
 			}
 			dir2, err := dir1f.Readdir(0)
 			if err != nil {
-				return set, errors.New(fmt.Sprintf("Unable to read second level LOB dir: %v\n", err))
+				return ret, errors.New(fmt.Sprintf("Unable to read second level LOB dir: %v\n", err))
 			}
 			for _, dir2fi := range dir2 {
 				if dir2fi.IsDir() {
 					dir2path := filepath.Join(dir1path, dir2fi.Name())
 					dir2f, err := os.Open(dir2path)
 					if err != nil {
-						return set, errors.New(fmt.Sprintf("Unable to open LOB dir: %v\n", err))
+						return ret, errors.New(fmt.Sprintf("Unable to open LOB dir: %v\n", err))
 					}
 					lobnames, err := dir2f.Readdirnames(0)
 					if err != nil {
-						return set, errors.New(fmt.Sprintf("Unable to read innermost LOB dir: %v\n", err))
+						return ret, errors.New(fmt.Sprintf("Unable to read innermost LOB dir: %v\n", err))
 					}
 					for _, lobname := range lobnames {
 						// Make sure it's really a LOB file
 						if match := lobFilenameRegex.FindStringSubmatch(lobname); match != nil {
 							// Regex pulls out the SHA
 							sha := match[1]
-							set.Add(sha)
+							ret = append(ret, sha)
 						}
 					}
 
@@ -262,7 +260,7 @@ func getAllLOBSHAsInDir(lobroot string) (StringSet, error) {
 
 	}
 
-	return set, nil
+	return ret, nil
 
 }
 
@@ -328,12 +326,13 @@ func PruneUnreferenced(dryRun bool, callback func()) ([]string, error) {
 	fileSHAs, err := getAllLocalLOBSHAs()
 	if err == nil {
 
-		toDelete := fileSHAs.Difference(referencedSHAs)
-		ret := make([]string, 0, len(toDelete))
-		for sha := range toDelete.Iter() {
-			ret = append(ret, string(sha))
-			if !dryRun {
-				DeleteLOB(string(sha))
+		var ret []string
+		for _, sha := range fileSHAs {
+			if !referencedSHAs.Contains(sha) {
+				ret = append(ret, string(sha))
+				if !dryRun {
+					DeleteLOB(string(sha))
+				}
 			}
 		}
 		return ret, nil
@@ -538,7 +537,7 @@ func PruneSharedStore(dryRun bool, callback func()) ([]string, error) {
 	fileSHAs, err := getAllSharedLOBSHAs()
 	if err == nil {
 		ret := make([]string, 0, 10)
-		for sha := range fileSHAs.Iter() {
+		for _, sha := range fileSHAs {
 			shareddir := GetSharedLOBDir(sha)
 			names, err := filepath.Glob(filepath.Join(shareddir, fmt.Sprintf("%v*", sha)))
 			if err != nil {
