@@ -350,9 +350,9 @@ func PruneOld(dryRun bool, callback func()) ([]string, error) {
 	refSHAsDone := NewStringSet()
 	// Build a list to keep, then delete all else (includes deleting unreferenced)
 	// Can't just look at diffs (just like fetch) since LOB changed 3 years ago but still valid = recent
+	retainSet := NewStringSet()
 
-	getLOBsToKeep := func(commit string, days int, notPushedScanOnly bool, remotesToCheck []string) ([]string, error) {
-		var lobs []string
+	retainLOBs := func(commit string, days int, notPushedScanOnly bool, remotesToCheck []string) error {
 		var err error
 		var earliestCommit string
 		var lsfilesSnapshotDone bool
@@ -363,9 +363,13 @@ func PruneOld(dryRun bool, callback func()) ([]string, error) {
 			lsfilesSnapshotDone = false
 		} else {
 			// This ref is itself included so perform usual 'all lobs at checkout + n days history' query
+			var lobs []string
 			lobs, earliestCommit, err = GetGitAllLOBsToCheckoutAtCommitAndRecent(commit, days, []string{}, []string{})
 			if err != nil {
-				return []string{}, fmt.Errorf("Error determining recent commits from %v: %v", commit, err.Error())
+				return fmt.Errorf("Error determining recent commits from %v: %v", commit, err.Error())
+			}
+			for _, l := range lobs {
+				retainSet.Add(l)
 			}
 			// the above query includes a snapshot of lobs at ref, so only diffs to process
 			lsfilesSnapshotDone = true
@@ -373,6 +377,7 @@ func PruneOld(dryRun bool, callback func()) ([]string, error) {
 
 		// earliestCommit is the earliest one which changed (replaced) a binary SHA
 		// and therefore the SHA we pulled out of it applied UP TO that point
+		// that we've included in the lobs list already
 		// If this commit is pushed then we're OK, if not we have to go backwards
 		// until we find the one that is.
 		// A pushed commit indicates the SHA pulled out of the *following* commit
@@ -388,14 +393,15 @@ func PruneOld(dryRun bool, callback func()) ([]string, error) {
 		// 2. We retrieve statees B and C through log --since=R, since we pick up
 		//    commits 2 and 3 and hence the SHAs for C and then B from the '-' side of the diff
 		// 3. 'Earliest commit' is 2, but lets say 2 isn't pushed
-		// 4. If 1 is pushed, then we're actually OK since 1 introduced B, and when
+		// 4. If 1 is pushed, then we're technically OK since 1 introduced B, and when
 		//    pushing we're pushing the '+' side of the diff
-		// 5. If 1 isn't pushed then we need to continue to move backwards and pull out
-		//    the binary SHA from the '+' side of the diff for each ANCESTOR of 1,
-		//    until we find one which is pushed, at which point we stop (and don't add
-		//    to retention). Assuming 0 added A and is not pushed we will retain A.
-		//    If any before that are pushed we would stop & not add their '+' SHAs
-		//
+		// 5. However, if 2 was a merge commit then the first parent might not identify it
+		//    And we don't want to do a tree search of all parents, instead use the nature of
+		//    merges that 2 would include the + side of all parents, so use that as record
+		//    even though technically it means we retain one more commit than necessary in non-merge cases
+		// 6. So starting from earliestCommit we go backwards adding the '+' side of all non-pushed
+		//    commits to our retain list
+
 		// This switching between using '-' and '+' lines of diff might seem odd but using
 		// the '-' lines is the easiest way to get required state in between commits. When
 		// your threshold date is in between commits you actually want the SHA from the commit
@@ -428,7 +434,7 @@ func PruneOld(dryRun bool, callback func()) ([]string, error) {
 					return true, fmt.Errorf("Error determining recent commits from %v: %v", commitLOB.commit, err.Error())
 				}
 				for _, l := range snapshotLOBs {
-					lobs = append(lobs, l)
+					retainSet.Add(l)
 				}
 				// the above query includes a snapshot of lobs at ref, so only diffs to process
 				lsfilesSnapshotDone = true
@@ -438,7 +444,7 @@ func PruneOld(dryRun bool, callback func()) ([]string, error) {
 				// here we only deal with differences.
 				// We have to use the '-' diffs *between* commits (arbitrary date), but can use '+' when *on* commits
 				for _, l := range commitLOB.lobSHAs {
-					lobs = append(lobs, l)
+					retainSet.Add(l)
 				}
 			}
 
@@ -446,23 +452,10 @@ func PruneOld(dryRun bool, callback func()) ([]string, error) {
 
 		}
 
-		// In this case we walk the diffs looking for additions
+		// In this case we walk the diffs looking for additions of lobs '+' in the diff
 		err = WalkGitHistoryReferencingLOBs(earliestCommit, true, false, walkHistoryFunc)
 
-		// WHAT IF RETENTION IS BEFORE FIRST COMMIT
-
-		// TODO
-
-		// 1. ls-files at ref
-
-		// 2. scan backwards in time for all changes back to recent date
-		//    (earliest commit included is >= recent date)
-		// 3. check if this commit is marked as pushed
-		// 3a. If so, then we've collected all SHAs we need to keep for this ref
-		// 3b. If not, walk backwards from this commit until we find pushed (or until no more parents)
-		//     Then include all LOBs referenced from that commit to the earliest commit >= recent date
-
-		return lobs, nil
+		return nil
 
 	}
 
@@ -480,13 +473,11 @@ func PruneOld(dryRun bool, callback func()) ([]string, error) {
 
 	// First, include HEAD (we always want to keep that)
 	headsha, _ := GitRefToFullSHA("HEAD")
-	headlobs, err := getLOBsToKeep(headsha, GlobalOptions.RetentionCommitsPeriodHEAD, false, remotes)
+	err := retainLOBs(headsha, GlobalOptions.RetentionCommitsPeriodHEAD, false, remotes)
 	if err != nil {
 		return []string{}, err
 	}
 	refSHAsDone.Add(headsha)
-
-	retainSet := NewStringSetFromSlice(headlobs)
 
 	// Get all refs - we get all refs and not just recent refs like fetch, because we should
 	// not purge binaries in old refs if they are not pushed. However we get them in date order
@@ -525,12 +516,9 @@ func PruneOld(dryRun bool, callback func()) ([]string, error) {
 		}
 
 		// LOBs to keep for this ref
-		lobs, err := getLOBsToKeep(ref.CommitSHA, GlobalOptions.RetentionCommitsPeriodOther, notPushedScanOnly, remotes)
+		err := retainLOBs(ref.CommitSHA, GlobalOptions.RetentionCommitsPeriodOther, notPushedScanOnly, remotes)
 		if err != nil {
 			return []string{}, fmt.Errorf("Error determining LOBs to keep for %v: %v", err.Error())
-		}
-		for _, lob := range lobs {
-			retainSet.Add(lob)
 		}
 
 	}
