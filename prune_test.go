@@ -9,9 +9,113 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 )
 
 var _ = Describe("Prune", func() {
+	Describe("Prune old references", func() {
+		// Test critieria
+		// Doesn't prune when all commits in range
+		// Prunes pushed and not non-pushed
+		// Remote filtering for push test
+		// Picks up multiple branches
+		// Merges?
+
+		root := filepath.Join(os.TempDir(), "PruneOldTest")
+		var oldwd string
+		var setupInputs []*TestCommitSetupInput
+		var setupOutputs []*TestCommitSetupOutput
+		BeforeEach(func() {
+			// Just be explicit
+			GlobalOptions = NewOptions()
+
+			// Set up git repo with some subfolders
+			CreateGitRepoForTest(root)
+			oldwd, _ = os.Getwd()
+			os.Chdir(root)
+
+			// Create a single commit (not referencing any SHA)
+			now := time.Now()
+
+			setupInputs = []*TestCommitSetupInput{
+				&TestCommitSetupInput{
+					CommitDate: now.AddDate(0, 0, -29),
+					Files:      []string{"data1.bin", filepath.Join("img", "image1.jpg")},
+				},
+				&TestCommitSetupInput{
+					CommitDate: now.AddDate(0, 0, -28),
+					Files:      []string{"data2.bin", filepath.Join("img", "image2.jpg")},
+				},
+				// branch, modify & add
+				// this branch we'll leave hanging
+				&TestCommitSetupInput{
+					CommitDate: now.AddDate(0, 0, -27),
+					Files:      []string{"data1.bin", filepath.Join("bigdata", "something.dat")},
+					FileSizes:  []int64{150, 2000},
+					NewBranch:  "feature/bigdata",
+				},
+				&TestCommitSetupInput{
+					CommitDate:     now.AddDate(0, 0, -23),
+					Files:          []string{"data3.bin", "data4.bin", "data5.bin"},
+					ParentBranches: []string{"feature/bigdata"},
+				},
+				// now back on master
+				&TestCommitSetupInput{
+					CommitDate:     now.AddDate(0, 0, -25),
+					Files:          []string{"data2.bin", "newfile1.dat", "newfile2.dat"},
+					ParentBranches: []string{"master"},
+				},
+				// another new branch, this one we'll merge
+				// deliberately include changes which will overwrite each other
+				// to ensure that we pick up the cancelled LOB changes to retain
+				// in this case 'mergedata.bin' change at this commit is overwritten by the
+				// next commit when it comes to merging to master
+				&TestCommitSetupInput{
+					CommitDate: now.AddDate(0, 0, -24),
+					Files:      []string{"mergedata.bin", "mergedata2.dat"},
+					NewBranch:  "feature/tomerge",
+				},
+				&TestCommitSetupInput{
+					CommitDate:     now.AddDate(0, 0, -23),
+					Files:          []string{"mergedata.bin", "mergedata3.dat"},
+					ParentBranches: []string{"feature/tomerge"},
+				},
+				// now merge (no changes added except from merge)
+				&TestCommitSetupInput{
+					CommitDate:     now.AddDate(0, 0, -22),
+					ParentBranches: []string{"master", "feature/tomerge"},
+				},
+				// one more commit on master
+				&TestCommitSetupInput{
+					CommitDate:     now.AddDate(0, 0, -20),
+					Files:          []string{filepath.Join("img", "image30.jpg")},
+					ParentBranches: []string{"master"}, // unnecessary but make sure
+				},
+			}
+
+			setupOutputs = SetupRepoForTest(setupInputs)
+		})
+		AfterEach(func() {
+			os.Chdir(oldwd)
+			os.RemoveAll(root)
+			GlobalOptions = NewOptions()
+		})
+
+		It("Removes nothing when everything within retention", func() {
+			GlobalOptions.RetentionRefsPeriod = 30
+			GlobalOptions.RetentionCommitsPeriodHEAD = 7
+			GlobalOptions.RetentionCommitsPeriodOther = 0
+
+			fmt.Println(setupOutputs)
+			// Try with dry-run first
+			deleted, err := PruneOld(false, func() {})
+			Expect(err).To(BeNil(), "Should be no error pruning")
+			Expect(deleted).To(BeEmpty(), "No files should be deleted, all within range")
+
+		})
+
+	})
+
 	Describe("Prune all unreferenced", func() {
 
 		root := filepath.Join(os.TempDir(), "PruneTest")

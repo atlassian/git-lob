@@ -204,6 +204,7 @@ func CreateLargeTestLOBDataForRetrieval() (correctInfo *LOBInfo) {
 
 // Create a file with random data of size sz
 func CreateRandomFileForTest(sz int64, filename string) {
+	os.MkdirAll(filepath.Dir(filename), 0755)
 	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0644)
 	if err != nil {
 		Fail(fmt.Sprintf("Can't create test file %v: %v", filename, err))
