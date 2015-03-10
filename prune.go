@@ -361,6 +361,7 @@ func PruneOld(dryRun bool, callback func()) ([]string, error) {
 			// we haven't YET snapshotted the file system using lsfiles (depends on pushed state)
 			lsfilesSnapshotDone = false
 		} else {
+			callback()
 			// This ref is itself included so perform usual 'all lobs at checkout + n days history' query
 			var lobs []string
 			lobs, earliestCommit, err = GetGitAllLOBsToCheckoutAtCommitAndRecent(commit, days, []string{}, []string{})
@@ -413,6 +414,7 @@ func PruneOld(dryRun bool, callback func()) ([]string, error) {
 		walkHistoryFunc := func(commitLOB *CommitLOBRef) (quit bool, err error) {
 			// keep going backwards
 			pushed := false
+			callback()
 			for _, remoteName := range remotesToCheck {
 				if !ShouldPushBinariesForCommit(remoteName, commitLOB.commit) {
 					pushed = true
@@ -471,6 +473,7 @@ func PruneOld(dryRun bool, callback func()) ([]string, error) {
 	}
 
 	// First, include HEAD (we always want to keep that)
+	LogDebugf("Retaining HEAD and %dd of history\n", GlobalOptions.RetentionCommitsPeriodHEAD)
 	headsha, _ := GitRefToFullSHA("HEAD")
 	err := retainLOBs(headsha, GlobalOptions.RetentionCommitsPeriodHEAD, false, remotes)
 	if err != nil {
@@ -488,6 +491,7 @@ func PruneOld(dryRun bool, callback func()) ([]string, error) {
 	outsideRefRetention := false
 	earliestRefDate := time.Now().AddDate(0, 0, -GlobalOptions.RetentionRefsPeriod)
 	for _, ref := range refs {
+		callback()
 		// Don't duplicate work when >1 ref has the same SHA
 		// Most common with HEAD if not detached but also tags
 		if refSHAsDone.Contains(ref.CommitSHA) {
@@ -514,6 +518,10 @@ func PruneOld(dryRun bool, callback func()) ([]string, error) {
 			}
 		}
 
+		if !notPushedScanOnly {
+			LogDebugf("Retaining %v and %dd of history\n", ref, GlobalOptions.RetentionCommitsPeriodOther)
+		}
+
 		// LOBs to keep for this ref
 		err := retainLOBs(ref.CommitSHA, GlobalOptions.RetentionCommitsPeriodOther, notPushedScanOnly, remotes)
 		if err != nil {
@@ -526,6 +534,7 @@ func PruneOld(dryRun bool, callback func()) ([]string, error) {
 	localLOBs, err := getAllLocalLOBSHAs()
 	if err == nil {
 		for _, sha := range localLOBs {
+			callback()
 			if !retainSet.Contains(sha) {
 				removedList = append(removedList, string(sha))
 				if !dryRun {
@@ -536,6 +545,7 @@ func PruneOld(dryRun bool, callback func()) ([]string, error) {
 	} else {
 		return []string{}, errors.New("Unable to get list of binary files: " + err.Error())
 	}
+	LogDebugf("Also retained everything that hasn't been pushed to %v\n", remotes)
 
 	return removedList, nil
 }
