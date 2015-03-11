@@ -104,7 +104,8 @@ var _ = Describe("Prune", func() {
 		It("Removes nothing when everything within retention", func() {
 			GlobalOptions.RetentionRefsPeriod = 30
 			GlobalOptions.RetentionCommitsPeriodHEAD = 7
-			GlobalOptions.RetentionCommitsPeriodOther = 0
+			GlobalOptions.RetentionCommitsPeriodOther = 1 // not the default, retain by date
+			// we want to test that the older commit on the 'hanging' branch is retained when it's 1 day back, not because it's not pushed
 
 			lobsdeleted := 0
 			lobsretainedbydate := 0
@@ -119,11 +120,17 @@ var _ = Describe("Prune", func() {
 					lobsdeleted++
 				}
 			}
+			filestoretain := 0
+			for _, out := range setupOutputs {
+				filestoretain += len(out.FileLOBSHAs)
+			}
 			//fmt.Println(setupOutputs)
 			deleted, err := PruneOld(false, callback)
 			Expect(err).To(BeNil(), "Should be no error pruning")
 			Expect(deleted).To(BeEmpty(), "No files should be deleted, all within range")
 			Expect(lobsdeleted).To(BeZero(), "No deletion callbacks should be made")
+			Expect(lobsretainedbydate).To(BeEquivalentTo(filestoretain), "Should be correct number of file SHAs retained by date")
+			Expect(lobsretainednotpushed).To(BeEquivalentTo(0), "Should not need to rely on not pushed to retain anything")
 
 		})
 
