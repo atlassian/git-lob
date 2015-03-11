@@ -90,10 +90,10 @@ func WalkGitHistory(startSHA string, callback func(currentSHA, parentSHA string)
 	currentLogHEAD := startSHA
 	var callbackError error
 	for !quit {
-		// get 50 parents
+		// get 250 parents
 		// format as <SHA> <PARENT> so we can detect the end of history
 		cmd := exec.Command("git", "log", "--first-parent", "--topo-order",
-			"-n", "50", "--format=%H %P", currentLogHEAD)
+			"-n", "250", "--format=%H %P", currentLogHEAD)
 
 		outp, err := cmd.StdoutPipe()
 		if err != nil {
@@ -141,10 +141,10 @@ func WalkGitHistoryReferencingLOBs(startSHA string, additions, removals bool, ca
 	currentLogHEAD := startSHA
 	var callbackError error
 	for !quit {
-		// get 50 parents
+		// get 250 parents
 		args := []string{"log", `--format=commitsha: %H %P`, "-p",
 			"--topo-order", "--first-parent",
-			"-n", "50",
+			"-n", "250",
 			"-G", SHALineRegex,
 			currentLogHEAD}
 
