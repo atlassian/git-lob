@@ -250,7 +250,7 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 				int64(0), int64(1), 0, 0})
 		}
 		// Get HEAD LOBs first
-		headlobs, err := GetGitAllLOBsToCheckoutAtCommitAndRecent("HEAD", GlobalOptions.RecentCommitsPeriodHEAD,
+		headlobs, _, err := GetGitAllLOBsToCheckoutAtCommitAndRecent("HEAD", GlobalOptions.FetchCommitsPeriodHEAD,
 			GlobalOptions.FetchIncludePaths, GlobalOptions.FetchExcludePaths)
 		if err != nil {
 			return errors.New(fmt.Sprintf("Error determining recent HEAD commits: %v", err.Error()))
@@ -260,21 +260,24 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 				0, 0, 0, 0})
 		}
 		lobsNeeded = headlobs
-		if GlobalOptions.RecentRefsPeriodDays > 0 {
+		if GlobalOptions.FetchRefsPeriodDays > 0 {
 			// Find recent other refs (only include remote branches for this remote)
-			recentrefs, err := GetGitRecentRefs(GlobalOptions.RecentRefsPeriodDays, true, remoteName)
+			recentrefs, err := GetGitRecentRefs(GlobalOptions.FetchRefsPeriodDays, true, remoteName)
 			if err != nil {
 				return errors.New(fmt.Sprintf("Error determining recent refs: %v", err.Error()))
 			}
 			// Now each other ref, they should be in reverse date order from GetGitRecentRefs so we're doing
 			// things by priority, HEAD first then most recent
-			headSHA, _ := GitRefToFullSHA("HEAD")
+			refSHAsDone := NewStringSet()
 			for i, ref := range recentrefs {
-				// Don't duplicate HEAD commit though
-				if ref == headSHA {
+				// Don't duplicate work when >1 ref has the same SHA
+				// Most common with HEAD if not detached but also tags
+				if refSHAsDone.Contains(ref.CommitSHA) {
 					continue
 				}
-				recentreflobs, err := GetGitAllLOBsToCheckoutAtCommitAndRecent(ref, GlobalOptions.RecentCommitsPeriodOther,
+				refSHAsDone.Add(ref.CommitSHA)
+
+				recentreflobs, _, err := GetGitAllLOBsToCheckoutAtCommitAndRecent(ref.Name, GlobalOptions.FetchCommitsPeriodOther,
 					GlobalOptions.FetchIncludePaths, GlobalOptions.FetchExcludePaths)
 				if err != nil {
 					return errors.New(fmt.Sprintf("Error determining recent commits on %v: %v", ref, err.Error()))
@@ -347,8 +350,10 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 
 	LogDebugf("Successfully fetched from %v via %v\n", remoteName, provider.TypeID())
 
-	if prune {
-		PruneOld(dryRun)
+	if prune && !dryRun {
+		callback(&ProgressCallbackData{ProgressCalculate, "Performing post-fetch prune...",
+			int64(len(refspecs)), int64(len(refspecs)), 0, 0})
+		PostFetchPullPrune()
 	}
 
 	return nil
@@ -658,11 +663,11 @@ how this behaves, see CONFIG below.
 
 Recent commits means:
   * The current HEAD, plus
-  * Any ancestors of HEAD within git-lob.recent_commits_head days of its last
+  * Any ancestors of HEAD within git-lob.fetch-commits-head days of its last
     commit date
   * Any branches (local and remote) or tags which have a commit within
-    git-lob.recent_refs days of the current date
-  * Any ancestors of those branches/tags within git-lob.recent_commits_other
+    git-lob.fetch-refs days of the current date
+  * Any ancestors of those branches/tags within git-lob.fetch-commits-other
     days of its last commit date
 
 REMOTES

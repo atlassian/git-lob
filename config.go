@@ -50,12 +50,18 @@ type Options struct {
 	SharedStore string
 	// Auto fetch (download) on checkout?
 	AutoFetchEnabled bool
-	// 'Recent' window in days for all refs (branches/tags) compared to current date
-	RecentRefsPeriodDays int
-	// 'Recent' window in days for commits on HEAD compared to latest commit date
-	RecentCommitsPeriodHEAD int
-	// 'Recent' window in days for commits on other branches/tags compared to latest commit date
-	RecentCommitsPeriodOther int
+	// 'Recent' window in days for fetching all refs (branches/tags) compared to current date
+	FetchRefsPeriodDays int
+	// 'Recent' window in days for fetching commits on HEAD compared to latest commit date
+	FetchCommitsPeriodHEAD int
+	// 'Recent' window in days for fetching commits on other branches/tags compared to latest commit date
+	FetchCommitsPeriodOther int
+	// Retention window in days for refs compared to current date
+	RetentionRefsPeriod int
+	// Retention window in days for commits on HEAD compared to latest commit date
+	RetentionCommitsPeriodHEAD int
+	// Retention window in days for commits on other branches/tags compared to latest commit date
+	RetentionCommitsPeriodOther int
 	// List of paths to include when fetching
 	FetchIncludePaths []string
 	// List of paths to exclude when fetching
@@ -66,15 +72,18 @@ type Options struct {
 
 func NewOptions() *Options {
 	return &Options{
-		StringOpts:               make(map[string]string),
-		BoolOpts:                 NewStringSet(),
-		Args:                     make([]string, 0, 5),
-		GitConfig:                make(map[string]string),
-		RecentRefsPeriodDays:     90,
-		RecentCommitsPeriodHEAD:  30,
-		RecentCommitsPeriodOther: 0,
-		FetchIncludePaths:        []string{},
-		FetchExcludePaths:        []string{},
+		StringOpts:                  make(map[string]string),
+		BoolOpts:                    NewStringSet(),
+		Args:                        make([]string, 0, 5),
+		GitConfig:                   make(map[string]string),
+		FetchRefsPeriodDays:         30,
+		FetchCommitsPeriodHEAD:      7,
+		FetchCommitsPeriodOther:     0,
+		FetchIncludePaths:           []string{},
+		FetchExcludePaths:           []string{},
+		RetentionRefsPeriod:         30,
+		RetentionCommitsPeriodHEAD:  7,
+		RetentionCommitsPeriodOther: 0,
 	}
 }
 
@@ -130,25 +139,46 @@ func parseConfig(configmap map[string]string, opts *Options) {
 		opts.AutoFetchEnabled = true
 	}
 
-	//git-lob.recent-refs          default: 90 days
-	//git-lob.recent-commits-head  default: 30 days
-	//git-lob.recent-commits-other default: 0 days
-	if recentrefs := configmap["git-lob.recent-refs"]; recentrefs != "" {
+	//git-lob.fetch-refs
+	//git-lob.fetch-commits-head
+	//git-lob.fetch-commits-other default
+	if recentrefs := configmap["git-lob.fetch-refs"]; recentrefs != "" {
 		n, err := strconv.ParseInt(recentrefs, 10, 0)
 		if err == nil {
-			opts.RecentRefsPeriodDays = int(n)
+			opts.FetchRefsPeriodDays = int(n)
 		}
 	}
-	if recent := configmap["git-lob.recent-commits-head"]; recent != "" {
+	if recent := configmap["git-lob.fetch-commits-head"]; recent != "" {
 		n, err := strconv.ParseInt(recent, 10, 0)
 		if err == nil {
-			opts.RecentCommitsPeriodHEAD = int(n)
+			opts.FetchCommitsPeriodHEAD = int(n)
 		}
 	}
-	if recent := configmap["git-lob.recent-commits-other"]; recent != "" {
+	if recent := configmap["git-lob.fetch-commits-other"]; recent != "" {
 		n, err := strconv.ParseInt(recent, 10, 0)
 		if err == nil {
-			opts.RecentCommitsPeriodOther = int(n)
+			opts.FetchCommitsPeriodOther = int(n)
+		}
+	}
+	//git-lob.retention-period-refs
+	//git-lob.retention-period-head
+	//git-lob.retention-period-other
+	if recentrefs := configmap["git-lob.retention-period-refs"]; recentrefs != "" {
+		n, err := strconv.ParseInt(recentrefs, 10, 0)
+		if err == nil {
+			opts.RetentionRefsPeriod = int(n)
+		}
+	}
+	if recent := configmap["git-lob.retention-period-head"]; recent != "" {
+		n, err := strconv.ParseInt(recent, 10, 0)
+		if err == nil {
+			opts.RetentionCommitsPeriodHEAD = int(n)
+		}
+	}
+	if recent := configmap["git-lob.retention-period-other"]; recent != "" {
+		n, err := strconv.ParseInt(recent, 10, 0)
+		if err == nil {
+			opts.RetentionCommitsPeriodOther = int(n)
 		}
 	}
 	if fetchincludes := configmap["git-lob.fetch-include"]; fetchincludes != "" {

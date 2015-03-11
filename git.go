@@ -36,15 +36,16 @@ type GitCommitSummary struct {
 	Subject        string
 }
 
-const (
-	GitRefTypeLocalBranch  = iota
-	GitRefTypeRemoteBranch = iota
-	GitRefTypeLocalTag     = iota
-	GitRefTypeRemoteTag    = iota
-	GitRefTypeHEAD         = iota // current checkout
-)
-
 type GitRefType int
+
+const (
+	GitRefTypeLocalBranch  = GitRefType(iota)
+	GitRefTypeRemoteBranch = GitRefType(iota)
+	GitRefTypeLocalTag     = GitRefType(iota)
+	GitRefTypeRemoteTag    = GitRefType(iota)
+	GitRefTypeHEAD         = GitRefType(iota) // current checkout
+	GitRefTypeOther        = GitRefType(iota) // stash or unknown
+)
 
 // A git reference (branch, tag etc)
 type GitRef struct {
@@ -89,10 +90,10 @@ func WalkGitHistory(startSHA string, callback func(currentSHA, parentSHA string)
 	currentLogHEAD := startSHA
 	var callbackError error
 	for !quit {
-		// get 50 parents
+		// get 250 parents
 		// format as <SHA> <PARENT> so we can detect the end of history
 		cmd := exec.Command("git", "log", "--first-parent", "--topo-order",
-			"-n", "50", "--format=%H %P", currentLogHEAD)
+			"-n", "250", "--format=%H %P", currentLogHEAD)
 
 		outp, err := cmd.StdoutPipe()
 		if err != nil {
@@ -119,6 +120,51 @@ func WalkGitHistory(startSHA string, callback func(currentSHA, parentSHA string)
 			}
 		}
 		cmd.Wait()
+		// End of history
+		if parentSHA == "" {
+			break
+		} else {
+			currentLogHEAD = parentSHA
+		}
+	}
+	return callbackError
+}
+
+// Walk git history from startSHA but only commits which reference LOBs
+// Use 'additions' & 'removals' to control which side of the diff used to pull out LOBs
+// First call will only be startSHA if it references LOBs itself, otherwise the
+// first call will be the first parent of startSHA which does
+// Walking will stop when there are no more parents referencing LOBs or when callback returns quit=true
+func WalkGitHistoryReferencingLOBs(startSHA string, additions, removals bool, callback func(commitLOB *CommitLOBRef) (quit bool, err error)) error {
+
+	quit := false
+	currentLogHEAD := startSHA
+	var callbackError error
+	for !quit {
+		// get 250 parents
+		args := []string{"log", `--format=commitsha: %H %P`, "-p",
+			"--topo-order", "--first-parent",
+			"-n", "250",
+			"-G", SHALineRegex,
+			currentLogHEAD}
+
+		// format as <SHA> <PARENT> so we can detect the end of history
+		cmd := exec.Command("git", args...)
+
+		outp, err := cmd.StdoutPipe()
+		if err != nil {
+			return errors.New(fmt.Sprintf("Unable to list commits from %v: %v", currentLogHEAD, err.Error()))
+		}
+		cmd.Start()
+
+		commitLOBs, parentSHA := scanGitLogOutputForLOBReferences(outp, additions, removals, []string{}, []string{})
+
+		cmd.Wait()
+
+		for _, commitLOB := range commitLOBs {
+			quit, callbackError = callback(&commitLOB)
+		}
+
 		// End of history
 		if parentSHA == "" {
 			break
@@ -455,7 +501,7 @@ func GetGitCommitsReferencingLOBsInRange(from, to string, includePaths, excludeP
 // additions/removals controls whether we report only diffs with '+' lines of git-lob, '-' lines, or both
 func getGitCommitsReferencingLOBsInRange(from, to string, additions, removals bool, includePaths, excludePaths []string) ([]CommitLOBRef, error) {
 
-	args := []string{"log", `--format=commitsha: %H`, "-p",
+	args := []string{"log", `--format=commitsha: %H %P`, "-p",
 		"--topo-order", "--first-parent",
 		"--reverse", // we want to list them in ascending order
 		"-G", SHALineRegex}
@@ -478,7 +524,7 @@ func getGitCommitsReferencingLOBsInRange(from, to string, additions, removals bo
 	}
 	cmd.Start()
 
-	ret := scanGitLogOutputForLOBReferences(outp, additions, removals, includePaths, excludePaths)
+	ret, _ := scanGitLogOutputForLOBReferences(outp, additions, removals, includePaths, excludePaths)
 
 	cmd.Wait()
 
@@ -487,13 +533,16 @@ func getGitCommitsReferencingLOBsInRange(from, to string, additions, removals bo
 }
 
 // Internal utility for scanning git-log output for git-lob references
-// Log output must be formated like this: `--format=commitsha: %H`
+// Log output must be formated like this: `--format=commitsha: %H %P`
 // outp must be output from a running git log task
-func scanGitLogOutputForLOBReferences(outp io.Reader, additions, removals bool, includePaths, excludePaths []string) []CommitLOBRef {
+// Also returns the parent SHA for the last commit encountered, if any
+// existingLOBs can be used to pass in an existing list to append to on return
+func scanGitLogOutputForLOBReferences(outp io.Reader, additions, removals bool,
+	includePaths, excludePaths []string) (commitLOBs []CommitLOBRef, parentSHA string) {
 	// Sadly we still get more output than we actually need, but this is the minimum we can get
 	// For each commit we'll get something like this:
 	/*
-	   COMMITSHA:af2607421c9fee2e430cde7e7073a7dad07be559
+	   COMMITSHA:af2607421c9fee2e430cde7e7073a7dad07be559 22be911a626eb9cf2e2760b1b8b092441771cb9d
 
 	   diff --git a/atheneNormalMap.png b/atheneNormalMap.png
 	   new file mode 100644
@@ -519,7 +568,7 @@ func scanGitLogOutputForLOBReferences(outp io.Reader, additions, removals bool, 
 	}
 	fileHeaderRegex := regexp.MustCompile(`diff --git a\/(.+?)\s+b\/(.+)`)
 	fileMergeHeaderRegex := regexp.MustCompile(`diff --cc (.+)`)
-	commitHeaderRegex := regexp.MustCompile(`^commitsha: ([A-Fa-f0-9]{40})`)
+	commitHeaderRegex := regexp.MustCompile(`^commitsha: ([A-Fa-f0-9]{40}) ([A-Fa-f0-9]{40})?`)
 
 	scanner := bufio.NewScanner(outp)
 
@@ -527,11 +576,15 @@ func scanGitLogOutputForLOBReferences(outp io.Reader, additions, removals bool, 
 	var currentFilename string
 	currentFileIncluded := true
 	var ret []CommitLOBRef
+	var lastParent string
 	for scanner.Scan() {
 		line := scanner.Text()
 		if match := commitHeaderRegex.FindStringSubmatch(line); match != nil {
 			// Commit header
 			sha := match[1]
+			if len(match) > 2 {
+				lastParent = match[2]
+			}
 			// Set commit context
 			if currentCommit != nil {
 				if len(currentCommit.lobSHAs) > 0 {
@@ -570,7 +623,7 @@ func scanGitLogOutputForLOBReferences(outp io.Reader, additions, removals bool, 
 		currentCommit = nil
 	}
 
-	return ret
+	return ret, lastParent
 }
 
 // Gets a list of LOB SHAs for all binary files that are needed when checking out any of
@@ -627,21 +680,29 @@ func GetGitAllLOBsToCheckoutInRefSpec(refspec *GitRefSpec, includePaths, exclude
 // ancestor of it within a number of days of that commit date (not today's date)
 // Note that if a LOB was modified to the same SHA more than once, duplicates may appear in the return
 // They are not routinely eliminated for performance, so perform your own dupe removal if you need it
-func GetGitAllLOBsToCheckoutAtCommitAndRecent(commit string, days int, includePaths, excludePaths []string) ([]string, error) {
+// as well as a list of LOBs, returns the commit SHA of the earliest change that was included in the scan.
+// Since this is the first *change* included (which would be removing the previous SHA), the earliest LOB
+// SHA included is from the *parent* of this commit.
+func GetGitAllLOBsToCheckoutAtCommitAndRecent(commit string, days int, includePaths,
+	excludePaths []string) (lobs []string, earliestChangeCommit string, reterr error) {
 	// All LOBs at the commit itself
 	shasAtCommit, err := GetGitAllLOBsToCheckoutAtCommit(commit, includePaths, excludePaths)
 	if err != nil {
-		return []string{}, err
+		return []string{}, "", err
 	}
 
 	// days == 0 means we only snapshot latest
 	if days == 0 {
-		return shasAtCommit, nil
+		earliest := commit
+		if !GitRefIsFullSHA(earliest) {
+			earliest, _ = GitRefToFullSHA(earliest)
+		}
+		return shasAtCommit, earliest, nil
 	} else {
 		// get the commit date
 		commitDetails, err := GetGitCommitSummary(commit)
 		if err != nil {
-			return []string{}, err
+			return []string{}, "", err
 		}
 		sinceDate := commitDetails.CommitDate.AddDate(0, 0, -days)
 		// Now use git log to scan backwards
@@ -649,7 +710,7 @@ func GetGitAllLOBsToCheckoutAtCommitAndRecent(commit string, days int, includePa
 		// we're looking for *previous* SHAs, which means we're looking for diffs
 		// with a '-' line. So SHAs replaced in the latest commit are old versions too
 		// that we haven't included yet in shasAtCommit
-		args := []string{"log", `--format=commitsha: %H`, "-p",
+		args := []string{"log", `--format=commitsha: %H %P`, "-p",
 			fmt.Sprintf("--since=%v", FormatGitDate(sinceDate)),
 			"-G", SHALineRegex,
 			commit}
@@ -657,20 +718,22 @@ func GetGitAllLOBsToCheckoutAtCommitAndRecent(commit string, days int, includePa
 		cmd := exec.Command("git", args...)
 		outp, err := cmd.StdoutPipe()
 		if err != nil {
-			return []string{}, errors.New(fmt.Sprintf("Unable to call git-log: %v", err.Error()))
+			return []string{}, "", errors.New(fmt.Sprintf("Unable to call git-log: %v", err.Error()))
 		}
 		cmd.Start()
 
 		// Looking backwards, so removals
-		commitsWithLOBs := scanGitLogOutputForLOBReferences(outp, false, true, includePaths, excludePaths)
+		commitsWithLOBs, _ := scanGitLogOutputForLOBReferences(outp, false, true, includePaths, excludePaths)
 		ret := shasAtCommit
+		earliestCommit := commit
 		for _, lobcommit := range commitsWithLOBs {
 			ret = append(ret, lobcommit.lobSHAs...)
+			earliestCommit = lobcommit.commit
 		}
 
 		cmd.Wait()
 
-		return ret, nil
+		return ret, earliestCommit, nil
 	}
 
 }
@@ -839,40 +902,52 @@ func GetGitCommitSummary(commit string) (*GitCommitSummary, error) {
 
 }
 
-// Get a list of refs (branches, tags) that have received commits in the last numdays
+// Get a list of refs (branches, tags) that have received commits in the last numdays, ordered
+// by most recent first
+// You can also set numdays to -1 to not have any limit but still get them in reverse order
 // remoteName is optional but if specified and includeRemoteBranches is true, will only include
 // remote branches on that remote
-func GetGitRecentRefs(numdays int, includeRemoteBranches bool, remoteName string) ([]string, error) {
+func GetGitRecentRefs(numdays int, includeRemoteBranches bool, remoteName string) ([]*GitRef, error) {
+	// Include %(objectname) AND %(*objectname), the latter only returns something if it's a tag
+	// and that will be the dereferenced SHA ie the actual commit SHA instead of the tag SHA
 	cmd := exec.Command("git", "for-each-ref",
 		`--sort=-committerdate`,
-		`--format=%(refname) %(objectname:short)`,
+		`--format=%(refname) %(objectname) %(*objectname)`,
 		"refs")
 	outp, err := cmd.StdoutPipe()
 	if err != nil {
 		msg := fmt.Sprintf("Unable to call git for-each-ref: %v", err.Error())
-		return []string{}, errors.New(msg)
+		return []*GitRef{}, errors.New(msg)
 	}
 	cmd.Start()
 	scanner := bufio.NewScanner(outp)
 
 	// Output is like this:
-	// refs/heads/master 22be911
-	// refs/remotes/origin/master fa392f7
-	// refs/tags/blah 34c653b
-	// We don't need the SHA
+	// refs/heads/master 69d144416abf89b79f6a6fd21c2621dd9c13ead1
+	// refs/remotes/origin/master ad3b29b773e46ad6870fdf08796c33d97190fe93
+	// refs/tags/blah fa392f757dddf9fa7c3bb1717d0bf0c4762326fc c34b29b773e46ad6870fdf08796c33d97190fe93
+	// note the second SHA when it's a tag but not otherwise
 
 	// Output is ordered by latest commit date first, so we can stop at the threshold
-	earliestDate := time.Now().AddDate(0, 0, -numdays)
+	var earliestDate time.Time
+	if numdays >= 0 {
+		earliestDate = time.Now().AddDate(0, 0, -numdays)
+	}
 
-	regex := regexp.MustCompile(`^refs/([^/]+)/(\S+)`)
+	regex := regexp.MustCompile(`^(refs/[^/]+/\S+)\s+([0-9A-Za-z]{40})(?:\s+([0-9A-Za-z]{40}))?`)
 
-	var ret []string
+	var ret []*GitRef
 	for scanner.Scan() {
 		line := scanner.Text()
 		if match := regex.FindStringSubmatch(line); match != nil {
-			reftype := match[1]
-			ref := match[2]
-			if reftype == "remotes" {
+			fullref := match[1]
+			sha := match[2]
+			// test for dereferenced tags, use commit SHA
+			if len(match) > 3 && match[3] != "" {
+				sha = match[3]
+			}
+			reftype, ref := ParseGitRefToTypeAndName(fullref)
+			if reftype == GitRefTypeRemoteBranch || reftype == GitRefTypeRemoteTag {
 				if !includeRemoteBranches {
 					continue
 				}
@@ -880,17 +955,19 @@ func GetGitRecentRefs(numdays int, includeRemoteBranches bool, remoteName string
 					continue
 				}
 			}
-			// This is aref we might use
-			// Check the date
-			commit, err := GetGitCommitSummary(ref)
-			if err != nil {
-				return ret, err
+			// This is a ref we might use
+			if numdays >= 0 {
+				// Check the date
+				commit, err := GetGitCommitSummary(ref)
+				if err != nil {
+					return ret, err
+				}
+				if commit.CommitDate.Before(earliestDate) {
+					// the end
+					break
+				}
 			}
-			if commit.CommitDate.Before(earliestDate) {
-				// the end
-				break
-			}
-			ret = append(ret, ref)
+			ret = append(ret, &GitRef{ref, reftype, sha})
 		}
 	}
 	cmd.Wait()
@@ -928,6 +1005,35 @@ func GitRefreshIndexForFiles(files []string) error {
 
 }
 
+// Get the type & name of a git reference
+func ParseGitRefToTypeAndName(fullref string) (t GitRefType, name string) {
+	const localPrefix = "refs/heads/"
+	const remotePrefix = "refs/remotes/"
+	const remoteTagPrefix = "refs/remotes/tags/"
+	const localTagPrefix = "refs/tags/"
+
+	if fullref == "HEAD" {
+		name = fullref
+		t = GitRefTypeHEAD
+	} else if strings.HasPrefix(fullref, localPrefix) {
+		name = fullref[len(localPrefix):]
+		t = GitRefTypeLocalBranch
+	} else if strings.HasPrefix(fullref, remotePrefix) {
+		name = fullref[len(remotePrefix):]
+		t = GitRefTypeRemoteBranch
+	} else if strings.HasPrefix(fullref, remoteTagPrefix) {
+		name = fullref[len(remoteTagPrefix):]
+		t = GitRefTypeRemoteTag
+	} else if strings.HasPrefix(fullref, localTagPrefix) {
+		name = fullref[len(localTagPrefix):]
+		t = GitRefTypeLocalTag
+	} else {
+		name = fullref
+		t = GitRefTypeOther
+	}
+	return
+}
+
 // get all refs in the repo (branches, tags, stashes)
 func GetGitAllRefs() ([]*GitRef, error) {
 	cmd := exec.Command("git", "show-ref", "--head", "--dereference")
@@ -954,29 +1060,8 @@ func GetGitAllRefs() ([]*GitRef, error) {
 		if len(f) == 2 {
 			sha := f[0]
 			fullref := f[1]
-			var name string
-			var t GitRefType
-			const localPrefix = "refs/heads/"
-			const remotePrefix = "refs/remotes/"
-			const remoteTagPrefix = "refs/remotes/tags/"
-			const localTagPrefix = "refs/tags/"
-
-			if fullref == "HEAD" {
-				name = fullref
-				t = GitRefTypeHEAD
-			} else if strings.HasPrefix(fullref, localPrefix) {
-				name = fullref[len(localPrefix):]
-				t = GitRefTypeLocalBranch
-			} else if strings.HasPrefix(fullref, remotePrefix) {
-				name = fullref[len(remotePrefix):]
-				t = GitRefTypeRemoteBranch
-			} else if strings.HasPrefix(fullref, remoteTagPrefix) {
-				name = fullref[len(remoteTagPrefix):]
-				t = GitRefTypeRemoteTag
-			} else if strings.HasPrefix(fullref, localTagPrefix) {
-				name = fullref[len(localTagPrefix):]
-				t = GitRefTypeLocalTag
-			} else {
+			t, name := ParseGitRefToTypeAndName(fullref)
+			if t == GitRefTypeOther {
 				// skip all others (including Stash)
 				continue
 			}

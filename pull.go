@@ -1,6 +1,12 @@
 package main
 
 func cmdPull() int {
+	// extract the 'prune' option & perform it AFTER the checkout instead of in the Fetch
+	// this is so that user can abort the prune if they want (or carry on working)
+	optPrune := GlobalOptions.BoolOpts.Contains("prune")
+	if optPrune {
+		GlobalOptions.BoolOpts.Remove("prune")
+	}
 	fetchret := cmdFetch()
 	if fetchret != 0 {
 		// Fetch failed, abort
@@ -11,6 +17,13 @@ func cmdPull() int {
 	GlobalOptions.Args = []string{}
 	ret := cmdCheckout()
 	GlobalOptions.Args = oldArgs
+
+	if optPrune && !GlobalOptions.DryRun {
+		// NOW do the prune
+		LogConsole("Performing post-pull prune...")
+		LogConsole("You can abort this process or carry on working now, pull is complete")
+		PostFetchPullPrune()
+	}
 
 	return ret
 
