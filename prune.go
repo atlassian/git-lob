@@ -378,7 +378,17 @@ func PruneOld(dryRun bool, callback PruneCallback) ([]string, error) {
 	// Can't just look at diffs (just like fetch) since LOB changed 3 years ago but still valid = recent
 	retainSet := NewStringSet()
 
+	// When walking history, stop when we visit a commit we've already seen
+	commitsVisited := NewStringSet()
+
+	// Add LOBs to retainSet for this commit and history
 	retainLOBs := func(commit string, days int, notPushedScanOnly bool, remotesToCheck []string) error {
+
+		// Early-out
+		if commitsVisited.Contains(commit) {
+			return nil
+		}
+
 		var err error
 		var earliestCommit string
 		var lsfilesSnapshotDone bool
@@ -441,6 +451,11 @@ func PruneOld(dryRun bool, callback PruneCallback) ([]string, error) {
 		// Walk backwards through history finding the last pushed & adding lobs as we go
 		// Push only marks commits referencing binaries as pushed anyway so walk just commits with lobs
 		walkHistoryFunc := func(commitLOB *CommitLOBRef) (quit bool, err error) {
+			// Stop visiting if we've seen this before
+			if commitsVisited.Contains(commitLOB.commit) {
+				return true, nil
+			}
+			commitsVisited.Add(commitLOB.commit)
 			// keep going backwards
 			pushed := false
 			callback(PruneWorking, "")
