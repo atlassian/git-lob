@@ -144,6 +144,7 @@ func WalkGitHistoryReferencingLOBs(startSHA string, additions, removals bool, ca
 		// get 50 parents
 		args := []string{"log", `--format=commitsha: %H %P`, "-p",
 			"--topo-order", "--first-parent",
+			"-n", "50",
 			"-G", SHALineRegex,
 			currentLogHEAD}
 
