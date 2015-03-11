@@ -13,6 +13,43 @@ import (
 	"time"
 )
 
+type PruneCallbackType int
+
+const (
+	// Prune is working (for spinner)
+	PruneWorking PruneCallbackType = iota
+	// Prune is retaining LOB because referenced
+	PruneRetainReferenced PruneCallbackType = iota
+	// Prune is retaining LOB because commit referencing it is within retention period
+	PruneRetainByDate PruneCallbackType = iota
+	// Prune is retaining LOB because commit is referencing it is not pushed
+	PruneRetainNotPushed PruneCallbackType = iota
+	// Prune is deleting LOB (because unreferenced or out of date range & pushed)
+	PruneDeleted PruneCallbackType = iota
+)
+
+// Callback when running prune, identifies what's going on
+// When in dry run mode the same callbacks are made even if the actual act isn't performed (e.g. deletion)
+type PruneCallback func(t PruneCallbackType, lobsha string)
+
+var pruneCallbackImpl = func(t PruneCallbackType, lobsha string) {
+	// Include this stuff in the log because it's important
+	switch t {
+	case PruneRetainByDate:
+		LogDebugf("Prune: retaining %v (date)\n", lobsha)
+	case PruneRetainNotPushed:
+		LogDebugf("Prune: retaining %v (not pushed)\n", lobsha)
+	case PruneRetainReferenced:
+		LogDebugf("Prune: retaining %v (referenced)\n", lobsha)
+	case PruneDeleted:
+		LogDebugf("Prune: deleted %v\n", lobsha)
+	case PruneWorking:
+		// nothing, just spinner below
+	}
+	// Always continue spinner
+	LogConsoleSpinner("Processing: ")
+}
+
 func cmdPrune() int {
 	errorList := validateCustomOptions(GlobalOptions, nil, []string{"unreferenced"})
 	if len(errorList) > 0 {
@@ -22,16 +59,12 @@ func cmdPrune() int {
 
 	optOnlyUnreferenced := GlobalOptions.BoolOpts.Contains("unreferenced")
 
-	callback := func() {
-		LogConsoleSpinner("Processing: ")
-	}
-
 	var shas []string
 	var err error
 	if optOnlyUnreferenced {
 		// Only purge unreferenced
 		LogConsole("Pruning unreferenced binaries...")
-		shas, err = PruneUnreferenced(GlobalOptions.DryRun, callback)
+		shas, err = PruneUnreferenced(GlobalOptions.DryRun, pruneCallbackImpl)
 		LogConsoleSpinnerFinish("Processing: ")
 		if err != nil {
 			LogErrorf("Prune failed: %v\n", err)
@@ -40,7 +73,7 @@ func cmdPrune() int {
 	} else {
 		// Purge old & unreferenced
 		LogConsole("Pruning old binaries...")
-		shas, err = PruneOld(GlobalOptions.DryRun, callback)
+		shas, err = PruneOld(GlobalOptions.DryRun, pruneCallbackImpl)
 		LogConsoleSpinnerFinish("Processing: ")
 		if err != nil {
 			LogErrorf("Prune failed: %v\n", err)
@@ -49,20 +82,10 @@ func cmdPrune() int {
 
 	}
 	if GlobalOptions.DryRun {
-		if GlobalOptions.Verbose {
-			LogConsolef("%d binaries would have been deleted:\n", len(shas))
-			LogConsole(strings.Join(shas, "\n"))
-		} else {
-			LogConsolef("%d binaries would have been deleted.\n", len(shas))
-		}
+		LogConsolef("%d binaries would have been deleted.\n", len(shas))
 		LogConsole("Run command again without --dry-run to actually perform the deletion.")
 	} else {
-		if GlobalOptions.Verbose {
-			LogConsolef("%d binaries were deleted:\n", len(shas))
-			LogConsoleDebug(strings.Join(shas, "\n"))
-		} else {
-			LogConsolef("%d binaries were deleted.\n", len(shas))
-		}
+		LogConsolef("%d binaries were deleted.\n", len(shas))
 	}
 
 	return 0
@@ -80,11 +103,8 @@ func cmdPruneShared() int {
 		LogConsoleErrorf("Configured shared store '%v' doesn't exist, cannot prune.\n", shared)
 		return 9
 	}
-	callback := func() {
-		LogConsoleSpinner("Processing: ")
-	}
 	LogConsole("Pruning shared store...")
-	shas, err := PruneSharedStore(GlobalOptions.DryRun, callback)
+	shas, err := PruneSharedStore(GlobalOptions.DryRun, pruneCallbackImpl)
 	LogConsoleSpinnerFinish("Processing: ")
 	if err != nil {
 		LogErrorf("Prune failed: %v\n", err)
@@ -192,16 +212,16 @@ var (
 )
 
 // Retrieve the full set of SHAs that currently have files locally (complete or not)
-func getAllLocalLOBSHAs() ([]string, error) {
+func getAllLocalLOBSHAs() (StringSet, error) {
 	return getAllLOBSHAsInDir(GetLocalLOBRoot())
 }
 
 // Retrieve the full set of SHAs that currently have files in the shared store (complete or not)
-func getAllSharedLOBSHAs() ([]string, error) {
+func getAllSharedLOBSHAs() (StringSet, error) {
 	return getAllLOBSHAsInDir(GetSharedLOBRoot())
 }
 
-func getAllLOBSHAsInDir(lobroot string) ([]string, error) {
+func getAllLOBSHAsInDir(lobroot string) (StringSet, error) {
 
 	// os.File.Readdirnames is the most efficient
 	// os.File.Readdir retrieves extra info we don't usually need but in case other unexpected files
@@ -211,7 +231,9 @@ func getAllLOBSHAsInDir(lobroot string) ([]string, error) {
 	if lobFilenameRegex == nil {
 		lobFilenameRegex = regexp.MustCompile(`^([A-Za-z0-9]{40})_(meta|\d+)$`)
 	}
-	var ret []string
+	// Readdir returns in 'directory order' which means we may not get files for same SHA together
+	// so use set to find uniques
+	ret := NewStringSet()
 
 	// We only need to support a 2-folder structure here & know that all files are at the bottom level
 	// We always work on the local LOB folder (either only copy or hard link)
@@ -250,7 +272,7 @@ func getAllLOBSHAsInDir(lobroot string) ([]string, error) {
 						if match := lobFilenameRegex.FindStringSubmatch(lobname); match != nil {
 							// Regex pulls out the SHA
 							sha := match[1]
-							ret = append(ret, sha)
+							ret.Add(sha)
 						}
 					}
 
@@ -282,8 +304,7 @@ func lobReferenceFromDiffLine(line string) string {
 // Delete unreferenced binary files from local store
 // For a file to be deleted it needs to not be referenced by any (reachable) commit
 // Returns a list of SHAs that were deleted (unless dryRun = true)
-// Callback is a simple 'tick' to let caller know we're doing something
-func PruneUnreferenced(dryRun bool, callback func()) ([]string, error) {
+func PruneUnreferenced(dryRun bool, callback PruneCallback) ([]string, error) {
 	// Purging requires full git on the command line, no way around this really
 	cmd := exec.Command("git", "log", "--all", "--no-color", "--oneline", "-p", "-G", SHALineRegex)
 	stdout, err := cmd.StdoutPipe()
@@ -299,11 +320,13 @@ func PruneUnreferenced(dryRun bool, callback func()) ([]string, error) {
 	cmd.Start()
 	referencedSHAs := NewStringSet()
 	for scanner.Scan() {
+		callback(PruneWorking, "")
 		line := scanner.Text()
 		if sha := lobReferenceFromDiffLine(line); sha != "" {
-			referencedSHAs.Add(sha)
+			if referencedSHAs.Add(sha) {
+				callback(PruneRetainReferenced, sha)
+			}
 		}
-		callback()
 	}
 	cmd.Wait()
 
@@ -316,9 +339,12 @@ func PruneUnreferenced(dryRun bool, callback func()) ([]string, error) {
 	scanner = bufio.NewScanner(stdout)
 	cmd.Start()
 	for scanner.Scan() {
+		callback(PruneWorking, "")
 		line := scanner.Text()
 		if sha := lobReferenceFromDiffLine(line); sha != "" {
-			referencedSHAs.Add(sha)
+			if referencedSHAs.Add(sha) {
+				callback(PruneRetainReferenced, sha)
+			}
 		}
 	}
 	cmd.Wait()
@@ -327,9 +353,11 @@ func PruneUnreferenced(dryRun bool, callback func()) ([]string, error) {
 	if err == nil {
 
 		var ret []string
-		for _, sha := range fileSHAs {
+		for sha := range fileSHAs.Iter() {
+			callback(PruneWorking, "")
 			if !referencedSHAs.Contains(sha) {
 				ret = append(ret, string(sha))
+				callback(PruneDeleted, sha)
 				if !dryRun {
 					DeleteLOB(string(sha))
 				}
@@ -344,8 +372,7 @@ func PruneUnreferenced(dryRun bool, callback func()) ([]string, error) {
 
 // Remove LOBs from the local store if they fall outside the range we would normally fetch for
 // Returns a list of SHAs that were deleted (unless dryRun = true)
-// callback is a basic function to let caller know something is happening
-func PruneOld(dryRun bool, callback func()) ([]string, error) {
+func PruneOld(dryRun bool, callback PruneCallback) ([]string, error) {
 	refSHAsDone := NewStringSet()
 	// Build a list to keep, then delete all else (includes deleting unreferenced)
 	// Can't just look at diffs (just like fetch) since LOB changed 3 years ago but still valid = recent
@@ -361,7 +388,7 @@ func PruneOld(dryRun bool, callback func()) ([]string, error) {
 			// we haven't YET snapshotted the file system using lsfiles (depends on pushed state)
 			lsfilesSnapshotDone = false
 		} else {
-			callback()
+			callback(PruneWorking, "")
 			// This ref is itself included so perform usual 'all lobs at checkout + n days history' query
 			var lobs []string
 			lobs, earliestCommit, err = GetGitAllLOBsToCheckoutAtCommitAndRecent(commit, days, []string{}, []string{})
@@ -369,7 +396,9 @@ func PruneOld(dryRun bool, callback func()) ([]string, error) {
 				return fmt.Errorf("Error determining recent commits from %v: %v", commit, err.Error())
 			}
 			for _, l := range lobs {
-				retainSet.Add(l)
+				if retainSet.Add(l) {
+					callback(PruneRetainByDate, l)
+				}
 			}
 			// the above query includes a snapshot of lobs at ref, so only diffs to process
 			lsfilesSnapshotDone = true
@@ -414,7 +443,7 @@ func PruneOld(dryRun bool, callback func()) ([]string, error) {
 		walkHistoryFunc := func(commitLOB *CommitLOBRef) (quit bool, err error) {
 			// keep going backwards
 			pushed := false
-			callback()
+			callback(PruneWorking, "")
 			for _, remoteName := range remotesToCheck {
 				if !ShouldPushBinariesForCommit(remoteName, commitLOB.commit) {
 					pushed = true
@@ -435,7 +464,9 @@ func PruneOld(dryRun bool, callback func()) ([]string, error) {
 					return true, fmt.Errorf("Error determining recent commits from %v: %v", commitLOB.commit, err.Error())
 				}
 				for _, l := range snapshotLOBs {
-					retainSet.Add(l)
+					if retainSet.Add(l) {
+						callback(PruneRetainNotPushed, l)
+					}
 				}
 				// the above query includes a snapshot of lobs at ref, so only diffs to process
 				lsfilesSnapshotDone = true
@@ -445,7 +476,9 @@ func PruneOld(dryRun bool, callback func()) ([]string, error) {
 				// here we only deal with differences.
 				// We have to use the '-' diffs *between* commits (arbitrary date), but can use '+' when *on* commits
 				for _, l := range commitLOB.lobSHAs {
-					retainSet.Add(l)
+					if retainSet.Add(l) {
+						callback(PruneRetainNotPushed, l)
+					}
 				}
 			}
 
@@ -491,7 +524,7 @@ func PruneOld(dryRun bool, callback func()) ([]string, error) {
 	outsideRefRetention := false
 	earliestRefDate := time.Now().AddDate(0, 0, -GlobalOptions.RetentionRefsPeriod)
 	for _, ref := range refs {
-		callback()
+		callback(PruneWorking, "")
 		// Don't duplicate work when >1 ref has the same SHA
 		// Most common with HEAD if not detached but also tags
 		if refSHAsDone.Contains(ref.CommitSHA) {
@@ -533,10 +566,11 @@ func PruneOld(dryRun bool, callback func()) ([]string, error) {
 	var removedList []string
 	localLOBs, err := getAllLocalLOBSHAs()
 	if err == nil {
-		for _, sha := range localLOBs {
-			callback()
+		for sha := range localLOBs.Iter() {
+			callback(PruneWorking, "")
 			if !retainSet.Contains(sha) {
 				removedList = append(removedList, string(sha))
+				callback(PruneDeleted, sha)
 				if !dryRun {
 					DeleteLOB(string(sha))
 				}
@@ -554,33 +588,38 @@ func PruneOld(dryRun bool, callback func()) ([]string, error) {
 // DeleteLOB will do this for individual LOBs we prune, but if the user
 // manually deletes a repo then unreferenced shared LOBs may never be cleaned up
 // callback is a basic function to let caller know something is happening
-func PruneSharedStore(dryRun bool, callback func()) ([]string, error) {
+func PruneSharedStore(dryRun bool, callback PruneCallback) ([]string, error) {
 	fileSHAs, err := getAllSharedLOBSHAs()
 	if err == nil {
 		ret := make([]string, 0, 10)
-		for _, sha := range fileSHAs {
+		for sha := range fileSHAs.Iter() {
 			shareddir := GetSharedLOBDir(sha)
 			names, err := filepath.Glob(filepath.Join(shareddir, fmt.Sprintf("%v*", sha)))
 			if err != nil {
 				return make([]string, 0), errors.New(fmt.Sprintf("Unable to glob shared files for %v: %v\n", sha, err))
 			}
 			var deleted bool = false
+			var lastsha string
 			for _, n := range names {
+				callback(PruneWorking, "")
 				links, err := GetHardLinkCount(n)
 				if err == nil && links == 1 {
 					// only 1 hard link means no other repo refers to this shared LOB
 					// so it's safe to delete it
 					deleted = true
+					sha = filepath.Base(n)[:40]
+					if lastsha != sha {
+						callback(PruneDeleted, sha)
+						lastsha = sha
+					}
 					if !dryRun {
 						err = os.Remove(n)
 						if err != nil {
 							// don't abort for 1 failure, report & carry on
 							LogErrorf("Unable to delete file %v: %v\n", n, err)
 						}
-						LogDebugf("Deleted shared file %v\n", n)
 					}
 				}
-				callback()
 			}
 			if deleted {
 				ret = append(ret, string(sha))
@@ -596,10 +635,7 @@ func PruneSharedStore(dryRun bool, callback func()) ([]string, error) {
 // Perform the default prune after fetching or pulling
 // Only call this if pruning was requested & not dry running
 func PostFetchPullPrune() ([]string, error) {
-	pruneCallback := func() {
-		LogConsoleSpinner("Processing: ")
-	}
-	shas, err := PruneOld(false, pruneCallback)
+	shas, err := PruneOld(false, pruneCallbackImpl)
 	LogConsoleSpinnerFinish("Processing: ")
 	return shas, err
 }

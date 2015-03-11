@@ -106,11 +106,24 @@ var _ = Describe("Prune", func() {
 			GlobalOptions.RetentionCommitsPeriodHEAD = 7
 			GlobalOptions.RetentionCommitsPeriodOther = 0
 
-			fmt.Println(setupOutputs)
-			// Try with dry-run first
-			deleted, err := PruneOld(false, func() {})
+			lobsdeleted := 0
+			lobsretainedbydate := 0
+			lobsretainednotpushed := 0
+			callback := func(t PruneCallbackType, sha string) {
+				switch t {
+				case PruneRetainByDate:
+					lobsretainedbydate++
+				case PruneRetainNotPushed:
+					lobsretainednotpushed++
+				case PruneDeleted:
+					lobsdeleted++
+				}
+			}
+			//fmt.Println(setupOutputs)
+			deleted, err := PruneOld(false, callback)
 			Expect(err).To(BeNil(), "Should be no error pruning")
 			Expect(deleted).To(BeEmpty(), "No files should be deleted, all within range")
+			Expect(lobsdeleted).To(BeZero(), "No deletion callbacks should be made")
 
 		})
 
@@ -137,9 +150,21 @@ var _ = Describe("Prune", func() {
 
 		Context("No files", func() {
 			It("does nothing when no files present", func() {
-				shasToDelete, err := PruneUnreferenced(false, func() {})
+				lobsdeleted := 0
+				lobsreferenced := 0
+				callback := func(t PruneCallbackType, sha string) {
+					switch t {
+					case PruneRetainReferenced:
+						lobsreferenced++
+					case PruneDeleted:
+						lobsdeleted++
+					}
+				}
+				shasToDelete, err := PruneUnreferenced(false, callback)
 				Expect(err).To(BeNil(), "PruneUnreferenced should succeed")
 				Expect(shasToDelete).To(BeEmpty(), "Should report no files to prune")
+				Expect(lobsdeleted).To(BeZero(), "Should be no deletion callbacks")
+				Expect(lobsreferenced).To(BeZero(), "Should be no referenced callbacks")
 			})
 		})
 
@@ -175,8 +200,20 @@ var _ = Describe("Prune", func() {
 			Context("prunes all files when no references", func() {
 				// Because we've created no commits, all LOBs should be eligible for deletion
 				It("lists files but doesn't act on it in dry run mode", func() {
-					shasToDelete, err := PruneUnreferenced(true, func() {})
+					lobsdeleted := 0
+					lobsreferenced := 0
+					callback := func(t PruneCallbackType, sha string) {
+						switch t {
+						case PruneRetainReferenced:
+							lobsreferenced++
+						case PruneDeleted:
+							lobsdeleted++
+						}
+					}
+					shasToDelete, err := PruneUnreferenced(true, callback)
 					Expect(err).To(BeNil(), "PruneUnreferenced should succeed")
+					Expect(lobsreferenced).To(BeZero(), "Should be no LOB referenced")
+					Expect(lobsdeleted).To(BeEquivalentTo(len(lobshas)), "Should be correct number deleted in callback")
 					// Use sets to compare so ordering doesn't matter
 					actualset := NewStringSetFromSlice(shasToDelete)
 					Expect(actualset).To(Equal(lobshaset), "Should want to delete all files")
@@ -188,7 +225,7 @@ var _ = Describe("Prune", func() {
 
 				})
 				It("deletes files when not in dry run mode", func() {
-					shasToDelete, err := PruneUnreferenced(false, func() {})
+					shasToDelete, err := PruneUnreferenced(false, func(PruneCallbackType, string) {})
 					Expect(err).To(BeNil(), "PruneUnreferenced should succeed")
 					// Use sets to compare so ordering doesn't matter
 					actualset := NewStringSetFromSlice(shasToDelete)
@@ -246,11 +283,23 @@ var _ = Describe("Prune", func() {
 					//shasShouldKeep := NewStringSetFromSlice(lobshas[0:14])
 					shasShouldDelete := NewStringSetFromSlice(lobshas[14:])
 
-					deletedSlice, err := PruneUnreferenced(false, func() {})
+					lobsdeleted := 0
+					lobsreferenced := 0
+					callback := func(t PruneCallbackType, sha string) {
+						switch t {
+						case PruneRetainReferenced:
+							lobsreferenced++
+						case PruneDeleted:
+							lobsdeleted++
+						}
+					}
+					deletedSlice, err := PruneUnreferenced(false, callback)
 					Expect(err).To(BeNil(), "PruneUnreferenced should succeed")
 					shasDidDelete := NewStringSetFromSlice(deletedSlice)
 
 					Expect(shasDidDelete).To(Equal(shasShouldDelete), "Should delete the correct LOBs")
+					Expect(lobsdeleted).To(BeEquivalentTo(len(shasShouldDelete)), "Callbacks for deletion should be correct")
+					Expect(lobsreferenced).To(BeEquivalentTo(len(lobshas)-len(shasShouldDelete)), "Callbacks for retention should be correct")
 					// Make sure files don't exist
 					for sha := range shasShouldDelete.Iter() {
 						matches, err := filepath.Glob(fmt.Sprintf("%v*", filepath.Join(GetLocalLOBDir(sha), sha)))
@@ -309,7 +358,7 @@ var _ = Describe("Prune", func() {
 			Context("prunes all files when no references", func() {
 				// Because we've created no commits, all LOBs should be eligible for deletion
 				It("lists files but doesn't act on it in dry run mode", func() {
-					shasToDelete, err := PruneUnreferenced(true, func() {})
+					shasToDelete, err := PruneUnreferenced(true, func(PruneCallbackType, string) {})
 					Expect(err).To(BeNil(), "PruneUnreferenced should succeed")
 					// Use sets to compare so ordering doesn't matter
 					actualset := NewStringSetFromSlice(shasToDelete)
@@ -323,7 +372,7 @@ var _ = Describe("Prune", func() {
 
 				})
 				It("deletes files when not in dry run mode", func() {
-					shasToDelete, err := PruneUnreferenced(false, func() {})
+					shasToDelete, err := PruneUnreferenced(false, func(PruneCallbackType, string) {})
 					Expect(err).To(BeNil(), "PruneUnreferenced should succeed")
 					// Use sets to compare so ordering doesn't matter
 					actualset := NewStringSetFromSlice(shasToDelete)
@@ -382,7 +431,7 @@ var _ = Describe("Prune", func() {
 					//shasShouldKeep := NewStringSetFromSlice(lobshas[0:14])
 					shasShouldDelete := NewStringSetFromSlice(lobshas[14:])
 
-					deletedSlice, err := PruneUnreferenced(false, func() {})
+					deletedSlice, err := PruneUnreferenced(false, func(PruneCallbackType, string) {})
 					Expect(err).To(BeNil(), "PruneUnreferenced should succeed")
 					shasDidDelete := NewStringSetFromSlice(deletedSlice)
 
@@ -438,7 +487,7 @@ var _ = Describe("Prune", func() {
 			Context("prunes all files when no references", func() {
 				// Because we've created no hard links to the shared store, everything should be available for deletion
 				It("lists files but doesn't act on it in dry run mode", func() {
-					shasToDelete, err := PruneSharedStore(true, func() {})
+					shasToDelete, err := PruneSharedStore(true, func(PruneCallbackType, string) {})
 					Expect(err).To(BeNil(), "PruneSharedStore should succeed")
 					// Use sets to compare so ordering doesn't matter
 					actualset := NewStringSetFromSlice(shasToDelete)
@@ -452,7 +501,7 @@ var _ = Describe("Prune", func() {
 
 				})
 				It("deletes files when not in dry run mode", func() {
-					shasToDelete, err := PruneSharedStore(false, func() {})
+					shasToDelete, err := PruneSharedStore(false, func(PruneCallbackType, string) {})
 					Expect(err).To(BeNil(), "PruneSharedStore should succeed")
 					// Use sets to compare so ordering doesn't matter
 					actualset := NewStringSetFromSlice(shasToDelete)
@@ -491,14 +540,14 @@ var _ = Describe("Prune", func() {
 				})
 
 				It("does nothing in dry run mode", func() {
-					PruneSharedStore(true, func() {})
+					PruneSharedStore(true, func(PruneCallbackType, string) {})
 					for _, sharedfile := range sharedlobfiles {
 						exists, _ := FileOrDirExists(sharedfile)
 						Expect(exists).To(BeTrue(), "Should not have deleted %v", sharedfile)
 					}
 				})
 				It("correctly identifies referenced and unreferenced shared files", func() {
-					PruneSharedStore(false, func() {})
+					PruneSharedStore(false, func(PruneCallbackType, string) {})
 					for i, sharedfile := range sharedlobfiles {
 						exists, _ := FileOrDirExists(sharedfile)
 						if i <= referenceUpTo {

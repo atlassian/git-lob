@@ -425,6 +425,10 @@ type TestCommitSetupOutput struct {
 	FileLOBSHAs []string
 }
 
+func (self *TestCommitSetupOutput) String() string {
+	return fmt.Sprintf("C: %v\n  F:%v\n", self.CommitSHA, self.FileLOBSHAs)
+}
+
 func CommitAtDateForTest(t time.Time, msg string) error {
 	cmd := exec.Command("git", "commit", "--allow-empty", "-m", msg)
 	env := os.Environ()
