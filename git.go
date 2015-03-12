@@ -130,12 +130,147 @@ func WalkGitHistory(startSHA string, callback func(currentSHA, parentSHA string)
 	return callbackError
 }
 
+// Walk a list of commits with LOB references which are ancestors of 'ref' which have not been pushed
+// Walks forwards from the oldest commit to the latest commit (including 'ref' if it includes LOBs)
+// Walks all ancestors including second+ parents, in topological order
+func WalkGitCommitLOBsToPush(remoteName, ref string, callback func(commitLOB *CommitLOBRef) (quit bool, err error)) error {
+	// We use git's ability to log all new commits up to ref but exclude any ancestors of pushed
+	pushedSHAs := GetPushedCommits(remoteName)
+	args := []string{"log", `--format=commitsha: %H %P`, "-p",
+		"--topo-order",
+		"--reverse",
+		"-G", SHALineRegex,
+		ref}
+
+	for _, p := range pushedSHAs {
+		// 'not reachable from pushed commits'
+		args = append(args, fmt.Sprintf("^%v", p))
+	}
+
+	// format as <SHA> <PARENT> so we progressively work backward
+	cmd := exec.Command("git", args...)
+
+	outp, err := cmd.StdoutPipe()
+	if err != nil {
+		return errors.New(fmt.Sprintf("Unable to list commits from %v: %v", ref, err.Error()))
+	}
+	cmd.Start()
+
+	quit, err := walkGitLogOutputForLOBReferences(outp, true, false, []string{}, []string{}, callback)
+
+	if quit || err != nil {
+		// Early abort
+		cmd.Process.Kill()
+	}
+
+	cmd.Wait()
+
+	return err
+}
+
+// Internal utility for walking git-log output for git-lob references & calling callback
+// Log output must be formated like this: `--format=commitsha: %H %P`
+// outp must be output from a running git log task
+func walkGitLogOutputForLOBReferences(outp io.Reader, additions, removals bool,
+	includePaths, excludePaths []string, callback func(commitLOB *CommitLOBRef) (quit bool, err error)) (quit bool, err error) {
+	// Sadly we still get more output than we actually need, but this is the minimum we can get
+	// For each commit we'll get something like this:
+	/*
+	   COMMITSHA:af2607421c9fee2e430cde7e7073a7dad07be559 22be911a626eb9cf2e2760b1b8b092441771cb9d
+
+	   diff --git a/atheneNormalMap.png b/atheneNormalMap.png
+	   new file mode 100644
+	   index 0000000..272b5c1
+	   --- /dev/null
+	   +++ b/atheneNormalMap.png
+	   @@ -0,0 +1 @@
+	   +git-lob: b022770eab414c36575290c993c29799bc6610c3
+	*/
+	// There can be multiple diffs per commit (multiple binaries)
+	// Also when a binary is changed the diff will include a '-' line for the old SHA
+	// Depending on which direction in history the caller wants, they'll specify the
+	// parameters 'additions' and 'removals' to determine which get included
+
+	// Use 1 regex to capture all for speed
+	var lobregex *regexp.Regexp
+	if additions && !removals {
+		lobregex = regexp.MustCompile(`^\+git-lob: ([A-Fa-f0-9]{40})`)
+	} else if removals && !additions {
+		lobregex = regexp.MustCompile(`^\-git-lob: ([A-Fa-f0-9]{40})`)
+	} else {
+		lobregex = regexp.MustCompile(`^[\+\-]git-lob: ([A-Fa-f0-9]{40})`)
+	}
+	fileHeaderRegex := regexp.MustCompile(`diff --git a\/(.+?)\s+b\/(.+)`)
+	fileMergeHeaderRegex := regexp.MustCompile(`diff --cc (.+)`)
+	commitHeaderRegex := regexp.MustCompile(`^commitsha: ([A-Fa-f0-9]{40}) ([A-Fa-f0-9]{40})?`)
+
+	scanner := bufio.NewScanner(outp)
+
+	var currentCommit *CommitLOBRef
+	var currentFilename string
+	currentFileIncluded := true
+	for scanner.Scan() {
+		line := scanner.Text()
+		if match := commitHeaderRegex.FindStringSubmatch(line); match != nil {
+			// Commit header
+			sha := match[1]
+			// Set commit context
+			if currentCommit != nil {
+				if len(currentCommit.lobSHAs) > 0 {
+					quit, err := callback(currentCommit)
+					if err != nil {
+						return quit, err
+					} else if quit {
+						return true, nil
+					}
+				}
+				currentCommit = nil
+			}
+			currentCommit = &CommitLOBRef{commit: sha}
+		} else if match := fileHeaderRegex.FindStringSubmatch(line); match != nil {
+			// Finding a regular file header
+			// Pertinent file name depends on whether we're listening to additions or removals
+			if additions {
+				currentFilename = match[2]
+			} else {
+				currentFilename = match[1]
+			}
+			currentFileIncluded = FilenamePassesIncludeExcludeFilter(currentFilename, includePaths, excludePaths)
+		} else if match := fileMergeHeaderRegex.FindStringSubmatch(line); match != nil {
+			// Git merge file header is a little different, only one file
+			currentFilename = match[1]
+			currentFileIncluded = FilenamePassesIncludeExcludeFilter(currentFilename, includePaths, excludePaths)
+		} else if match := lobregex.FindStringSubmatch(line); match != nil {
+			// This is a LOB reference (+/- already matched in variant of regex)
+			sha := match[1]
+			// Use filename context to include/exclude if paths were used
+			if currentFileIncluded {
+				currentCommit.lobSHAs = append(currentCommit.lobSHAs, sha)
+			}
+		}
+	}
+	// Final commit
+	if currentCommit != nil {
+		if len(currentCommit.lobSHAs) > 0 {
+			quit, err := callback(currentCommit)
+			if err != nil {
+				return quit, err
+			} else if quit {
+				return true, nil
+			}
+		}
+		currentCommit = nil
+	}
+
+	return false, nil
+}
+
 // Walk git history from startSHA but only commits which reference LOBs
 // Use 'additions' & 'removals' to control which side of the diff used to pull out LOBs
 // First call will only be startSHA if it references LOBs itself, otherwise the
 // first call will be the first parent of startSHA which does
 // Walking will stop when there are no more parents referencing LOBs or when callback returns quit=true
-func WalkGitHistoryReferencingLOBs(startSHA string, additions, removals bool, callback func(commitLOB *CommitLOBRef) (quit bool, err error)) error {
+func WalkGitHistoryReferencingLOBs_REMOVE(startSHA string, additions, removals bool, callback func(commitLOB *CommitLOBRef) (quit bool, err error)) error {
 
 	quit := false
 	currentLogHEAD := startSHA
@@ -157,7 +292,7 @@ func WalkGitHistoryReferencingLOBs(startSHA string, additions, removals bool, ca
 		}
 		cmd.Start()
 
-		commitLOBs, parentSHA := scanGitLogOutputForLOBReferences(outp, additions, removals, []string{}, []string{})
+		commitLOBs, parentSHA := scanGitLogOutputForLOBReferences_REMOVE(outp, additions, removals, []string{}, []string{})
 
 		cmd.Wait()
 
@@ -316,6 +451,15 @@ func GitRefToFullSHA(ref string) (string, error) {
 		return ref, fmt.Errorf("Can't convert %v to a SHA: %v", ref, err.Error())
 	}
 	return strings.TrimSpace(string(outp)), nil
+}
+
+// Returns whether a ref or SHA refers to a valid, existing commit or not by asking git to resolve it
+func GitRefOrSHAIsValid(refOrSHA string) bool {
+	// --verify doesn't actually verify commit object is valid, will return OK if it's just any 40-char SHA
+	// Need to use <sha>^{commit} to verify it's a commit
+	err := exec.Command("git", "rev-parse", "--verify",
+		fmt.Sprintf("%v^{commit}", refOrSHA)).Run()
+	return err == nil
 }
 
 // Return a list of all local branches
@@ -524,7 +668,7 @@ func getGitCommitsReferencingLOBsInRange(from, to string, additions, removals bo
 	}
 	cmd.Start()
 
-	ret, _ := scanGitLogOutputForLOBReferences(outp, additions, removals, includePaths, excludePaths)
+	ret, _ := scanGitLogOutputForLOBReferences_REMOVE(outp, additions, removals, includePaths, excludePaths)
 
 	cmd.Wait()
 
@@ -537,7 +681,7 @@ func getGitCommitsReferencingLOBsInRange(from, to string, additions, removals bo
 // outp must be output from a running git log task
 // Also returns the parent SHA for the last commit encountered, if any
 // existingLOBs can be used to pass in an existing list to append to on return
-func scanGitLogOutputForLOBReferences(outp io.Reader, additions, removals bool,
+func scanGitLogOutputForLOBReferences_REMOVE(outp io.Reader, additions, removals bool,
 	includePaths, excludePaths []string) (commitLOBs []CommitLOBRef, parentSHA string) {
 	// Sadly we still get more output than we actually need, but this is the minimum we can get
 	// For each commit we'll get something like this:
@@ -723,7 +867,7 @@ func GetGitAllLOBsToCheckoutAtCommitAndRecent(commit string, days int, includePa
 		cmd.Start()
 
 		// Looking backwards, so removals
-		commitsWithLOBs, _ := scanGitLogOutputForLOBReferences(outp, false, true, includePaths, excludePaths)
+		commitsWithLOBs, _ := scanGitLogOutputForLOBReferences_REMOVE(outp, false, true, includePaths, excludePaths)
 		ret := shasAtCommit
 		earliestCommit := commit
 		for _, lobcommit := range commitsWithLOBs {
@@ -1089,4 +1233,32 @@ func GetGitAllRefs() ([]*GitRef, error) {
 	cmd.Wait()
 
 	return ret, nil
+}
+
+// Returns whether commit a (sha or ref) is an ancestor of commit b (sha or ref)
+func GitIsAncestor(a, b string) (bool, error) {
+
+	if !GitRefIsSHA(a) {
+		var err error
+		a, err = GitRefToFullSHA(a)
+		if err != nil {
+			return false, err
+		}
+	}
+	if !GitRefIsSHA(b) {
+		var err error
+		b, err = GitRefToFullSHA(b)
+		if err != nil {
+			return false, err
+		}
+	}
+	cmd := exec.Command("git", "merge-base", a, b)
+	outp, err := cmd.Output()
+	if err != nil {
+		return false, err
+	}
+	base := strings.TrimSpace(string(outp))
+
+	return base == a, nil
+
 }

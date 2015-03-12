@@ -460,7 +460,7 @@ func PruneOld(dryRun bool, callback PruneCallback) ([]string, error) {
 			pushed := false
 			callback(PruneWorking, "")
 			for _, remoteName := range remotesToCheck {
-				if !ShouldPushBinariesForCommit(remoteName, commitLOB.commit) {
+				if !ShouldPushBinariesForCommit_REMOVE(remoteName, commitLOB.commit) {
 					pushed = true
 					break // if >1 remote (i.e. config was '*'), count as pushed if pushed to ANY
 				}
@@ -502,7 +502,7 @@ func PruneOld(dryRun bool, callback PruneCallback) ([]string, error) {
 		}
 
 		// In this case we walk the diffs looking for additions of lobs '+' in the diff
-		err = WalkGitHistoryReferencingLOBs(earliestCommit, true, false, walkHistoryFunc)
+		err = WalkGitHistoryReferencingLOBs_REMOVE(earliestCommit, true, false, walkHistoryFunc)
 
 		return nil
 

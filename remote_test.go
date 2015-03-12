@@ -31,22 +31,22 @@ var _ = Describe("Remote", func() {
 
 			sha := "b09bfdf65bb51bb50307f93ab930dd7708a5b6dc"
 
-			push := ShouldPushBinariesForCommit(remote1Name, sha)
+			push := ShouldPushBinariesForCommit_REMOVE(remote1Name, sha)
 			Expect(push).To(BeTrue(), "Should want to push unknown SHA")
 
-			err := SuccessfullyPushedBinariesForCommit(remote1Name, sha)
+			err := SuccessfullyPushedBinariesForCommit_REMOVE(remote1Name, sha)
 			Expect(err).To(BeNil(), "Shouldn't be an error marking pushed")
 
-			push = ShouldPushBinariesForCommit(remote1Name, sha)
+			push = ShouldPushBinariesForCommit_REMOVE(remote1Name, sha)
 			Expect(push).To(BeFalse(), "Shouldn't push again")
 
-			push = ShouldPushBinariesForCommit(remote2Name, sha)
+			push = ShouldPushBinariesForCommit_REMOVE(remote2Name, sha)
 			Expect(push).To(BeTrue(), "Should push for other remote")
 
 			// Now undo
 			err = ResetPushedBinaryState(remote1Name)
 			Expect(err).To(BeNil(), "Shouldn't be an error undoing pushed")
-			push = ShouldPushBinariesForCommit(remote1Name, sha)
+			push = ShouldPushBinariesForCommit_REMOVE(remote1Name, sha)
 			Expect(push).To(BeTrue(), "Should push again after undo")
 		})
 
@@ -61,47 +61,47 @@ var _ = Describe("Remote", func() {
 				"b09bfdf65bbfaa36000000000000000000000000"}
 
 			for _, s := range shas {
-				push := ShouldPushBinariesForCommit(remote1Name, s)
+				push := ShouldPushBinariesForCommit_REMOVE(remote1Name, s)
 				Expect(push).To(BeTrue(), "Should want to push unknown SHA %v", s)
 			}
 
 			// Add out of order so we can test insert before / after
-			err := SuccessfullyPushedBinariesForCommit(remote1Name, shas[1])
+			err := SuccessfullyPushedBinariesForCommit_REMOVE(remote1Name, shas[1])
 			Expect(err).To(BeNil(), "Shouldn't be an error marking pushed")
 
 			// Insert at start
-			err = SuccessfullyPushedBinariesForCommit(remote1Name, shas[0])
+			err = SuccessfullyPushedBinariesForCommit_REMOVE(remote1Name, shas[0])
 			Expect(err).To(BeNil(), "Shouldn't be an error inserting at start")
 
 			// Insert at end
-			err = SuccessfullyPushedBinariesForCommit(remote1Name, shas[4])
+			err = SuccessfullyPushedBinariesForCommit_REMOVE(remote1Name, shas[4])
 			Expect(err).To(BeNil(), "Shouldn't be an error inserting at start")
 
 			// Insert in middle
-			err = SuccessfullyPushedBinariesForCommit(remote1Name, shas[2])
+			err = SuccessfullyPushedBinariesForCommit_REMOVE(remote1Name, shas[2])
 			Expect(err).To(BeNil(), "Shouldn't be an error inserting at start")
 
 			// Insert at end again
-			err = SuccessfullyPushedBinariesForCommit(remote1Name, shas[5])
+			err = SuccessfullyPushedBinariesForCommit_REMOVE(remote1Name, shas[5])
 			Expect(err).To(BeNil(), "Shouldn't be an error inserting at start")
 
 			// Insert in middle
-			err = SuccessfullyPushedBinariesForCommit(remote1Name, shas[3])
+			err = SuccessfullyPushedBinariesForCommit_REMOVE(remote1Name, shas[3])
 			Expect(err).To(BeNil(), "Shouldn't be an error inserting at start")
 
 			for _, s := range shas {
-				push := ShouldPushBinariesForCommit(remote1Name, s)
+				push := ShouldPushBinariesForCommit_REMOVE(remote1Name, s)
 				Expect(push).To(BeFalse(), "Should not want to push %v", s)
 			}
 
 			// Do a couple of duplicates to make sure we don't double-register
-			err = SuccessfullyPushedBinariesForCommit(remote1Name, shas[4])
+			err = SuccessfullyPushedBinariesForCommit_REMOVE(remote1Name, shas[4])
 			Expect(err).To(BeNil(), "Shouldn't be an error inserting at start")
-			err = SuccessfullyPushedBinariesForCommit(remote1Name, shas[2])
+			err = SuccessfullyPushedBinariesForCommit_REMOVE(remote1Name, shas[2])
 			Expect(err).To(BeNil(), "Shouldn't be an error inserting at start")
 
 			for _, s := range shas {
-				push := ShouldPushBinariesForCommit(remote1Name, s)
+				push := ShouldPushBinariesForCommit_REMOVE(remote1Name, s)
 				Expect(push).To(BeFalse(), "Should not want to push %v", s)
 			}
 
@@ -118,7 +118,7 @@ var _ = Describe("Remote", func() {
 			err = ResetPushedBinaryState(remote1Name)
 			Expect(err).To(BeNil(), "Shouldn't be an error undoing pushed")
 			for _, s := range shas {
-				push := ShouldPushBinariesForCommit(remote1Name, s)
+				push := ShouldPushBinariesForCommit_REMOVE(remote1Name, s)
 				Expect(push).To(BeTrue(), "Should want to push %v", s)
 			}
 
@@ -161,15 +161,15 @@ var _ = Describe("Remote", func() {
 			headSHA := strings.TrimSpace(string(outp))
 
 			// Check that no-match case works & terminates correctly
-			sha, err := FindLatestAncestorWhereBinariesPushed(remote, headSHA)
+			sha, err := FindLatestAncestorWhereBinariesPushed_REMOVE(remote, headSHA)
 			Expect(err).To(BeNil())
 			Expect(sha).To(Equal(""), "Should be no pushed binaries at start")
 
 			for i, pushedCommit := range commitPoints {
 				// Say we've pushed at this point, then test from HEAD
-				SuccessfullyPushedBinariesForCommit(remote, pushedCommit)
+				SuccessfullyPushedBinariesForCommit_REMOVE(remote, pushedCommit)
 
-				sha, err := FindLatestAncestorWhereBinariesPushed(remote, headSHA)
+				sha, err := FindLatestAncestorWhereBinariesPushed_REMOVE(remote, headSHA)
 				Expect(err).To(BeNil())
 				Expect(sha).To(Equal(pushedCommit), "Should detect %v as pushed commit (iteration %d)", pushedCommit, i)
 			}

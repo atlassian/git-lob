@@ -1,9 +1,9 @@
 package main
 
 import (
-	"fmt"
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -160,7 +160,7 @@ var _ = Describe("Push", func() {
 		Expect(HasPushedBinaryState("origin")).To(BeTrue(), "Should have pushed state for origin")
 		// Check it's at position expected
 		mastersha, _ := GitRefToFullSHA("master")
-		pushedSHA, err := FindLatestAncestorWhereBinariesPushed("origin", mastersha)
+		pushedSHA, err := FindLatestAncestorWhereBinariesPushed_REMOVE("origin", mastersha)
 		Expect(err).To(BeNil(), "Should not be error finding latest pushed")
 		tag1sha, _ := GitRefToFullSHA("Tag1")
 		Expect(pushedSHA).To(Equal(tag1sha), "Pushed marker should be at Tag1")
@@ -182,7 +182,7 @@ var _ = Describe("Push", func() {
 		// Confirm data exists on remote
 		CheckLOBsExistForTest(mastershaspercommit[2], originBinStore)
 
-		pushedSHA, err = FindLatestAncestorWhereBinariesPushed("origin", mastersha)
+		pushedSHA, err = FindLatestAncestorWhereBinariesPushed_REMOVE("origin", mastersha)
 		Expect(err).To(BeNil(), "Should not be error finding latest pushed")
 		Expect(pushedSHA).To(Equal(mastersha), "Pushed marker should be at master")
 
@@ -202,12 +202,12 @@ var _ = Describe("Push", func() {
 		CheckLOBsExistForTest(branch2shaspercommit[1], originBinStore)
 
 		branch2sha, _ := GitRefToFullSHA("branch2")
-		pushedSHA, err = FindLatestAncestorWhereBinariesPushed("origin", branch2sha)
+		pushedSHA, err = FindLatestAncestorWhereBinariesPushed_REMOVE("origin", branch2sha)
 		Expect(err).To(BeNil(), "Should not be error finding latest pushed")
 		Expect(pushedSHA).To(Equal(branch2sha), "Pushed marker should be at branch2")
 
 		// Now push master to fork
-		pushedSHA, err = FindLatestAncestorWhereBinariesPushed("fork", mastersha)
+		pushedSHA, err = FindLatestAncestorWhereBinariesPushed_REMOVE("fork", mastersha)
 		Expect(err).To(BeNil(), "Should not be error finding latest pushed")
 		Expect(pushedSHA).To(Equal(""), "Pushed marker should not be set for fork")
 
@@ -224,7 +224,7 @@ var _ = Describe("Push", func() {
 		CheckLOBsExistForTest(mastershaspercommit[0], forkBinStore)
 		CheckLOBsExistForTest(mastershaspercommit[1], forkBinStore)
 		Expect(HasPushedBinaryState("fork")).To(BeTrue(), "Should have pushed state for fork")
-		pushedSHA, err = FindLatestAncestorWhereBinariesPushed("fork", mastersha)
+		pushedSHA, err = FindLatestAncestorWhereBinariesPushed_REMOVE("fork", mastersha)
 		Expect(err).To(BeNil(), "Should not be error finding latest pushed")
 		Expect(pushedSHA).To(Equal(mastersha), "Pushed marker should be at master")
 
@@ -232,7 +232,7 @@ var _ = Describe("Push", func() {
 		err = ResetPushedBinaryState("origin")
 		Expect(err).To(BeNil(), "Should not be error resetting pushed data")
 		Expect(HasPushedBinaryState("origin")).To(BeFalse(), "Should not have pushed state for origin")
-		pushedSHA, err = FindLatestAncestorWhereBinariesPushed("origin", mastersha)
+		pushedSHA, err = FindLatestAncestorWhereBinariesPushed_REMOVE("origin", mastersha)
 		Expect(err).To(BeNil(), "Should not be error finding latest pushed")
 		Expect(pushedSHA).To(Equal(""), "Pushed marker should not be set")
 
@@ -262,7 +262,7 @@ var _ = Describe("Push", func() {
 		// Confirm new data exists on remote
 		CheckLOBsExistForTest(mastershaspercommit[2], originBinStore)
 		// Check that push cache has been updated (because missing files were OK on remote)
-		pushedSHA, err = FindLatestAncestorWhereBinariesPushed("origin", mastersha)
+		pushedSHA, err = FindLatestAncestorWhereBinariesPushed_REMOVE("origin", mastersha)
 		Expect(err).To(BeNil(), "Should not be error finding latest pushed")
 		Expect(pushedSHA).To(Equal(mastersha), "Pushed marker should be at master")
 
@@ -271,7 +271,7 @@ var _ = Describe("Push", func() {
 		err = ResetPushedBinaryState("origin")
 		Expect(err).To(BeNil(), "Should not be error resetting pushed data")
 		Expect(HasPushedBinaryState("origin")).To(BeFalse(), "Should not have pushed state for origin")
-		pushedSHA, err = FindLatestAncestorWhereBinariesPushed("origin", mastersha)
+		pushedSHA, err = FindLatestAncestorWhereBinariesPushed_REMOVE("origin", mastersha)
 		Expect(err).To(BeNil(), "Should not be error finding latest pushed")
 		Expect(pushedSHA).To(Equal(""), "Pushed marker should not be set")
 
@@ -301,7 +301,7 @@ var _ = Describe("Push", func() {
 		CheckLOBsExistForTest(mastershaspercommit[2], originBinStore)
 		// Check that push cache has been updated, but only to [0] (Tag0)
 		tag0sha, _ := GitRefToFullSHA("Tag0")
-		pushedSHA, err = FindLatestAncestorWhereBinariesPushed("origin", mastersha)
+		pushedSHA, err = FindLatestAncestorWhereBinariesPushed_REMOVE("origin", mastersha)
 		Expect(err).To(BeNil(), "Should not be error finding latest pushed")
 		Expect(pushedSHA).To(Equal(tag0sha), "Pushed marker should have only been moved to the point before missing files on local & remote")
 

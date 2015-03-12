@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -57,7 +58,7 @@ func cmdMarkPushed() int {
 	LogConsole("Marking", remoteName, "as pushed at", refs)
 
 	for i, sha := range expandedrefs {
-		err := SuccessfullyPushedBinariesForCommit(remoteName, sha)
+		err := SuccessfullyPushedBinariesForCommit_REMOVE(remoteName, sha)
 		if err != nil {
 			LogErrorf("Unable to mark %v as pushed at %v (%v): %v\n", remoteName, sha, refs[i], err.Error())
 		} else {
@@ -191,7 +192,7 @@ func cmdLastPushed() int {
 		return 9
 	}
 
-	last, err := FindLatestAncestorWhereBinariesPushed(remoteName, commitSHA)
+	last, err := FindLatestAncestorWhereBinariesPushed_REMOVE(remoteName, commitSHA)
 	if err != nil {
 		LogErrorf("Unable to locate last pushed commit for %v at %v: %v\n", remoteName, ref, err.Error())
 		return 12
@@ -251,6 +252,7 @@ func getRemoteStateCacheRoot(remoteName string) string {
 
 // Gets the file name which will store a given commitSHA if binaries are thought to
 // be up to date at that commit on that remote
+// REMOVE
 func getRemoteStateCacheFileForCommit(remoteName, commitSHA string) string {
 
 	// Use a simple DB format based on commit SHA
@@ -268,8 +270,25 @@ func getRemoteStateCacheFileForCommit(remoteName, commitSHA string) string {
 	return file
 }
 
+// Gets the file name which will store when we last pushed binaries
+func getRemoteStateCacheFile(remoteName string) string {
+
+	// Use a simple DB format based on commit SHA
+	// e.g. for SHA 37d1cd1e4bd8f4853002ef6a5c8211d89fc09be2
+	// cacheroot/37d/1cd/1e4/bd8/f48.txt
+	// Every commit that starts with 37d1cd1e4bd8f48 will be stored in that text file, sorted
+	dir := getRemoteStateCacheRoot(remoteName)
+	err := os.MkdirAll(dir, 0755)
+	if err != nil {
+		LogErrorf("Unable to create remote state cache folder at %v: %v", dir, err)
+		panic(err)
+	}
+	file := filepath.Join(dir, "push_state")
+	return file
+}
+
 // Based on local cached state, should we try to push binaries for a given commit?
-func ShouldPushBinariesForCommit(remoteName, commitSHA string) bool {
+func ShouldPushBinariesForCommit_REMOVE(remoteName, commitSHA string) bool {
 	filename := getRemoteStateCacheFileForCommit(remoteName, commitSHA)
 	f, err := os.OpenFile(filename, os.O_RDONLY, 0644)
 	if err != nil {
@@ -289,7 +308,7 @@ func ShouldPushBinariesForCommit(remoteName, commitSHA string) bool {
 }
 
 // Update local cache to say that we believe we've updated the named remote at this commit
-func recordRemoteBinariesUpToDateAtCommit(remoteName, commitSHA string) (alreadyMarked bool, err error) {
+func recordRemoteBinariesUpToDateAtCommit_REMOVE(remoteName, commitSHA string) (alreadyMarked bool, err error) {
 	filename := getRemoteStateCacheFileForCommit(remoteName, commitSHA)
 	f, err := os.OpenFile(filename, os.O_EXCL|os.O_RDWR, 0644)
 	if err != nil {
@@ -366,23 +385,170 @@ func InitSuccessfullyPushedCacheIfAppropriate() {
 			LogErrorf("Unable to get all refs from git %v\n", err.Error())
 			return
 		}
-		for _, ref := range refs {
-			for _, remote := range remotes {
-				SuccessfullyPushedBinariesForCommit(remote, ref.CommitSHA)
+		for _, remote := range remotes {
+			var shas []string
+			for _, ref := range refs {
+				shas = append(shas, ref.CommitSHA)
 			}
+			shas = consolidateCommitsToLatestDescendants(shas)
+			WritePushedState(remote, shas)
 		}
 	}
 
 }
 
+// Record that binaries have been pushed to a given remote at a commit
+// replaceCommitSHA can be blank, but if provided will replace a previously inserted SHA
+// for an ancestor instead of adding this SHA to the list (to be potentially optimised out)
+func MarkBinariesAsPushed(remoteName, commitSHA, replaceCommitSHA string) error {
+	if !GitRefIsFullSHA(commitSHA) {
+		return fmt.Errorf("Invalid commit SHA, must be full 40 char SHA, not '%v'", commitSHA)
+	}
+
+	filename := getRemoteStateCacheFile(remoteName)
+	f, err := os.OpenFile(filename, os.O_EXCL|os.O_RDWR, 0644)
+	if err != nil {
+		// File did not exist, just write single line
+		// For consistency in sizing, always include \n
+		LogDebugf("Created new remote state cache file %v to mark %v as pushed\n", filename, commitSHA)
+		return ioutil.WriteFile(filename, []byte(commitSHA+"\n"), 0644)
+	} else {
+		defer f.Close()
+
+		// File is sorted, could in theory read & insert but almost certainly faster
+		// to read all, insert in memory then rewrite out in bulk. We've split on
+		// first 15 chars of SHA anyway, unlikely to be huge contention
+		scanner := bufio.NewScanner(f)
+		var shas []string
+		for scanner.Scan() {
+			c := scanner.Text()
+			if c != replaceCommitSHA {
+				shas = append(shas, c)
+			}
+		}
+
+		found, insertAt := StringBinarySearch(shas, commitSHA)
+
+		if !found {
+			// Rather than spend the time inserting in shas, just re-write from after insertion
+			// Line length is the 40 char SHA plus (Unix) newline
+			lineLen := SHALen + 1
+			seekTo := int64(lineLen * insertAt)
+			_, err = f.Seek(seekTo, os.SEEK_SET)
+			if err != nil {
+				return errors.New(fmt.Sprintf("Unable to seek to %v in %v", seekTo, filename))
+			}
+			// Insert the new entry
+			f.WriteString(commitSHA + "\n")
+			// Now write all the entries after that (we'll stay sorted)
+			for i := insertAt; i < len(shas); i++ {
+				// Have to re-insert the line break
+				f.WriteString(shas[i] + "\n")
+			}
+			LogDebugf("Updated remote state cache file %v to mark %v as pushed", filename, commitSHA)
+
+			return nil
+		}
+
+		// Was already recorded
+		return nil
+	}
+}
+
+// Overwrite entire pushed state for a remote
+func WritePushedState(remoteName string, shas []string) error {
+
+	filename := getRemoteStateCacheFile(remoteName)
+	// we just write the whole thing, sorted
+	sort.Strings(shas)
+	f, err := os.OpenFile(filename, os.O_EXCL|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return errors.New(fmt.Sprintf("Unable to write cache file %v:", filename, err.Error()))
+	}
+	for _, sha := range shas {
+		// Have to re-insert the line break
+		f.WriteString(sha + "\n")
+	}
+	LogDebugf("Initialised remote state cache for %v", remoteName)
+
+	return nil
+}
+
+// Get a list of commits that have been pushed for a remote
+func GetPushedCommits(remoteName string) []string {
+	filename := getRemoteStateCacheFile(remoteName)
+	f, err := os.OpenFile(filename, os.O_RDONLY, 0644)
+	if err != nil {
+		// File missing
+		return []string{}
+	}
+	defer f.Close()
+	// Read entire file into memory and binary search
+	// Will already be sorted
+	scanner := bufio.NewScanner(f)
+	var shas []string
+	for scanner.Scan() {
+		shas = append(shas, scanner.Text())
+	}
+	return shas
+}
+
+// Minimise the amount of state we retain on pushed state
+// As we add SHAs that are pushed we can create redundant records because some SHAs are
+// parents of others. This makes the subsequent retrieval of commits to push slower
+// So remove SHAs that are ancestors of others and just keep the later SHAs that are pushed
+func cleanupPushState(remoteName string) {
+	pushed := GetPushedCommits(remoteName)
+
+	consolidated := consolidateCommitsToLatestDescendants(pushed)
+
+	if len(consolidated) != len(pushed) {
+		WritePushedState(remoteName, consolidated)
+	}
+}
+
+// Take a list of commit SHAs and consolidate them into another list which excludes
+// any commits which are ancestors of others, and those which are no longer valid
+// Note that this makes up to N^2 + N git calls so call infrequently
+func consolidateCommitsToLatestDescendants(in []string) []string {
+	consolidated := make([]string, 0, len(in))
+	for i, a := range in {
+		// First check this is a valid ref still (if rebased & deleted, remove)
+		if !GitRefOrSHAIsValid(a) {
+			continue
+		}
+		// If any other pushed entry is a descendent of 'a' then no reason to store 'a'
+		redundant := false
+		for j, b := range in {
+			if i == j {
+				continue
+			}
+			isancestor, err := GitIsAncestor(a, b)
+			if err != nil {
+				// play safe & keep
+				continue
+			}
+			if isancestor {
+				redundant = true
+				break
+			}
+		}
+		if !redundant {
+			consolidated = append(consolidated, a)
+		}
+	}
+	return consolidated
+
+}
+
 // Say that we've successfully pushed binaries for a remote at a commit (and all ancestors)
-func SuccessfullyPushedBinariesForCommit(remoteName, commitSHA string) error {
+func SuccessfullyPushedBinariesForCommit_REMOVE(remoteName, commitSHA string) error {
 
 	if !GitRefIsFullSHA(commitSHA) {
 		return fmt.Errorf("Invalid commit SHA, must be full 40 char SHA, not '%v'", commitSHA)
 	}
 
-	alreadyMarked, err := recordRemoteBinariesUpToDateAtCommit(remoteName, commitSHA)
+	alreadyMarked, err := recordRemoteBinariesUpToDateAtCommit_REMOVE(remoteName, commitSHA)
 	if err != nil {
 		return err
 	}
@@ -398,7 +564,7 @@ func SuccessfullyPushedBinariesForCommit(remoteName, commitSHA string) error {
 	parent := commitSHA + "^"
 	ancestorCount := 0
 	err = WalkGitHistory(parent, func(currentSHA, parentSHA string) (bool, error) {
-		alreadyMarked, err = recordRemoteBinariesUpToDateAtCommit(remoteName, currentSHA)
+		alreadyMarked, err = recordRemoteBinariesUpToDateAtCommit_REMOVE(remoteName, currentSHA)
 		if err != nil {
 			// quit
 			return true, err
@@ -423,12 +589,12 @@ func HasPushedBinaryState(remoteName string) bool {
 
 // Find the most recent ancestor of commitSHA (or itself) at which we believe we've
 // already pushed all binaries. Returns a blanks string if none have been pushed.
-func FindLatestAncestorWhereBinariesPushed(remoteName, commitSHA string) (string, error) {
+func FindLatestAncestorWhereBinariesPushed_REMOVE(remoteName, commitSHA string) (string, error) {
 	if len(commitSHA) != 40 {
 		return "", errors.New("Invalid parameter, commitSHA must be full SHA not alias/ref")
 	}
 	// Check self first (avoid git log call if up to date)
-	if !ShouldPushBinariesForCommit(remoteName, commitSHA) {
+	if !ShouldPushBinariesForCommit_REMOVE(remoteName, commitSHA) {
 		return commitSHA, nil
 	}
 
@@ -437,7 +603,7 @@ func FindLatestAncestorWhereBinariesPushed(remoteName, commitSHA string) (string
 	var foundSHA string
 	err := WalkGitHistory(parent, func(currentSHA, parentSHA string) (bool, error) {
 
-		if !ShouldPushBinariesForCommit(remoteName, currentSHA) {
+		if !ShouldPushBinariesForCommit_REMOVE(remoteName, currentSHA) {
 			foundSHA = currentSHA
 			return true, nil
 		}
@@ -468,7 +634,7 @@ func GetCommitLOBsToPushForRefSpec(remoteName string, refspec *GitRefSpec, reche
 			// Scan for LOBs in entire history
 			return GetGitCommitsReferencingLOBsInRange("", commitSHA, nil, nil)
 		} else {
-			lastPushed, err := FindLatestAncestorWhereBinariesPushed(remoteName, commitSHA)
+			lastPushed, err := FindLatestAncestorWhereBinariesPushed_REMOVE(remoteName, commitSHA)
 			if err != nil {
 				return []CommitLOBRef{}, err
 			}

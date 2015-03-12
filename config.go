@@ -9,6 +9,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -351,5 +352,63 @@ func ReadConfigStream(in io.Reader, dir string) (map[string]string, error) {
 	}
 
 	return ret, nil
+
+}
+
+// Write a .gitconfig-style config file
+// Takes a map of setting=value, where group levels are indicated by dot-notation
+// e.g. git-lob.logfile=blah
+// Note: overwrites whole file & loses comments if you ReadConfigFile then WriteConfigFile
+// only intended for internal use, don't use on user-edited files
+// This is NOT a merge-on-write user-friendly config updater (like SourceTree has)
+func WriteConfigFile(filepath string, contents map[string]string) error {
+	f, err := os.OpenFile(filepath, os.O_TRUNC|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	return WriteConfigStream(f, contents)
+
+}
+func WriteConfigStream(out io.Writer, contents map[string]string) error {
+	// We need to iterate over content IN ORDER so that we can group correctly
+	// golang map iteration is not ordered though so we need to sort keys & iterate on those
+	keys := make([]string, 0, len(contents))
+	for key, _ := range contents {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	lastGroup := ""
+	for _, key := range keys {
+		val := contents[key]
+		splitkey := strings.SplitN(key, ".", 1)
+		var group string
+		if len(splitkey) > 1 {
+			group = splitkey[0]
+			if strings.ContainsAny(group, " \t") {
+				group = fmt.Sprintf("\"%v\"", group)
+			}
+			key = splitkey[1]
+		}
+		if group != lastGroup {
+			_, err := out.Write([]byte(fmt.Sprintf("[%v]\n", group)))
+			if err != nil {
+				return err
+			}
+			lastGroup = group
+		}
+
+		if group != "" {
+			// Indent values in group
+			out.Write([]byte{'\t'})
+		}
+		_, err := out.Write([]byte(fmt.Sprintf("%v = %v\n", key, val)))
+		if err != nil {
+			return err
+		}
+
+	}
+	return nil
 
 }

@@ -307,7 +307,7 @@ func Push(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dryR
 				if err != nil {
 					return err
 				}
-				SuccessfullyPushedBinariesForCommit(remoteName, commitSHA)
+				SuccessfullyPushedBinariesForCommit_REMOVE(remoteName, commitSHA)
 			}
 
 		} else {
@@ -484,7 +484,7 @@ func Push(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dryR
 				// Sync provider will avoid any duplicate uploads anyway.
 			}
 			if !commit.Incomplete && !previousCommitIncomplete {
-				err = SuccessfullyPushedBinariesForCommit(remoteName, commit.CommitSHA)
+				err = SuccessfullyPushedBinariesForCommit_REMOVE(remoteName, commit.CommitSHA)
 				if err != nil {
 					// Stop at commit we can't mark, order is important
 					return err
