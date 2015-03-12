@@ -23,8 +23,8 @@ func cmdMarkPushed() int {
 		return 9
 	}
 
-	if len(GlobalOptions.Args) < 2 {
-		LogConsoleError("Too few arguments; must supply remote and at least one ref")
+	if len(GlobalOptions.Args) < 1 {
+		LogConsoleError("Too few arguments; must supply a remote")
 		return 9
 	}
 	// first parameter must be remote
@@ -35,34 +35,43 @@ func cmdMarkPushed() int {
 		return 9
 	}
 
-	// Remaining args are refs
-	refs := GlobalOptions.Args[1:]
-	var expandedrefs []string
-	// expand refs
-	shaRegex := regexp.MustCompile("^[A-Fa-f0-9]{40}$")
-	for _, ref := range refs {
-		if shaRegex.MatchString(ref) {
-			// already a full sha
-			expandedrefs = append(expandedrefs, ref)
-		} else {
-			expanded, err := GitRefToFullSHA(ref)
-			if err != nil {
-				LogConsoleErrorf("Invalid ref '%v': %v\n", ref, err.Error())
-				return 12
+	if len(GlobalOptions.Args) > 1 {
+		// Remaining args are refs
+		refs := GlobalOptions.Args[1:]
+		var expandedrefs []string
+		// expand refs
+		shaRegex := regexp.MustCompile("^[A-Fa-f0-9]{40}$")
+		for _, ref := range refs {
+			if shaRegex.MatchString(ref) {
+				// already a full sha
+				expandedrefs = append(expandedrefs, ref)
+			} else {
+				expanded, err := GitRefToFullSHA(ref)
+				if err != nil {
+					LogConsoleErrorf("Invalid ref '%v': %v\n", ref, err.Error())
+					return 12
+				}
+				expandedrefs = append(expandedrefs, expanded)
 			}
-			expandedrefs = append(expandedrefs, expanded)
 		}
-	}
 
-	// If all refs were ok, do it
-	LogConsole("Marking", remoteName, "as pushed at", refs)
+		// If all refs were ok, do it
+		LogConsole("Marking", remoteName, "as pushed at", refs)
 
-	for i, sha := range expandedrefs {
-		err := SuccessfullyPushedBinariesForCommit_REMOVE(remoteName, sha)
+		for i, sha := range expandedrefs {
+			err := MarkBinariesAsPushed(remoteName, sha, "")
+			if err != nil {
+				LogErrorf("Unable to mark %v as pushed at %v (%v): %v\n", remoteName, sha, refs[i], err.Error())
+			} else {
+				LogConsolef("Marked %v as pushed at %v (%v)\n", remoteName, sha, refs[i])
+			}
+		}
+	} else {
+		err := MarkAllBinariesPushed(remoteName)
 		if err != nil {
-			LogErrorf("Unable to mark %v as pushed at %v (%v): %v\n", remoteName, sha, refs[i], err.Error())
+			LogErrorf("Unable to mark %v as pushed: %v\n", remoteName, err.Error())
 		} else {
-			LogDebugf("Marked %v as pushed at %v (%v)\n", remoteName, sha, refs[i])
+			LogConsolef("Marked %v as pushed\n", remoteName)
 		}
 	}
 
@@ -71,7 +80,7 @@ func cmdMarkPushed() int {
 }
 
 func cmdMarkPushedHelp() {
-	LogConsole(`Usage: git-lob mark-pushed [options] <remote> <ref>...
+	LogConsole(`Usage: git-lob mark-pushed [options] <remote> [<ref>...]
 
   Manually marks a commit as pushed for a remote (and all its ancestors)
 
@@ -90,10 +99,9 @@ Parameters:
   <remote>: The name of the remote.
 
      <ref>: One or more refs or commit SHAs at which to record as pushed. 
-     		Any ancestors of this ref are also assumed to be pushed. If
-     		you have many (open) branches that you intend to push from later
-     		then you should do this for each branch to avoid a full history
-     		scan the first time you push.
+     		Any ancestors of this ref are also assumed to be pushed. 
+            If you don't supply any refs, all refs are marked pushed (which
+            is what you might do when adding a fork)
 
 Options:
   --quiet, -q   Print less output
@@ -382,19 +390,33 @@ func InitSuccessfullyPushedCacheIfAppropriate() {
 		// Mark as pushed at all refs (local branches, remote branches, tags)
 		refs, err := GetGitAllRefs()
 		if err != nil {
-			LogErrorf("Unable to get all refs from git %v\n", err.Error())
+			LogErrorf("Unable to get refs to mark as pushed %v\n", err.Error())
 			return
 		}
+		var shas []string
+		for _, ref := range refs {
+			shas = append(shas, ref.CommitSHA)
+		}
+		shas = consolidateCommitsToLatestDescendants(shas)
 		for _, remote := range remotes {
-			var shas []string
-			for _, ref := range refs {
-				shas = append(shas, ref.CommitSHA)
-			}
-			shas = consolidateCommitsToLatestDescendants(shas)
 			WritePushedState(remote, shas)
 		}
 	}
 
+}
+
+func MarkAllBinariesPushed(remoteName string) error {
+	// Mark as pushed at all refs (local branches, remote branches, tags)
+	refs, err := GetGitAllRefs()
+	if err != nil {
+		return err
+	}
+	var shas []string
+	for _, ref := range refs {
+		shas = append(shas, ref.CommitSHA)
+	}
+	shas = consolidateCommitsToLatestDescendants(shas)
+	return WritePushedState(remoteName, shas)
 }
 
 // Record that binaries have been pushed to a given remote at a commit
