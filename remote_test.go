@@ -161,7 +161,7 @@ var _ = Describe("Remote", func() {
 			headSHA := strings.TrimSpace(string(outp))
 
 			// Check that no-match case works & terminates correctly
-			sha, err := FindLatestAncestorWhereBinariesPushed_REMOVE(remote, headSHA)
+			sha, err := FindLatestAncestorWhereBinariesPushed(remote, headSHA)
 			Expect(err).To(BeNil())
 			Expect(sha).To(Equal(""), "Should be no pushed binaries at start")
 
@@ -169,7 +169,7 @@ var _ = Describe("Remote", func() {
 				// Say we've pushed at this point, then test from HEAD
 				SuccessfullyPushedBinariesForCommit_REMOVE(remote, pushedCommit)
 
-				sha, err := FindLatestAncestorWhereBinariesPushed_REMOVE(remote, headSHA)
+				sha, err := FindLatestAncestorWhereBinariesPushed(remote, headSHA)
 				Expect(err).To(BeNil())
 				Expect(sha).To(Equal(pushedCommit), "Should detect %v as pushed commit (iteration %d)", pushedCommit, i)
 			}

@@ -1130,3 +1130,17 @@ func GitIsAncestor(a, b string) (bool, error) {
 	return base == a, nil
 
 }
+
+// Returns the 'best' ancestor of all the passed in refs (as a SHA)
+// If a ref is listed twice the 'best' ancestor will be itself
+func GetGitBestAncestor(refs []string) (ancestor string, err error) {
+	args := []string{"merge-base"}
+	args = append(args, refs...)
+	cmd := exec.Command("git", args...)
+	outp, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	base := strings.TrimSpace(string(outp))
+	return base, nil
+}

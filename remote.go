@@ -200,7 +200,7 @@ func cmdLastPushed() int {
 		return 9
 	}
 
-	last, err := FindLatestAncestorWhereBinariesPushed_REMOVE(remoteName, commitSHA)
+	last, err := FindLatestAncestorWhereBinariesPushed(remoteName, commitSHA)
 	if err != nil {
 		LogErrorf("Unable to locate last pushed commit for %v at %v: %v\n", remoteName, ref, err.Error())
 		return 12
@@ -623,29 +623,21 @@ func HasPushedBinaryState(remoteName string) bool {
 	return hasRemoteStateCache(remoteName)
 }
 
-// Find the most recent ancestor of commitSHA (or itself) at which we believe we've
-// already pushed all binaries. Returns a blanks string if none have been pushed.
-func FindLatestAncestorWhereBinariesPushed_REMOVE(remoteName, commitSHA string) (string, error) {
-	if len(commitSHA) != 40 {
-		return "", errors.New("Invalid parameter, commitSHA must be full SHA not alias/ref")
-	}
-	// Check self first (avoid git log call if up to date)
-	if !ShouldPushBinariesForCommit_REMOVE(remoteName, commitSHA) {
-		return commitSHA, nil
+// Find the most recent ancestor of ref (or itself) at which we believe we've
+// already pushed all binaries. Returns a blank string if none have been pushed.
+func FindLatestAncestorWhereBinariesPushed(remoteName, ref string) (string, error) {
+
+	// Use the list of pushed SHAs plus this ref to determine the best common ancestor
+	pushedSHAs := GetPushedCommits(remoteName)
+	if len(pushedSHAs) == 0 {
+		return "", nil
 	}
 
-	// Now check ancestors
-	parent := commitSHA + "^"
-	var foundSHA string
-	err := WalkGitHistory(parent, func(currentSHA, parentSHA string) (bool, error) {
-
-		if !ShouldPushBinariesForCommit_REMOVE(remoteName, currentSHA) {
-			foundSHA = currentSHA
-			return true, nil
-		}
-		return false, nil
-	})
-	return foundSHA, err
+	var refs = make([]string, 0, len(pushedSHAs)+1)
+	refs = append(refs, ref)
+	refs = append(refs, pushedSHAs...)
+	best, err := GetGitBestAncestor(refs)
+	return best, err
 }
 
 // Get a list of commits which have LOB SHAs to push, given a refspec, in forward ancestry order
@@ -670,7 +662,7 @@ func GetCommitLOBsToPushForRefSpec(remoteName string, refspec *GitRefSpec, reche
 			// Scan for LOBs in entire history
 			return GetGitCommitsReferencingLOBsInRange("", commitSHA, nil, nil)
 		} else {
-			lastPushed, err := FindLatestAncestorWhereBinariesPushed_REMOVE(remoteName, commitSHA)
+			lastPushed, err := FindLatestAncestorWhereBinariesPushed(remoteName, commitSHA)
 			if err != nil {
 				return []*CommitLOBRef{}, err
 			}

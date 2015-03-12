@@ -249,7 +249,7 @@ var _ = Describe("Fetch", func() {
 
 		// Should also have updated push state for origin since local store was blank
 		mastersha, _ := GitRefToFullSHA("master")
-		pushedSHA, err := FindLatestAncestorWhereBinariesPushed_REMOVE("origin", mastersha)
+		pushedSHA, err := FindLatestAncestorWhereBinariesPushed("origin", mastersha)
 		Expect(err).To(BeNil(), "Should not be error finding latest pushed")
 		Expect(pushedSHA).To(Equal(mastersha), "Should be marked as fully pushed after initial fetch")
 
