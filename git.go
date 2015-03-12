@@ -133,6 +133,7 @@ func WalkGitHistory(startSHA string, callback func(currentSHA, parentSHA string)
 // Walk a list of commits with LOB references which are ancestors of 'ref' which have not been pushed
 // Walks forwards from the oldest commit to the latest commit (including 'ref' if it includes LOBs)
 // Walks all ancestors including second+ parents, in topological order
+// remoteName can be a specific remote or "*" to count pushed ton *any* remote as OK
 func WalkGitCommitLOBsToPush(remoteName, ref string, callback func(commitLOB *CommitLOBRef) (quit bool, err error)) error {
 	// We use git's ability to log all new commits up to ref but exclude any ancestors of pushed
 	pushedSHAs := GetPushedCommits(remoteName)
