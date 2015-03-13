@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -357,55 +356,29 @@ func MarkBinariesAsPushed(remoteName, commitSHA, replaceCommitSHA string) error 
 	if !GitRefIsFullSHA(commitSHA) {
 		return fmt.Errorf("Invalid commit SHA, must be full 40 char SHA, not '%v'", commitSHA)
 	}
+	shas := GetPushedCommits(remoteName)
 
-	filename := getRemoteStateCacheFile(remoteName)
-	f, err := os.OpenFile(filename, os.O_EXCL|os.O_RDWR, 0644)
-	if err != nil {
-		// File did not exist, just write single line
-		// For consistency in sizing, always include \n
-		LogDebugf("Created new remote state cache file %v to mark %v as pushed\n", filename, commitSHA)
-		return ioutil.WriteFile(filename, []byte(commitSHA+"\n"), 0644)
-	} else {
-		defer f.Close()
-
-		// File is sorted, could in theory read & insert but almost certainly faster
-		// to read all, insert in memory then rewrite out in bulk. We've split on
-		// first 15 chars of SHA anyway, unlikely to be huge contention
-		scanner := bufio.NewScanner(f)
-		var shas []string
-		for scanner.Scan() {
-			c := scanner.Text()
-			if c != replaceCommitSHA {
-				shas = append(shas, c)
-			}
-		}
-
-		found, insertAt := StringBinarySearch(shas, commitSHA)
-
-		if !found {
-			// Rather than spend the time inserting in shas, just re-write from after insertion
-			// Line length is the 40 char SHA plus (Unix) newline
-			lineLen := SHALen + 1
-			seekTo := int64(lineLen * insertAt)
-			_, err = f.Seek(seekTo, os.SEEK_SET)
-			if err != nil {
-				return errors.New(fmt.Sprintf("Unable to seek to %v in %v", seekTo, filename))
-			}
-			// Insert the new entry
-			f.WriteString(commitSHA + "\n")
-			// Now write all the entries after that (we'll stay sorted)
-			for i := insertAt; i < len(shas); i++ {
-				// Have to re-insert the line break
-				f.WriteString(shas[i] + "\n")
-			}
-			LogDebugf("Updated remote state cache file %v to mark %v as pushed", filename, commitSHA)
-
-			return nil
-		}
-
-		// Was already recorded
+	// confirm not there already
+	alreadyPresent, _ := StringBinarySearch(shas, commitSHA)
+	if alreadyPresent {
 		return nil
 	}
+
+	// insert or append, then re-sort
+	if replaceCommitSHA != "" {
+		LogDebugf("Updating remote state for %v to mark %v as pushed (replaces %v)", remoteName, commitSHA, replaceCommitSHA)
+		found, insertAt := StringBinarySearch(shas, replaceCommitSHA)
+		if found {
+			shas[insertAt] = commitSHA
+		} else {
+			shas = append(shas, commitSHA)
+		}
+	} else {
+		LogDebugf("Updating remote state for %v to mark %v as pushed", remoteName, commitSHA)
+		shas = append(shas, commitSHA)
+	}
+	sort.Strings(shas)
+	return WritePushedState(remoteName, shas)
 }
 
 // Overwrite entire pushed state for a remote
@@ -414,9 +387,9 @@ func WritePushedState(remoteName string, shas []string) error {
 	filename := getRemoteStateCacheFile(remoteName)
 	// we just write the whole thing, sorted
 	sort.Strings(shas)
-	f, err := os.OpenFile(filename, os.O_EXCL|os.O_WRONLY|os.O_TRUNC, 0644)
+	f, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
-		return errors.New(fmt.Sprintf("Unable to write cache file %v:", filename, err.Error()))
+		return errors.New(fmt.Sprintf("Unable to write cache file %v: %v", filename, err.Error()))
 	}
 	for _, sha := range shas {
 		// Have to re-insert the line break
