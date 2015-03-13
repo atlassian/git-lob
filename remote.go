@@ -351,7 +351,7 @@ func MarkAllBinariesPushed(remoteName string) error {
 
 // Record that binaries have been pushed to a given remote at a commit
 // replaceCommitSHA can be blank, but if provided will replace a previously inserted SHA
-// for an ancestor instead of adding this SHA to the list (to be potentially optimised out)
+// If you use replaceCommitSHA, it MUST BE an ancestor of commitSHA
 func MarkBinariesAsPushed(remoteName, commitSHA, replaceCommitSHA string) error {
 	if !GitRefIsFullSHA(commitSHA) {
 		return fmt.Errorf("Invalid commit SHA, must be full 40 char SHA, not '%v'", commitSHA)
@@ -437,7 +437,7 @@ func GetPushedCommits(remoteName string) []string {
 // As we add SHAs that are pushed we can create redundant records because some SHAs are
 // parents of others. This makes the subsequent retrieval of commits to push slower
 // So remove SHAs that are ancestors of others and just keep the later SHAs that are pushed
-func cleanupPushState(remoteName string) {
+func CleanupPushState(remoteName string) {
 	pushed := GetPushedCommits(remoteName)
 
 	consolidated := consolidateCommitsToLatestDescendants(pushed)

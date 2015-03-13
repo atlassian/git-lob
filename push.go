@@ -489,11 +489,25 @@ func Push(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dryR
 					// Sync provider will avoid any duplicate uploads anyway.
 				}
 				if !commit.Incomplete && !previousCommitIncomplete {
-					// replace the previous commit SHA we marked as pushed each time, for this ref
+					// replace the previous commit SHA we marked as pushed each time, IF it was the direct parent
+					// it's important not to just replace all because where there are merges even --topo-order will
+					// walk through multiple threads of development in parallel, the only constraint is that ancestors
+					// are always seen before descendants. Replacing a SHA in a parallel stream would give an incorrect
+					// result if the merge wasn't finished. Although the worst case is that the other stream would
+					// think it's not pushed, worth avoiding.
+					// If we end up adding extra SHAs in this case, they'll get tidied up in CleanupPushState at end
 					// avoids having to consolidate tons of commits later & means we generally store
 					// one pushed SHA per ref, before consolidation
+					replaceSHA := ""
+					isancestor, err := GitIsAncestor(previousCommitSHA, commit.CommitSHA)
+					if err != nil {
+						return err
+					}
+					if isancestor {
+						replaceSHA = previousCommitSHA
+					}
 					// This writes data to disk every time and that's fine, for robustness & interruptability
-					err = MarkBinariesAsPushed(remoteName, commit.CommitSHA, previousCommitSHA)
+					err = MarkBinariesAsPushed(remoteName, commit.CommitSHA, replaceSHA)
 					if err != nil {
 						// Stop at commit we can't mark, order is important
 						return err
@@ -501,6 +515,9 @@ func Push(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dryR
 					previousCommitSHA = commit.CommitSHA
 				}
 			}
+			// now perform cleanup of the push state to ensure we simplify it
+			// do this per ref so that subsequent refs have a simpler git log call
+			CleanupPushState(remoteName)
 		}
 
 		if anyIncomplete {

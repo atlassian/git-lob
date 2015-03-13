@@ -81,6 +81,10 @@ type CommitLOBRef struct {
 	lobSHAs []string
 }
 
+func (self *CommitLOBRef) String() string {
+	return fmt.Sprintf("Commit: %v\n  Files:%v\n", self.commit, self.lobSHAs)
+}
+
 // Walk first parents starting from startSHA and call callback
 // First call will be startSHA & its parent
 // Parent will be blank string if there are no more parents & walk will stop after
