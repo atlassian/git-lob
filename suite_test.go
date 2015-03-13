@@ -467,11 +467,12 @@ func SetupRepoForTest(inputs []*TestCommitSetupInput) []*CommitLOBRef {
 		} else {
 			CommitAtDateForTest(input.CommitDate, fmt.Sprintf("Test commit %d", i))
 		}
-		commit, err := GitRefToFullSHA("HEAD")
+		commit, err := GetGitCommitSummary("HEAD")
 		if err != nil {
 			Fail("Error determining commit SHA: " + err.Error())
 		}
-		output.commit = commit
+		output.commit = commit.SHA
+		output.parents = commit.Parents
 		outputs = append(outputs, output)
 	}
 	return outputs

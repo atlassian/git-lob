@@ -77,6 +77,7 @@ func (r *GitRefSpec) String() string {
 // A record of a set of LOB shas that are associated with a commit
 type CommitLOBRef struct {
 	commit  string
+	parents []string
 	lobSHAs []string
 }
 
@@ -214,7 +215,7 @@ func walkGitLogOutputForLOBReferences(outp io.Reader, additions, removals bool,
 	// Sadly we still get more output than we actually need, but this is the minimum we can get
 	// For each commit we'll get something like this:
 	/*
-	   COMMITSHA:af2607421c9fee2e430cde7e7073a7dad07be559 22be911a626eb9cf2e2760b1b8b092441771cb9d
+	   commitsha: af2607421c9fee2e430cde7e7073a7dad07be559 22be911a626eb9cf2e2760b1b8b092441771cb9d
 
 	   diff --git a/atheneNormalMap.png b/atheneNormalMap.png
 	   new file mode 100644
@@ -240,7 +241,7 @@ func walkGitLogOutputForLOBReferences(outp io.Reader, additions, removals bool,
 	}
 	fileHeaderRegex := regexp.MustCompile(`diff --git a\/(.+?)\s+b\/(.+)`)
 	fileMergeHeaderRegex := regexp.MustCompile(`diff --cc (.+)`)
-	commitHeaderRegex := regexp.MustCompile(`^commitsha: ([A-Fa-f0-9]{40}) ([A-Fa-f0-9]{40})?`)
+	commitHeaderRegex := regexp.MustCompile(`^commitsha: ([A-Fa-f0-9]{40})(?: ([A-Fa-f0-9]{40}))*`)
 
 	scanner := bufio.NewScanner(outp)
 
@@ -252,6 +253,7 @@ func walkGitLogOutputForLOBReferences(outp io.Reader, additions, removals bool,
 		if match := commitHeaderRegex.FindStringSubmatch(line); match != nil {
 			// Commit header
 			sha := match[1]
+			parentSHAs := match[2:]
 			// Set commit context
 			if currentCommit != nil {
 				if len(currentCommit.lobSHAs) > 0 {
@@ -264,7 +266,7 @@ func walkGitLogOutputForLOBReferences(outp io.Reader, additions, removals bool,
 				}
 				currentCommit = nil
 			}
-			currentCommit = &CommitLOBRef{commit: sha}
+			currentCommit = &CommitLOBRef{commit: sha, parents: parentSHAs}
 		} else if match := fileHeaderRegex.FindStringSubmatch(line); match != nil {
 			// Finding a regular file header
 			// Pertinent file name depends on whether we're listening to additions or removals
@@ -926,7 +928,7 @@ func FormatGitDate(t time.Time) string {
 // Get summary information about a commit
 func GetGitCommitSummary(commit string) (*GitCommitSummary, error) {
 	cmd := exec.Command("git", "show", "-s",
-		`--format=%H|%h|%ai|%ci|%ae|%an|%ce|%cn|%s`, commit)
+		`--format=%H|%h|%P|%ai|%ci|%ae|%an|%ce|%cn|%s`, commit)
 
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -934,23 +936,24 @@ func GetGitCommitSummary(commit string) (*GitCommitSummary, error) {
 		return nil, errors.New(msg)
 	}
 
-	// At most 9 substrings so subject line is not split on anything
-	fields := strings.SplitN(string(out), "|", 9)
+	// At most 10 substrings so subject line is not split on anything
+	fields := strings.SplitN(string(out), "|", 10)
 	// Cope with the case where subject is blank
-	if len(fields) >= 8 {
+	if len(fields) >= 9 {
 		ret := &GitCommitSummary{}
 		// Get SHAs from output, not commit input, so we can support symbolic refs
 		ret.SHA = fields[0]
 		ret.ShortSHA = fields[1]
+		ret.Parents = strings.Split(fields[2], " ")
 		// %aD & %cD (RFC2822) matches Go's RFC1123Z format
-		ret.AuthorDate, _ = ParseGitDate(fields[2])
-		ret.CommitDate, _ = ParseGitDate(fields[3])
-		ret.AuthorEmail = fields[4]
-		ret.AuthorName = fields[5]
-		ret.CommitterEmail = fields[6]
-		ret.CommitterName = fields[7]
-		if len(fields) > 8 {
-			ret.Subject = strings.TrimRight(fields[8], "\n")
+		ret.AuthorDate, _ = ParseGitDate(fields[3])
+		ret.CommitDate, _ = ParseGitDate(fields[4])
+		ret.AuthorEmail = fields[5]
+		ret.AuthorName = fields[6]
+		ret.CommitterEmail = fields[7]
+		ret.CommitterName = fields[8]
+		if len(fields) > 9 {
+			ret.Subject = strings.TrimRight(fields[9], "\n")
 		}
 		return ret, nil
 	} else {
