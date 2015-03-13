@@ -295,75 +295,6 @@ func getRemoteStateCacheFile(remoteName string) string {
 	return file
 }
 
-// Based on local cached state, should we try to push binaries for a given commit?
-func ShouldPushBinariesForCommit_REMOVE(remoteName, commitSHA string) bool {
-	filename := getRemoteStateCacheFileForCommit(remoteName, commitSHA)
-	f, err := os.OpenFile(filename, os.O_RDONLY, 0644)
-	if err != nil {
-		// File missing
-		return true
-	}
-	defer f.Close()
-	// Read entire file into memory and binary search
-	// Will already be sorted
-	scanner := bufio.NewScanner(f)
-	var lines []string
-	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
-	}
-	found, _ := StringBinarySearch(lines, commitSHA)
-	return !found
-}
-
-// Update local cache to say that we believe we've updated the named remote at this commit
-func recordRemoteBinariesUpToDateAtCommit_REMOVE(remoteName, commitSHA string) (alreadyMarked bool, err error) {
-	filename := getRemoteStateCacheFileForCommit(remoteName, commitSHA)
-	f, err := os.OpenFile(filename, os.O_EXCL|os.O_RDWR, 0644)
-	if err != nil {
-		// File did not exist, just write single line
-		// For consistency in sizing, always include \n
-		LogDebugf("Created new remote state cache file %v to mark %v as pushed\n", filename, commitSHA)
-		return false, ioutil.WriteFile(filename, []byte(commitSHA+"\n"), 0644)
-	} else {
-		defer f.Close()
-
-		// File is sorted, could in theory read & insert but almost certainly faster
-		// to read all, insert in memory then rewrite out in bulk. We've split on
-		// first 15 chars of SHA anyway, unlikely to be huge contention
-		scanner := bufio.NewScanner(f)
-		var shas []string
-		for scanner.Scan() {
-			shas = append(shas, scanner.Text())
-		}
-
-		found, insertAt := StringBinarySearch(shas, commitSHA)
-
-		if !found {
-			// Rather than spend the time inserting in shas, just re-write from after insertion
-			// Line length is the 40 char SHA plus (Unix) newline
-			lineLen := SHALen + 1
-			seekTo := int64(lineLen * insertAt)
-			_, err = f.Seek(seekTo, os.SEEK_SET)
-			if err != nil {
-				return false, errors.New(fmt.Sprintf("Unable to seek to %v in %v", seekTo, filename))
-			}
-			// Insert the new entry
-			f.WriteString(commitSHA + "\n")
-			// Now write all the entries after that (we'll stay sorted)
-			for i := insertAt; i < len(shas); i++ {
-				// Have to re-insert the line break
-				f.WriteString(shas[i] + "\n")
-			}
-			LogDebugf("Updated remote state cache file %v to mark %v as pushed", filename, commitSHA)
-
-			return false, nil
-		}
-
-		// Was already recorded
-		return true, nil
-	}
-}
-
 // Initialise the 'pushed' markers for all recent commits, if we can be sure we can do it
 // Most common case: just after clone
 func InitSuccessfullyPushedCacheIfAppropriate() {
@@ -575,41 +506,6 @@ func consolidateCommitsToLatestDescendants(in []string) []string {
 	}
 	return consolidated
 
-}
-
-// Say that we've successfully pushed binaries for a remote at a commit (and all ancestors)
-func SuccessfullyPushedBinariesForCommit_REMOVE(remoteName, commitSHA string) error {
-
-	if !GitRefIsFullSHA(commitSHA) {
-		return fmt.Errorf("Invalid commit SHA, must be full 40 char SHA, not '%v'", commitSHA)
-	}
-
-	alreadyMarked, err := recordRemoteBinariesUpToDateAtCommit_REMOVE(remoteName, commitSHA)
-	if err != nil {
-		return err
-	}
-	// Check ancestors (stop at first commit already marked, transitive)
-	// Retrieve them in bulk so we don't have to issue a git call for every one
-
-	// Limit how far we go back for this though; we go back so if someone branches
-	// at an old commit we still know which range of commits we need to search for
-	// new binaries, but we don't want to waste time going back forever
-	const historyLimit = 500
-
-	// Start with first parent
-	parent := commitSHA + "^"
-	ancestorCount := 0
-	err = WalkGitHistory(parent, func(currentSHA, parentSHA string) (bool, error) {
-		alreadyMarked, err = recordRemoteBinariesUpToDateAtCommit_REMOVE(remoteName, currentSHA)
-		if err != nil {
-			// quit
-			return true, err
-		}
-		ancestorCount++
-		// stop if we've hit a marked SHA or history limit
-		return alreadyMarked || ancestorCount >= historyLimit, nil
-	})
-	return err
 }
 
 // Reset the cached information about which binaries we have cached for a given remote

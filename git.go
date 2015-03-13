@@ -130,43 +130,80 @@ func WalkGitHistory(startSHA string, callback func(currentSHA, parentSHA string)
 	return callbackError
 }
 
+// Walk forwards through a list of commits with LOB references based on refspec
+// If refspec is a range, walks that specific range of commits regardless of whether it's been pushed
+// If not, walks forwards from the oldest ancestor of refspec.Ref1 that's not pushed to the latest commit (including 'ref' if it includes LOBs)
+// Walks all ancestors including second+ parents, in topological order
+// remoteName can be a specific remote or "*" to count pushed ton *any* remote as OK
+// If recheck=true then existing pushed records are ignored (all commits are walked)
+func WalkGitCommitLOBsToPushForRefSpec(remoteName string, refspec *GitRefSpec, recheck bool, callback func(commitLOB *CommitLOBRef) (quit bool, err error)) error {
+	if refspec.IsRange() {
+		// Walk a specific range
+		return walkGitCommitsReferencingLOBsInRange(refspec.Ref1, refspec.Ref2, true, false, []string{}, []string{}, callback)
+
+	} else {
+		// Walk everything that hasn't been pushed before Ref1
+		return WalkGitCommitLOBsToPush(remoteName, refspec.Ref1, recheck, callback)
+	}
+}
+
 // Walk a list of commits with LOB references which are ancestors of 'ref' which have not been pushed
 // Walks forwards from the oldest commit to the latest commit (including 'ref' if it includes LOBs)
 // Walks all ancestors including second+ parents, in topological order
 // remoteName can be a specific remote or "*" to count pushed ton *any* remote as OK
-func WalkGitCommitLOBsToPush(remoteName, ref string, callback func(commitLOB *CommitLOBRef) (quit bool, err error)) error {
+func WalkGitCommitLOBsToPush(remoteName, ref string, recheck bool, callback func(commitLOB *CommitLOBRef) (quit bool, err error)) error {
 	// We use git's ability to log all new commits up to ref but exclude any ancestors of pushed
-	pushedSHAs := GetPushedCommits(remoteName)
-	args := []string{"log", `--format=commitsha: %H %P`, "-p",
-		"--topo-order",
-		"--reverse",
-		"-G", SHALineRegex,
-		ref}
-
-	for _, p := range pushedSHAs {
-		// 'not reachable from pushed commits'
-		args = append(args, fmt.Sprintf("^%v", p))
+	var pushedSHAs []string
+	// If rechecking, then we just log the whole thing
+	if !recheck {
+		pushedSHAs := GetPushedCommits(remoteName)
 	}
+	// Loop to allow retry
+	for {
+		args := []string{"log", `--format=commitsha: %H %P`, "-p",
+			"--topo-order",
+			"--reverse",
+			"-G", SHALineRegex,
+			ref}
 
-	// format as <SHA> <PARENT> so we progressively work backward
-	cmd := exec.Command("git", args...)
+		for _, p := range pushedSHAs {
+			// 'not reachable from pushed commits'
+			args = append(args, fmt.Sprintf("^%v", p))
+		}
 
-	outp, err := cmd.StdoutPipe()
-	if err != nil {
-		return errors.New(fmt.Sprintf("Unable to list commits from %v: %v", ref, err.Error()))
+		// format as <SHA> <PARENT> so we progressively work backward
+		cmd := exec.Command("git", args...)
+
+		outp, err := cmd.StdoutPipe()
+		if err != nil {
+			if len(pushedSHAs) > 0 {
+				// This can happen because one of the pushedSHAs has been completely removed from the repo
+				// consolidate SHAs and try again, this deletes any non-existent SHAs
+				consolidated := consolidateCommitsToLatestDescendants(pushedSHAs)
+				if len(consolidated) != len(pushedSHAs) {
+					// Store the refined state
+					WritePushedState(remoteName, consolidated)
+					pushedSHAs = consolidated
+					// retry
+					continue
+				}
+			}
+			return errors.New(fmt.Sprintf("Unable to list commits from %v: %v", ref, err.Error()))
+		}
+		cmd.Start()
+
+		quit, err := walkGitLogOutputForLOBReferences(outp, true, false, []string{}, []string{}, callback)
+
+		if quit || err != nil {
+			// Early abort
+			cmd.Process.Kill()
+		}
+
+		cmd.Wait()
+
+		return err
+
 	}
-	cmd.Start()
-
-	quit, err := walkGitLogOutputForLOBReferences(outp, true, false, []string{}, []string{}, callback)
-
-	if quit || err != nil {
-		// Early abort
-		cmd.Process.Kill()
-	}
-
-	cmd.Wait()
-
-	return err
 }
 
 // Internal utility for walking git-log output for git-lob references & calling callback
@@ -600,6 +637,20 @@ func GetGitCommitsReferencingLOBsInRange(from, to string, includePaths, excludeP
 // Range is exclusive of 'from' and inclusive of 'to'
 // additions/removals controls whether we report only diffs with '+' lines of git-lob, '-' lines, or both
 func getGitCommitsReferencingLOBsInRange(from, to string, additions, removals bool, includePaths, excludePaths []string) ([]*CommitLOBRef, error) {
+	var ret []*CommitLOBRef
+	callback := func(commit *CommitLOBRef) (quit bool, err error) {
+		ret = append(ret, commit)
+		return false, nil
+	}
+	err := walkGitCommitsReferencingLOBsInRange(from, to, additions, removals, includePaths, excludePaths, callback)
+	return ret, err
+}
+
+// Walks a list of commits in ascending order which have LOB SHAs referenced in them, in a given commit range
+// Range is exclusive of 'from' and inclusive of 'to'
+// additions/removals controls whether we report only diffs with '+' lines of git-lob, '-' lines, or both
+func walkGitCommitsReferencingLOBsInRange(from, to string, additions, removals bool, includePaths, excludePaths []string,
+	callback func(commit *CommitLOBRef) (quit bool, err error)) error {
 
 	args := []string{"log", `--format=commitsha: %H %P`, "-p",
 		"--topo-order", "--first-parent",
@@ -620,20 +671,15 @@ func getGitCommitsReferencingLOBsInRange(from, to string, additions, removals bo
 	cmd := exec.Command("git", args...)
 	outp, err := cmd.StdoutPipe()
 	if err != nil {
-		return []*CommitLOBRef{}, errors.New(fmt.Sprintf("Unable to call git-log: %v", err.Error()))
+		return errors.New(fmt.Sprintf("Unable to call git-log: %v", err.Error()))
 	}
 	cmd.Start()
 
-	var ret []*CommitLOBRef
-	callback := func(commitLOB *CommitLOBRef) (quit bool, err error) {
-		ret = append(ret, commitLOB)
-		return false, nil
-	}
-	walkGitLogOutputForLOBReferences(outp, additions, removals, includePaths, excludePaths, callback)
+	_, err = walkGitLogOutputForLOBReferences(outp, additions, removals, includePaths, excludePaths, callback)
 
 	cmd.Wait()
 
-	return ret, nil
+	return err
 
 }
 

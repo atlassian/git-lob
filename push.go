@@ -274,102 +274,107 @@ func Push(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dryR
 
 	LogDebugf("Pushing to %v via %v\n", remoteName, provider.TypeID())
 
-	// First, build up details of what it is we need to push so we can estimate %
-	var allCommitsSize int64
-	var commitsToPush []*PushCommitContentDetails
-	var anyIncomplete bool
 	// for use when --force used
 	filesUploaded := NewStringSet()
 	for i, refspec := range refspecs {
+		// We now perform a complete push per refspec before proceeding to the nex
+		// estimates & progress is measured within the refspec
+		// This is how we mark pushed anyway, more consistent than trying to do for all refspecs in 1
+		var refCommitsToPush []*PushCommitContentDetails
+		var anyIncomplete bool
+
 		if GlobalOptions.Verbose {
 			callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf("Calculating data to push for %v", refspec),
 				int64(i), int64(len(refspecs)), 0, 0})
 		}
-		refcommits, err := GetCommitLOBsToPushForRefSpec(remoteName, refspec, recheck)
+
+		var refCommitsSize int64
+
+		// First we walk the commits to push & build up a picture of size etc
+		walkFunc := func(commit *CommitLOBRef) (quit bool, err error) {
+			filenames, basedir, totalSize, err := GetLOBFilenamesWithBaseDir(commit.lobSHAs, true)
+			commitIncomplete := false
+			if err != nil {
+				var problemSHAs []string
+				switch errSpec := err.(type) {
+				case *NotFoundForSHAsError:
+					problemSHAs = errSpec.SHAsNotFound
+				case *IntegrityError:
+					return true, err
+				default:
+					return true, err
+				}
+				// If we got here it means one or more sets of files for SHAs were not available or were bad locally
+				// We still want to push the rest though, we want to be tolerant of partial data
+
+				// This MAY be ok to still mark as pushed - the commits may have come from someone else,
+				// and may just be outside of our fetch range. If all the missing ones are already present
+				// on the remote then we're OK
+
+				// Check the remote for the presence of missing SHA data
+				remoteHasOurMissingSHAs := true
+				for _, sha := range problemSHAs {
+					remoteerr := CheckRemoteLOBFilesForSHA(sha, provider, remoteName)
+					if remoteerr != nil {
+						// Damn, missing
+						LogDebug(fmt.Sprintf("Commit %v locally missing %v, not on remote: %v", commit.commit[:7], sha, remoteerr.Error()))
+						remoteHasOurMissingSHAs = false
+						break
+					}
+				}
+
+				if !remoteHasOurMissingSHAs {
+					// Genuinely incomplete data in this commit that isn't present on remote
+					// We can't mark this (or following) commits as pushed, but we still want to
+					// push everything we can
+					commitIncomplete = true
+					anyIncomplete = true
+					LogDebug(fmt.Sprintf("Some content for commit %v is missing & not on remote already", commit.commit[:7]))
+					callback(&ProgressCallbackData{ProgressNotFound, fmt.Sprintf("data for commit %v", commit.commit[:7]),
+						int64(i + 1), int64(len(refspecs)), 0, 0})
+				}
+				// If we DID manage to find the missing data on the remote though, we treat this as
+				// being able to push everything
+			}
+
+			refCommitsToPush = append(refCommitsToPush, &PushCommitContentDetails{
+				CommitSHA:  commit.commit,
+				Files:      filenames,
+				BaseDir:    basedir,
+				TotalBytes: totalSize,
+				Incomplete: commitIncomplete})
+
+			refCommitsSize += totalSize
+
+			return false, nil
+		}
+
+		err := WalkGitCommitLOBsToPushForRefSpec(remoteName, refspec, recheck, walkFunc)
 		if err != nil {
 			return err
 		}
 
-		var refCommitsSize int64
-
-		if len(refcommits) == 0 {
+		if len(refCommitsToPush) == 0 {
 			callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf(" * %v: Nothing to push", refspec),
 				int64(i), int64(len(refspecs)), 0, 0})
 			// if nothing to push, then mark this ref as pushed to make querying faster next time
-			if !dryRun {
-				var commitSHA string
-				var err error
-				if refspec.IsRange() {
-					commitSHA, err = GitRefToFullSHA(refspec.Ref2)
-				} else {
-					commitSHA, err = GitRefToFullSHA(refspec.Ref1)
-				}
+			// Only for normal ref where we've checked for all ancestors to be pushed, not a manual range
+			if !dryRun && !refspec.IsRange() {
+				commitSHA, err := GitRefToFullSHA(refspec.Ref1)
 				if err != nil {
 					return err
 				}
-				SuccessfullyPushedBinariesForCommit_REMOVE(remoteName, commitSHA)
+				err = MarkBinariesAsPushed(remoteName, commitSHA, "")
+				if err != nil {
+					return err
+				}
+
 			}
 
 		} else {
-			for _, commit := range refcommits {
-				filenames, basedir, totalSize, err := GetLOBFilenamesWithBaseDir(commit.lobSHAs, true)
-				commitIncomplete := false
-				if err != nil {
-					var problemSHAs []string
-					switch errSpec := err.(type) {
-					case *NotFoundForSHAsError:
-						problemSHAs = errSpec.SHAsNotFound
-					case *IntegrityError:
-						return err
-					default:
-						return err
-					}
-					// If we got here it means one or more sets of files for SHAs were not available or were bad locally
-					// We still want to push the rest though, we want to be tolerant of partial data
-
-					// This MAY be ok to still mark as pushed - the commits may have come from someone else,
-					// and may just be outside of our fetch range. If all the missing ones are already present
-					// on the remote then we're OK
-
-					// Check the remote for the presence of missing SHA data
-					remoteHasOurMissingSHAs := true
-					for _, sha := range problemSHAs {
-						remoteerr := CheckRemoteLOBFilesForSHA(sha, provider, remoteName)
-						if remoteerr != nil {
-							// Damn, missing
-							LogDebug(fmt.Sprintf("Commit %v locally missing %v, not on remote: %v", commit.commit[:7], sha, remoteerr.Error()))
-							remoteHasOurMissingSHAs = false
-							break
-						}
-					}
-
-					if !remoteHasOurMissingSHAs {
-						// Genuinely incomplete data in this commit that isn't present on remote
-						// We can't mark this (or following) commits as pushed, but we still want to
-						// push everything we can
-						commitIncomplete = true
-						anyIncomplete = true
-						LogDebug(fmt.Sprintf("Some content for commit %v is missing & not on remote already", commit.commit[:7]))
-						callback(&ProgressCallbackData{ProgressNotFound, fmt.Sprintf("data for commit %v", commit.commit[:7]),
-							int64(i + 1), int64(len(refspecs)), 0, 0})
-					}
-					// If we DID manage to find the missing data on the remote though, we treat this as
-					// being able to push everything
-				}
-
-				commitsToPush = append(commitsToPush, &PushCommitContentDetails{
-					CommitSHA:  commit.commit,
-					Files:      filenames,
-					BaseDir:    basedir,
-					TotalBytes: totalSize,
-					Incomplete: commitIncomplete})
-
-				refCommitsSize += totalSize
-				allCommitsSize += totalSize
-			}
 			if refCommitsSize > 0 {
 				callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf(" * %v: %d commits with %v to push (if not already on remote)",
-					refspec, len(refcommits), FormatSize(refCommitsSize)), int64(i + 1), int64(len(refspecs)), 0, 0})
+					refspec, len(refCommitsToPush), FormatSize(refCommitsSize)), int64(i + 1), int64(len(refspecs)), 0, 0})
 			} else {
 				callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf(" * %v: Nothing to push, remote is up to date", refspec),
 					int64(i + 1), int64(len(refspecs)), 0, 0})
@@ -379,126 +384,131 @@ func Push(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dryR
 			callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf("Finished calculating data to push for %v", refspec),
 				int64(i + 1), int64(len(refspecs)), 0, 0})
 		}
-	}
 
-	if !dryRun && len(commitsToPush) > 0 {
-		filesdone := 0
+		if !dryRun && len(refCommitsToPush) > 0 {
+			filesdone := 0
 
-		// Even if allCommitsSize == 0 we still skim through marking them as pushed (must have been that data was on remote)
-		if allCommitsSize > 0 {
-			callback(&ProgressCallbackData{ProgressCalculate,
-				fmt.Sprintf("Uploading up to %v to %v via %v", FormatSize(allCommitsSize), remoteName, provider.TypeID()),
-				0, 0, 0, 0})
-		}
-
-		var bytesFromFilesDoneSoFar int64
-		previousCommitIncomplete := false
-		for _, commit := range commitsToPush {
-			// Upload now
-			var lastFilename string
-			var lastFileBytes int64
-			localcallback := func(fileInProgress string, progressType ProgressCallbackType, bytesDone, totalBytes int64) (abort bool) {
-				if lastFilename != fileInProgress {
-					// New file, always callback
-					if lastFilename != "" {
-						// we obviously never got a 100% call for previous file
-						filesdone++
-						bytesFromFilesDoneSoFar += lastFileBytes
-						callback(&ProgressCallbackData{ProgressTransferBytes, lastFilename, lastFileBytes, lastFileBytes,
-							bytesFromFilesDoneSoFar, allCommitsSize})
-						lastFilename = ""
-					}
-					if progressType == ProgressSkip || progressType == ProgressNotFound {
-						// 'not found' will have caused an error earlier anyway so just pass through
-						filesdone++
-						bytesFromFilesDoneSoFar += totalBytes
-						callback(&ProgressCallbackData{progressType, fileInProgress, totalBytes, totalBytes,
-							bytesFromFilesDoneSoFar, allCommitsSize})
-					} else {
-						// Start new file
-						callback(&ProgressCallbackData{ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
-							bytesFromFilesDoneSoFar + bytesDone, allCommitsSize})
-						lastFilename = fileInProgress
-						lastFileBytes = totalBytes
-					}
-				} else {
-					if bytesDone == totalBytes {
-						// finished
-						filesdone++
-						bytesFromFilesDoneSoFar += totalBytes
-						callback(&ProgressCallbackData{ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
-							bytesFromFilesDoneSoFar, allCommitsSize})
-						lastFilename = ""
-					} else {
-						// Otherwise this is a progress callback
-						return callback(&ProgressCallbackData{ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
-							bytesFromFilesDoneSoFar + bytesDone, allCommitsSize})
-					}
-				}
-				return false
+			// Even if size == 0 we still skim through marking them as pushed (must have been that data was on remote)
+			if refCommitsSize > 0 {
+				callback(&ProgressCallbackData{ProgressCalculate,
+					fmt.Sprintf("Uploading up to %v to %v via %v", FormatSize(refCommitsSize), remoteName, provider.TypeID()),
+					0, 0, 0, 0})
 			}
-			var err error
-			if force {
-				// We can end up duplicating uploads when in force mode because the underlying provider will not
-				// stop the upload in force mode if it's already there. So instead, make sure we only upload each
-				// file at most once
-				commitFilesSet := NewStringSetFromSlice(commit.Files)
-				newFilesSet := commitFilesSet.Difference(filesUploaded)
-				if len(newFilesSet) > 0 {
-					newFiles := make([]string, 0, len(newFilesSet))
-					for f := range newFilesSet {
-						newFiles = append(newFiles, f)
-					}
-					err = provider.Upload(remoteName, newFiles, commit.BaseDir, force, localcallback)
-					if err == nil {
-						for f := range newFilesSet {
-							filesUploaded.Add(f)
+
+			var bytesFromFilesDoneSoFar int64
+			previousCommitIncomplete := false
+			previousCommitSHA := ""
+			for _, commit := range refCommitsToPush {
+				// Upload now
+				var lastFilename string
+				var lastFileBytes int64
+				localcallback := func(fileInProgress string, progressType ProgressCallbackType, bytesDone, totalBytes int64) (abort bool) {
+					if lastFilename != fileInProgress {
+						// New file, always callback
+						if lastFilename != "" {
+							// we obviously never got a 100% call for previous file
+							filesdone++
+							bytesFromFilesDoneSoFar += lastFileBytes
+							callback(&ProgressCallbackData{ProgressTransferBytes, lastFilename, lastFileBytes, lastFileBytes,
+								bytesFromFilesDoneSoFar, refCommitsSize})
+							lastFilename = ""
+						}
+						if progressType == ProgressSkip || progressType == ProgressNotFound {
+							// 'not found' will have caused an error earlier anyway so just pass through
+							filesdone++
+							bytesFromFilesDoneSoFar += totalBytes
+							callback(&ProgressCallbackData{progressType, fileInProgress, totalBytes, totalBytes,
+								bytesFromFilesDoneSoFar, refCommitsSize})
+						} else {
+							// Start new file
+							callback(&ProgressCallbackData{ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
+								bytesFromFilesDoneSoFar + bytesDone, refCommitsSize})
+							lastFilename = fileInProgress
+							lastFileBytes = totalBytes
+						}
+					} else {
+						if bytesDone == totalBytes {
+							// finished
+							filesdone++
+							bytesFromFilesDoneSoFar += totalBytes
+							callback(&ProgressCallbackData{ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
+								bytesFromFilesDoneSoFar, refCommitsSize})
+							lastFilename = ""
+						} else {
+							// Otherwise this is a progress callback
+							return callback(&ProgressCallbackData{ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
+								bytesFromFilesDoneSoFar + bytesDone, refCommitsSize})
 						}
 					}
+					return false
 				}
-			} else {
-				// It IS possible to have a commit here with no files to upload. E.g. missing data locally (see above)
-				// which was present on remote. We still include it in the commit list for completeness
-				if len(commit.Files) > 0 {
-					err = provider.Upload(remoteName, commit.Files, commit.BaseDir, force, localcallback)
+				var err error
+				if force {
+					// We can end up duplicating uploads when in force mode because the underlying provider will not
+					// stop the upload in force mode if it's already there. So instead, make sure we only upload each
+					// file at most once
+					commitFilesSet := NewStringSetFromSlice(commit.Files)
+					newFilesSet := commitFilesSet.Difference(filesUploaded)
+					if len(newFilesSet) > 0 {
+						newFiles := make([]string, 0, len(newFilesSet))
+						for f := range newFilesSet {
+							newFiles = append(newFiles, f)
+						}
+						err = provider.Upload(remoteName, newFiles, commit.BaseDir, force, localcallback)
+						if err == nil {
+							for f := range newFilesSet {
+								filesUploaded.Add(f)
+							}
+						}
+					}
+				} else {
+					// It IS possible to have a commit here with no files to upload. E.g. missing data locally (see above)
+					// which was present on remote. We still include it in the commit list for completeness
+					if len(commit.Files) > 0 {
+						err = provider.Upload(remoteName, commit.Files, commit.BaseDir, force, localcallback)
+					}
 				}
-			}
-			if err != nil {
-				// Stop at commit we can't upload
-				return err
-			}
-			if lastFilename != "" {
-				// We obviously never got a 100% progress update from the last file
-				bytesFromFilesDoneSoFar += lastFileBytes
-				callback(&ProgressCallbackData{ProgressTransferBytes, lastFilename, lastFileBytes, lastFileBytes,
-					bytesFromFilesDoneSoFar, allCommitsSize})
-				lastFilename = ""
-			}
-			// Otherwise mark commit as pushed IF complete
-			if commit.Incomplete {
-				previousCommitIncomplete = true
-				// Any subsequent commits will also not be marked as pushed so we always go back to the incomplete commit
-				// until this is resolved. Our commits are in ancestor order.
-				// note that in the case of multiple refs is also means other following commits aren't marked as complete either
-				// this will result in longer than necessary calculations in subsequent pushes, but better to be safe.
-				// Sync provider will avoid any duplicate uploads anyway.
-			}
-			if !commit.Incomplete && !previousCommitIncomplete {
-				err = SuccessfullyPushedBinariesForCommit_REMOVE(remoteName, commit.CommitSHA)
 				if err != nil {
-					// Stop at commit we can't mark, order is important
+					// Stop at commit we can't upload
 					return err
+				}
+				if lastFilename != "" {
+					// We obviously never got a 100% progress update from the last file
+					bytesFromFilesDoneSoFar += lastFileBytes
+					callback(&ProgressCallbackData{ProgressTransferBytes, lastFilename, lastFileBytes, lastFileBytes,
+						bytesFromFilesDoneSoFar, refCommitsSize})
+					lastFilename = ""
+				}
+				// Otherwise mark commit as pushed IF complete
+				if commit.Incomplete {
+					previousCommitIncomplete = true
+					// Any subsequent commits will also not be marked as pushed so we always go back to the incomplete commit
+					// until this is resolved. Our commits are in ancestor order.
+					// note that in the case of multiple refs is also means other following commits aren't marked as complete either
+					// this will result in longer than necessary calculations in subsequent pushes, but better to be safe.
+					// Sync provider will avoid any duplicate uploads anyway.
+				}
+				if !commit.Incomplete && !previousCommitIncomplete {
+					// replace the previous commit SHA we marked as pushed each time, for this ref
+					// avoids having to consolidate tons of commits later & means we generally store
+					// one pushed SHA per ref, before consolidation
+					// This writes data to disk every time and that's fine, for robustness & interruptability
+					err = MarkBinariesAsPushed(remoteName, commit.CommitSHA, previousCommitSHA)
+					if err != nil {
+						// Stop at commit we can't mark, order is important
+						return err
+					}
+					previousCommitSHA = commit.CommitSHA
 				}
 			}
 		}
-	}
 
-	if anyIncomplete {
-		LogDebugf("Partial push to %v via %v\n", remoteName, provider.TypeID())
-	} else {
-		LogDebugf("Successfully pushed to %v via %v\n", remoteName, provider.TypeID())
+		if anyIncomplete {
+			LogDebugf("Partial push to %v for %v\n", remoteName, refspec)
+		} else {
+			LogDebugf("Successfully pushed to %v for %v\n", remoteName, refspec)
+		}
 	}
-
 	return nil
 
 }

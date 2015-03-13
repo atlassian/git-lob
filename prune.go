@@ -453,7 +453,7 @@ func PruneOld(dryRun bool, callback PruneCallback) ([]string, error) {
 		}
 
 		// Now walk all unpushed commits referencing LOBs that are earlier than this
-		err = WalkGitCommitLOBsToPush(remoteName, earliestCommit, walkHistoryFunc)
+		err = WalkGitCommitLOBsToPush(remoteName, earliestCommit, false, walkHistoryFunc)
 
 		return nil
 
