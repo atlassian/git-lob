@@ -461,7 +461,17 @@ func consolidateCommitsToLatestDescendants(in []string) []string {
 		redundant := false
 		for j, b := range in {
 			if i == j {
+				// Don't compare to self
 				continue
+			}
+			if a == b {
+				// Duplicate, remove earliest
+				if i < j {
+					redundant = true
+					break
+				} else {
+					continue
+				}
 			}
 			isancestor, err := GitIsAncestor(a, b)
 			if err != nil {
