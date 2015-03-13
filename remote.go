@@ -526,6 +526,20 @@ func GetCommitLOBsToPushForRefSpec(remoteName string, refspec *GitRefSpec, reche
 	return ret, err
 }
 
+// Get a list of commits which have LOB SHAs to push, given a ref, in forward ancestry order
+// Only commits which have LOBs associated will be returned on the assumption that when
+// child commits are marked as pushed it will also mark the parents
+// If the refspec is a single ref, then finds the latest ancestor we think has been pushed already
+// for this remote and returns the LOBs referred to in that range. If recheck is true,
+// ignores the record of the last commit we think we pushed and scans entire history (slow)
+func GetCommitLOBsToPushForRef(remoteName string, ref string, recheck bool) ([]*CommitLOBRef, error) {
+	var ret []*CommitLOBRef
+	callback := func(commit *CommitLOBRef) (quit bool, err error) {
+		ret = append(ret, commit)
+		return false, nil
+	}
+	err := WalkGitCommitLOBsToPush(remoteName, ref, recheck, callback)
+	return ret, err
 }
 
 // Check with a remote provider for the presence of all data required for a given LOB
