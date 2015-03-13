@@ -3,7 +3,6 @@ package main
 import (
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
-	"fmt"
 	"os"
 	"path/filepath"
 	"time"
