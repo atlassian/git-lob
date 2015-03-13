@@ -517,29 +517,14 @@ func FindLatestAncestorWhereBinariesPushed(remoteName, ref string) (string, erro
 // for this remote and returns the LOBs referred to in that range. If recheck is true,
 // ignores the record of the last commit we think we pushed and scans entire history (slow)
 func GetCommitLOBsToPushForRefSpec(remoteName string, refspec *GitRefSpec, recheck bool) ([]*CommitLOBRef, error) {
-	if refspec.IsRange() {
-		// Only need to deal with '..' range operator for push
-		return GetGitCommitsReferencingLOBsInRange(refspec.Ref1, refspec.Ref2, nil, nil)
-
-	} else {
-		// Determine range from last pushed - must be full SHA basis
-		commitSHA, err := GitRefToFullSHA(refspec.Ref1)
-		if err != nil {
-			return []*CommitLOBRef{}, err
-		}
-		if recheck {
-			// Scan for LOBs in entire history
-			return GetGitCommitsReferencingLOBsInRange("", commitSHA, nil, nil)
-		} else {
-			lastPushed, err := FindLatestAncestorWhereBinariesPushed(remoteName, commitSHA)
-			if err != nil {
-				return []*CommitLOBRef{}, err
-			}
-			return GetGitCommitsReferencingLOBsInRange(lastPushed, commitSHA, nil, nil)
-		}
-
+	var ret []*CommitLOBRef
+	callback := func(commit *CommitLOBRef) (quit bool, err error) {
+		ret = append(ret, commit)
+		return false, nil
 	}
-	return []*CommitLOBRef{}, nil
+	err := WalkGitCommitLOBsToPushForRefSpec(remoteName, refspec, recheck, callback)
+	return ret, err
+}
 
 }
 
