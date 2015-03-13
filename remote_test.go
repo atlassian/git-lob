@@ -236,6 +236,59 @@ var _ = Describe("Remote", func() {
 			Expect(commits).To(ConsistOf(getOutputSubset(7, 10)), "Should be correct list to push")
 
 		})
+
+		It("consolidates pushed state", func() {
+			// This time we're just inserting push markers and making sure that they are consolidated correctly
+			remote := "origin"
+			err := MarkBinariesAsPushed(remote, setupOutputs[0].commit, "") // redundant since 4 is descendent
+			Expect(err).To(BeNil())
+			err = MarkBinariesAsPushed(remote, setupOutputs[4].commit, "")
+			Expect(err).To(BeNil())
+			err = MarkBinariesAsPushed(remote, setupOutputs[3].commit, "") // 3 is on a separate branch
+			Expect(err).To(BeNil())
+			CleanupPushState(remote)
+			pushed := GetPushedCommits(remote)
+			Expect(pushed).To(ConsistOf([]string{setupOutputs[4].commit, setupOutputs[3].commit}), "Should still record 2 pushed states")
+
+			err = MarkBinariesAsPushed(remote, setupOutputs[7].commit, "") // on merge path
+			Expect(err).To(BeNil())
+			err = MarkBinariesAsPushed(remote, setupOutputs[8].commit, "") // in parallel on master (overrides 4)
+			Expect(err).To(BeNil())
+			CleanupPushState(remote)
+			pushed = GetPushedCommits(remote)
+			Expect(pushed).To(ConsistOf([]string{setupOutputs[8].commit, setupOutputs[3].commit, setupOutputs[7].commit}),
+				"Should record 3 pushed states; master, hanging and merge path")
+			// Now once we say pushed after merge commit point, should resolve back to 2 again
+			err = MarkBinariesAsPushed(remote, setupOutputs[10].commit, "") // post-merge
+			Expect(err).To(BeNil())
+			CleanupPushState(remote)
+			pushed = GetPushedCommits(remote)
+			Expect(pushed).To(ConsistOf([]string{setupOutputs[10].commit, setupOutputs[3].commit}),
+				"Should be nack to 2 pushed states; master & hanging")
+		})
+
+		It("copes with bad commit SHAs", func() {
+			// Possible tha a SHA in the push list has been orphaned & gc'd so some commands including 'git log' will barf
+			// Make sure that we can recover correctly
+			remote := "origin"
+			// Add valid post-merge push point (hanging is not pushed)
+			err := MarkBinariesAsPushed(remote, setupOutputs[9].commit, "")
+			Expect(err).To(BeNil())
+			// Now add a completely incorrect SHA
+			err = MarkBinariesAsPushed(remote, "1111111111222222222233333333334444444444", "")
+			Expect(err).To(BeNil())
+			// Now let's check that we recover from the inevitable problem
+			commits, err := GetCommitLOBsToPushForRef(remote, "master", false)
+			Expect(err).To(BeNil())
+			// Should report the commits on master/hanging_ahead past 9 which have LOBs
+			Expect(commits).To(ConsistOf(getOutputSubset(10)), "Should correctly identify commits to push after bad SHA")
+			commits, err = GetCommitLOBsToPushForRef(remote, "feature/hanging_ahead", false)
+			Expect(err).To(BeNil())
+			// Should report the commits on master/hanging_ahead past 9 which have LOBs
+			Expect(commits).To(ConsistOf(getOutputSubset(10, 12, 13)), "Should correctly identify commits to push after bad SHA")
+
+		})
+
 	})
 
 })

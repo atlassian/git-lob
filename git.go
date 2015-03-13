@@ -181,6 +181,19 @@ func WalkGitCommitLOBsToPush(remoteName, ref string, recheck bool, callback func
 
 		outp, err := cmd.StdoutPipe()
 		if err != nil {
+			return errors.New(fmt.Sprintf("Unable to list commits from %v: %v", ref, err.Error()))
+		}
+		cmd.Start()
+
+		quit, err := walkGitLogOutputForLOBReferences(outp, true, false, []string{}, []string{}, callback)
+
+		if quit || err != nil {
+			// Early abort
+			cmd.Process.Kill()
+		}
+
+		procerr := cmd.Wait()
+		if procerr != nil {
 			if len(pushedSHAs) > 0 {
 				// This can happen because one of the pushedSHAs has been completely removed from the repo
 				// consolidate SHAs and try again, this deletes any non-existent SHAs
@@ -193,18 +206,7 @@ func WalkGitCommitLOBsToPush(remoteName, ref string, recheck bool, callback func
 					continue
 				}
 			}
-			return errors.New(fmt.Sprintf("Unable to list commits from %v: %v", ref, err.Error()))
 		}
-		cmd.Start()
-
-		quit, err := walkGitLogOutputForLOBReferences(outp, true, false, []string{}, []string{}, callback)
-
-		if quit || err != nil {
-			// Early abort
-			cmd.Process.Kill()
-		}
-
-		cmd.Wait()
 
 		return err
 
