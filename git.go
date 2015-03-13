@@ -156,7 +156,7 @@ func WalkGitCommitLOBsToPush(remoteName, ref string, recheck bool, callback func
 	var pushedSHAs []string
 	// If rechecking, then we just log the whole thing
 	if !recheck {
-		pushedSHAs := GetPushedCommits(remoteName)
+		pushedSHAs = GetPushedCommits(remoteName)
 	}
 	// Loop to allow retry
 	for {
