@@ -24,7 +24,7 @@ var _ = Describe("Prune", func() {
 		root := filepath.Join(os.TempDir(), "PruneOldTest")
 		var oldwd string
 		var setupInputs []*TestCommitSetupInput
-		var setupOutputs []*TestCommitSetupOutput
+		var setupOutputs []*CommitLOBRef
 		BeforeEach(func() {
 			// Just be explicit
 			GlobalOptions = NewOptions()
@@ -122,7 +122,7 @@ var _ = Describe("Prune", func() {
 			}
 			filestoretain := 0
 			for _, out := range setupOutputs {
-				filestoretain += len(out.FileLOBSHAs)
+				filestoretain += len(out.lobSHAs)
 			}
 			//fmt.Println(setupOutputs)
 			deleted, err := PruneOld(false, callback)

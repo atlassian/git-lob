@@ -865,7 +865,7 @@ var _ = Describe("Git", func() {
 				}
 				Expect(lobs).To(ConsistOf(validContents), fmt.Sprintf("Should be valid contents based on filter %v", desc))
 			}
-			shouldHaveCommitsReferencingFiles := func(commits []CommitLOBRef, fileIdxs []int, desc interface{}) {
+			shouldHaveCommitsReferencingFiles := func(commits []*CommitLOBRef, fileIdxs []int, desc interface{}) {
 				// Do a reverse lookup on each LOB SHA mentioned in a commit and make sure it's in the fileIdxs
 				for _, commit := range commits {
 					// Should only be 1 lob in each

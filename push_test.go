@@ -1,9 +1,9 @@
 package main
 
 import (
-	"fmt"
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"

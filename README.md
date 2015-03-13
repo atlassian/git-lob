@@ -42,6 +42,10 @@ So why pick Go as the language for git-lob? I have experience in a lot of langua
 3. It's mature & stable (compared to, say, Rust; at time of writing)
 4. It's fairly easy to learn & contribute (compared to, say, Haskell or even C)
 
+## Prerequisites ##
+
+You must have git 1.8+ installed and on your path. 
+
 ## Installation ##
 ### Install from source ###
 

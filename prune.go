@@ -378,25 +378,17 @@ func PruneOld(dryRun bool, callback PruneCallback) ([]string, error) {
 	// Can't just look at diffs (just like fetch) since LOB changed 3 years ago but still valid = recent
 	retainSet := NewStringSet()
 
-	// When walking history, stop when we visit a commit we've already seen
-	commitsVisited := NewStringSet()
-
 	// Add LOBs to retainSet for this commit and history
-	retainLOBs := func(commit string, days int, notPushedScanOnly bool, remotesToCheck []string) error {
-
-		// Early-out
-		if commitsVisited.Contains(commit) {
-			return nil
-		}
+	retainLOBs := func(commit string, days int, notPushedScanOnly bool, remoteName string) error {
 
 		var err error
 		var earliestCommit string
-		var lsfilesSnapshotDone bool
 		if notPushedScanOnly {
 			// We only want to include lobs from this ref if not pushed
 			earliestCommit = commit
-			// we haven't YET snapshotted the file system using lsfiles (depends on pushed state)
-			lsfilesSnapshotDone = false
+			// we never have to snapshot the file system because we're only interested in
+			// lobs which haven't been pushed. If that's all of them, then we'll eventually
+			// find the original addition of the lob in the history anyway
 		} else {
 			callback(PruneWorking, "")
 			// This ref is itself included so perform usual 'all lobs at checkout + n days history' query
@@ -410,8 +402,6 @@ func PruneOld(dryRun bool, callback PruneCallback) ([]string, error) {
 					callback(PruneRetainByDate, l)
 				}
 			}
-			// the above query includes a snapshot of lobs at ref, so only diffs to process
-			lsfilesSnapshotDone = true
 		}
 
 		// earliestCommit is the earliest one which changed (replaced) a binary SHA
@@ -431,15 +421,10 @@ func PruneOld(dryRun bool, callback PruneCallback) ([]string, error) {
 		// 1. We retrieve state D through ls-files
 		// 2. We retrieve statees B and C through log --since=R, since we pick up
 		//    commits 2 and 3 and hence the SHAs for C and then B from the '-' side of the diff
-		// 3. 'Earliest commit' is 2, but lets say 2 isn't pushed
-		// 4. If 1 is pushed, then we're technically OK since 1 introduced B, and when
-		//    pushing we're pushing the '+' side of the diff
-		// 5. However, if 2 was a merge commit then the first parent might not identify it
-		//    And we don't want to do a tree search of all parents, instead use the nature of
-		//    merges that 2 would include the + side of all parents, so use that as record
-		//    even though technically it means we retain one more commit than necessary in non-merge cases
-		// 6. So starting from earliestCommit we go backwards adding the '+' side of all non-pushed
-		//    commits to our retain list
+		// 3. 'Earliest commit' is 2
+		// 4. We then walk all commits that are at 2 or ancestors which reference LOBs
+		//    and are not pushed (this happens forwards from earliest up to & including 2)
+		//    This actually picks up the '+' sides of the diff
 
 		// This switching between using '-' and '+' lines of diff might seem odd but using
 		// the '-' lines is the easiest way to get required state in between commits. When
@@ -448,52 +433,18 @@ func PruneOld(dryRun bool, callback PruneCallback) ([]string, error) {
 		// Using the '-' lines eliminates that issue & also lets us just use git log --since.
 		// When you're looking at commits (rather than between them) you can use '+' which is easier
 
-		// Walk backwards through history finding the last pushed & adding lobs as we go
-		// Push only marks commits referencing binaries as pushed anyway so walk just commits with lobs
+		// WalkGitCommitLOBsToPush already finds the earliest commits that are not pushed before / on a ref
+		// so we use that plus a walk function
 		walkHistoryFunc := func(commitLOB *CommitLOBRef) (quit bool, err error) {
-			// Stop visiting if we've seen this before
-			if commitsVisited.Contains(commitLOB.commit) {
-				return true, nil
-			}
-			commitsVisited.Add(commitLOB.commit)
-			// keep going backwards
-			pushed := false
 			callback(PruneWorking, "")
-			for _, remoteName := range remotesToCheck {
-				if !ShouldPushBinariesForCommit(remoteName, commitLOB.commit) {
-					pushed = true
-					break // if >1 remote (i.e. config was '*'), count as pushed if pushed to ANY
-				}
-			}
 
-			if pushed {
-				// Nothing more to do, quit
-				return true, nil
-			}
-
-			// If we're not pushed, we have to add contents
-			if !lsfilesSnapshotDone {
-				// Must take snapshot here before processing any diffs
-				snapshotLOBs, err := GetGitAllLOBsToCheckoutAtCommit(commitLOB.commit, []string{}, []string{})
-				if err != nil {
-					return true, fmt.Errorf("Error determining recent commits from %v: %v", commitLOB.commit, err.Error())
-				}
-				for _, l := range snapshotLOBs {
-					if retainSet.Add(l) {
-						callback(PruneRetainNotPushed, l)
-					}
-				}
-				// the above query includes a snapshot of lobs at ref, so only diffs to process
-				lsfilesSnapshotDone = true
-			} else {
-				// we asked to be told about the '+' side of the diff for LOBs while doing this walk,
-				// so that it corresponds with the push flag. Snapshots above include that already, so
-				// here we only deal with differences.
-				// We have to use the '-' diffs *between* commits (arbitrary date), but can use '+' when *on* commits
-				for _, l := range commitLOB.lobSHAs {
-					if retainSet.Add(l) {
-						callback(PruneRetainNotPushed, l)
-					}
+			// we asked to be told about the '+' side of the diff for LOBs while doing this walk,
+			// so that it corresponds with the push flag. Snapshots above include that already, so
+			// here we only deal with differences.
+			// We have to use the '-' diffs *between* commits (arbitrary date), but can use '+' when *on* commits
+			for _, l := range commitLOB.lobSHAs {
+				if retainSet.Add(l) {
+					callback(PruneRetainNotPushed, l)
 				}
 			}
 
@@ -501,29 +452,23 @@ func PruneOld(dryRun bool, callback PruneCallback) ([]string, error) {
 
 		}
 
-		// In this case we walk the diffs looking for additions of lobs '+' in the diff
-		err = WalkGitHistoryReferencingLOBs(earliestCommit, true, false, walkHistoryFunc)
+		// Now walk all unpushed commits referencing LOBs that are earlier than this
+		err = WalkGitCommitLOBsToPush(remoteName, earliestCommit, false, walkHistoryFunc)
 
 		return nil
 
 	}
 
 	// What remote(s) do we check for push?
-	var remotes []string
-	remoteCheckCfg := strings.TrimSpace(GlobalOptions.GitConfig["git-lob.prune-check-remote"])
-	if remoteCheckCfg == "" {
-		remotes = []string{"origin"}
-	} else if remoteCheckCfg == "*" {
-		remotes, _ = GetGitRemotes()
-		// ignore errors, empty remote list will default safely (not pushed, so keep)
-	} else {
-		remotes = []string{remoteCheckCfg}
+	remoteName := strings.TrimSpace(GlobalOptions.GitConfig["git-lob.prune-check-remote"])
+	if remoteName == "" {
+		remoteName = "origin"
 	}
 
 	// First, include HEAD (we always want to keep that)
 	LogDebugf("Retaining HEAD and %dd of history\n", GlobalOptions.RetentionCommitsPeriodHEAD)
 	headsha, _ := GitRefToFullSHA("HEAD")
-	err := retainLOBs(headsha, GlobalOptions.RetentionCommitsPeriodHEAD, false, remotes)
+	err := retainLOBs(headsha, GlobalOptions.RetentionCommitsPeriodHEAD, false, remoteName)
 	if err != nil {
 		return []string{}, err
 	}
@@ -571,7 +516,7 @@ func PruneOld(dryRun bool, callback PruneCallback) ([]string, error) {
 		}
 
 		// LOBs to keep for this ref
-		err := retainLOBs(ref.CommitSHA, GlobalOptions.RetentionCommitsPeriodOther, notPushedScanOnly, remotes)
+		err := retainLOBs(ref.CommitSHA, GlobalOptions.RetentionCommitsPeriodOther, notPushedScanOnly, remoteName)
 		if err != nil {
 			return []string{}, fmt.Errorf("Error determining LOBs to keep for %v: %v", err.Error())
 		}
@@ -594,7 +539,7 @@ func PruneOld(dryRun bool, callback PruneCallback) ([]string, error) {
 	} else {
 		return []string{}, errors.New("Unable to get list of binary files: " + err.Error())
 	}
-	LogDebugf("Also retained everything that hasn't been pushed to %v\n", remotes)
+	LogDebugf("Also retained everything that hasn't been pushed to %v\n", remoteName)
 
 	return removedList, nil
 }
