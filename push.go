@@ -499,12 +499,14 @@ func Push(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dryR
 					// avoids having to consolidate tons of commits later & means we generally store
 					// one pushed SHA per ref, before consolidation
 					replaceSHA := ""
-					isancestor, err := GitIsAncestor(previousCommitSHA, commit.CommitSHA)
-					if err != nil {
-						return err
-					}
-					if isancestor {
-						replaceSHA = previousCommitSHA
+					if previousCommitSHA != "" {
+						isancestor, err := GitIsAncestor(previousCommitSHA, commit.CommitSHA)
+						if err != nil {
+							return err
+						}
+						if isancestor {
+							replaceSHA = previousCommitSHA
+						}
 					}
 					// This writes data to disk every time and that's fine, for robustness & interruptability
 					err = MarkBinariesAsPushed(remoteName, commit.CommitSHA, replaceSHA)
