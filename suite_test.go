@@ -417,18 +417,6 @@ type TestCommitSetupInput struct {
 	NewBranch string
 }
 
-// Corresponding output struct for TestCommitSetupInput after test state is set up
-type TestCommitSetupOutput struct {
-	// Commit SHA
-	CommitSHA string
-	// SHAs of the LOBs that were created
-	FileLOBSHAs []string
-}
-
-func (self *TestCommitSetupOutput) String() string {
-	return fmt.Sprintf("C: %v\n  F:%v\n", self.CommitSHA, self.FileLOBSHAs)
-}
-
 func CommitAtDateForTest(t time.Time, msg string) error {
 	cmd := exec.Command("git", "commit", "--allow-empty", "-m", msg)
 	env := os.Environ()
@@ -438,13 +426,13 @@ func CommitAtDateForTest(t time.Time, msg string) error {
 	return cmd.Run()
 }
 
-func SetupRepoForTest(inputs []*TestCommitSetupInput) []*TestCommitSetupOutput {
+func SetupRepoForTest(inputs []*TestCommitSetupInput) []*CommitLOBRef {
 	// Used to check whether we need to checkout another commit before
 	lastBranch := "master"
-	outputs := make([]*TestCommitSetupOutput, 0, len(inputs))
+	outputs := make([]*CommitLOBRef, 0, len(inputs))
 
 	for i, input := range inputs {
-		output := &TestCommitSetupOutput{}
+		output := &CommitLOBRef{}
 		// first, are we on the correct branch
 		if len(input.ParentBranches) > 0 {
 			if input.ParentBranches[0] != lastBranch {
@@ -470,7 +458,7 @@ func SetupRepoForTest(inputs []*TestCommitSetupInput) []*TestCommitSetupOutput {
 				sz = input.FileSizes[fi]
 			}
 			info := CreateAndStoreLOBFileForTest(sz, filename)
-			output.FileLOBSHAs = append(output.FileLOBSHAs, info.SHA)
+			output.lobSHAs = append(output.lobSHAs, info.SHA)
 			RunGitCommandForTest(true, "add", filename)
 		}
 		// Now commit
@@ -483,7 +471,7 @@ func SetupRepoForTest(inputs []*TestCommitSetupInput) []*TestCommitSetupOutput {
 		if err != nil {
 			Fail("Error determining commit SHA: " + err.Error())
 		}
-		output.CommitSHA = commit
+		output.commit = commit
 		outputs = append(outputs, output)
 	}
 	return outputs
