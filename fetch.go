@@ -274,6 +274,7 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 			// Now each other ref, they should be in reverse date order from GetGitRecentRefs so we're doing
 			// things by priority, HEAD first then most recent
 			refSHAsDone := NewStringSet()
+			refSHAsDone.Add(headSHA)
 			for i, ref := range recentrefs {
 				// Don't duplicate work when >1 ref has the same SHA
 				// Most common with HEAD if not detached but also tags
