@@ -355,6 +355,8 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 
 	}
 
+	fetchAnyNotFound := false
+
 	if len(lobsNeeded) == 0 {
 		callback(&ProgressCallbackData{ProgressCalculate, "No binaries to download.",
 			int64(len(refspecs)), int64(len(refspecs)), 0, 0})
@@ -382,8 +384,15 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 				int64(len(refspecs)), int64(len(refspecs)), 0, 0})
 		}
 		if !dryRun {
+			fetchCallback := func(data *ProgressCallbackData) (abort bool) {
+				if data.Type == ProgressNotFound {
+					fetchAnyNotFound = true
+				}
+				// passthrough to external callback
+				return callback(data)
+			}
 
-			err := fetchLOBs(lobsToDownload, provider, remoteName, force, callback)
+			err := fetchLOBs(lobsToDownload, provider, remoteName, force, fetchCallback)
 			if err != nil {
 				return err
 			}
@@ -394,7 +403,8 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 	LogDebugf("Successfully fetched from %v via %v\n", remoteName, provider.TypeID())
 
 	// Now mark as pushed if appropriate
-	if len(commitsToMarkPushedAfterFetching) > 0 {
+	// If any files were not found on the remote, don't do this (we may get them locally later & need to push them)
+	if !fetchAnyNotFound && len(commitsToMarkPushedAfterFetching) > 0 {
 		for _, c := range commitsToMarkPushedAfterFetching {
 			err := MarkBinariesAsPushed(remoteName, c, "")
 			if err != nil {
