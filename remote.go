@@ -296,7 +296,8 @@ func getRemoteStateCacheFile(remoteName string) string {
 
 // Initialise the 'pushed' markers for all recent commits, if we can be sure we can do it
 // Most common case: just after clone
-func InitSuccessfullyPushedCacheIfAppropriate() {
+// Returns whether we met the requirements to do this
+func InitSuccessfullyPushedCacheIfAppropriate() bool {
 	// Things get complex when you can have a combination of binaries which need fetching and
 	// which might need pushing. Our push cache errs on the side of caution since binaries may
 	// have been added from multiple sources so we check we pushed (or don't need to) before
@@ -315,13 +316,13 @@ func InitSuccessfullyPushedCacheIfAppropriate() {
 		remotes, err := GetGitRemotes()
 		if err != nil {
 			LogErrorf("Unable to get remotes to mark as pushed %v\n", err.Error())
-			return
+			return false
 		}
 		// Mark as pushed at all refs (local branches, remote branches, tags)
 		refs, err := GetGitAllRefs()
 		if err != nil {
 			LogErrorf("Unable to get refs to mark as pushed %v\n", err.Error())
-			return
+			return false
 		}
 		var shas []string
 		for _, ref := range refs {
@@ -329,9 +330,15 @@ func InitSuccessfullyPushedCacheIfAppropriate() {
 		}
 		shas = consolidateCommitsToLatestDescendants(shas)
 		for _, remote := range remotes {
-			WritePushedState(remote, shas)
+			err := WritePushedState(remote, shas)
+			if err != nil {
+				LogErrorf("Unable to write push state for %v: %v\n", remote, err.Error())
+				return false
+			}
 		}
+		return true
 	}
+	return false
 
 }
 

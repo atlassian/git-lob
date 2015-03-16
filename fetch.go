@@ -242,7 +242,7 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 	LogDebugf("Fetching from %v via %v\n", remoteName, provider.TypeID())
 
 	var lobsNeeded []string
-
+	var fetchranges []*GitRefSpec
 	if len(refspecs) == 0 {
 		// No refs specified, use 'Recent' fetch algorithm
 		if GlobalOptions.Verbose {
@@ -277,7 +277,7 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 				}
 				refSHAsDone.Add(ref.CommitSHA)
 
-				recentreflobs, _, err := GetGitAllLOBsToCheckoutAtCommitAndRecent(ref.Name, GlobalOptions.FetchCommitsPeriodOther,
+				recentreflobs, earliestCommit, err := GetGitAllLOBsToCheckoutAtCommitAndRecent(ref.Name, GlobalOptions.FetchCommitsPeriodOther,
 					GlobalOptions.FetchIncludePaths, GlobalOptions.FetchExcludePaths)
 				if err != nil {
 					return errors.New(fmt.Sprintf("Error determining recent commits on %v: %v", ref, err.Error()))
@@ -287,7 +287,10 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 						int64(i), int64(len(refspecs)), 0, 0})
 				}
 				lobsNeeded = append(lobsNeeded, recentreflobs...)
+
+				fetchranges = append(fetchranges, &GitRefSpec{fmt.Sprintf("^%v", earliestCommit), "..", ref.CommitSHA})
 			}
+
 		}
 	} else {
 		// Get LOBs directly from specified refs/ranges
@@ -305,12 +308,52 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 					int64(i), int64(len(refspecs)), 0, 0})
 			}
 			lobsNeeded = append(lobsNeeded, refshas...)
+
+			if refspec.IsRange() {
+				fetchranges = append(fetchranges, refspec)
+			} else {
+				fetchranges = append(fetchranges, &GitRefSpec{fmt.Sprintf("^%v", refspec.Ref1), "..", refspec.Ref2})
+			}
 		}
 	}
 
+	var commitsToMarkPushedAfterFetching []string
 	// Before we actually fetch anything, check if we can bulk mark things as pushed
 	// Common case - first fetch after clone, user hasn't done any local work
-	InitSuccessfullyPushedCacheIfAppropriate()
+	if !InitSuccessfullyPushedCacheIfAppropriate() {
+		// Otherwise, let's see whether we can move the pushed state forward as we fetch
+		// Remember, we can have 'gaps' in the history for LOBs if enough time passed since last fetch
+		// that the earliest fetch doesn't cover the whole period since the last fetch
+		// So the cases where we can move the push markers forward are:
+		// 1. There's nothing to push before the first commit we're fetching, OR
+		// 2. The intervening 'unpushed' commits already exist on the remote
+		for _, fetchrange := range fetchranges {
+			anyCommitsUnpushed := false
+			allUnpushedCommitsAreOnRemote := true
+			unpushedCallback := func(commit *CommitLOBRef) (quit bool, err error) {
+				anyCommitsUnpushed = true
+				for _, sha := range commit.lobSHAs {
+					// check remote
+					remoteerr := CheckRemoteLOBFilesForSHA(sha, provider, remoteName)
+					if remoteerr != nil {
+						// LOB doesn't exist on remote so this is genuinely unpushed
+						allUnpushedCommitsAreOnRemote = false
+						return true, remoteerr
+					}
+				}
+				return false, nil
+			}
+			// These are all ranges, Ref1 being exclusive so that's where we measure from
+			WalkGitCommitLOBsToPush(remoteName, fetchrange.Ref1, false, unpushedCallback)
+			if !anyCommitsUnpushed || allUnpushedCommitsAreOnRemote {
+				commitsToMarkPushedAfterFetching = append(commitsToMarkPushedAfterFetching, fetchrange.Ref2)
+				LogDebugf("Will mark %v as pushed after fetch since there are no unpushed LOBs in ancestors that aren't on %v\n", fetchrange.Ref2, remoteName)
+			} else {
+				LogDebugf("%v will not be marked as pushed after fetch since there are unpushed LOBs in ancestors that aren't on %v\n", fetchrange.Ref2, remoteName)
+			}
+		}
+
+	}
 
 	if len(lobsNeeded) == 0 {
 		callback(&ProgressCallbackData{ProgressCalculate, "No binaries to download.",
@@ -349,6 +392,18 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 	}
 
 	LogDebugf("Successfully fetched from %v via %v\n", remoteName, provider.TypeID())
+
+	// Now mark as pushed if appropriate
+	if len(commitsToMarkPushedAfterFetching) > 0 {
+		for _, c := range commitsToMarkPushedAfterFetching {
+			err := MarkBinariesAsPushed(remoteName, c, "")
+			if err != nil {
+				LogErrorf("Error marking %v as pushed after fetch for %v: %v", c, remoteName, err.Error())
+			}
+		}
+		// resolve any redundant state that creates
+		CleanupPushState(remoteName)
+	}
 
 	if prune && !dryRun {
 		callback(&ProgressCallbackData{ProgressCalculate, "Performing post-fetch prune...",
