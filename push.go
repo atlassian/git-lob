@@ -97,6 +97,12 @@ func cmdPush() int {
 		}
 	}
 
+	if len(refspecs) == 0 {
+		LogConsole("No default refs to push based on config, current HEAD & tracking branches")
+		LogConsole("Specify --all or a specific ref/branch to push something")
+		return 0
+	}
+
 	LogConsole("Pushing binaries for", refspecs, "to", remoteName)
 
 	// Warn about long calculation processes
