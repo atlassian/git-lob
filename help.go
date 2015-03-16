@@ -243,6 +243,6 @@ const plumbingCommandsHelpTxt = `Low-level plumbing commands:
   fetch-lob            Fetch an individual LOB from a remote by SHA
   last-pushed          Report the last pushed ancestor of a ref
   mark-pushed          Mark a commit as having being pushed to a remote
-  reset-pushed         Reset the pushed flag for a commit
+  reset-pushed         Reset the pushed state for a remote (will push all next time)
 
 `
