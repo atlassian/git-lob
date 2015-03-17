@@ -38,30 +38,37 @@ var _ = Describe("Prune", func() {
 			now := time.Now()
 
 			setupInputs = []*TestCommitSetupInput{
-				&TestCommitSetupInput{
-					CommitDate: now.AddDate(0, 0, -29),
-					Files:      []string{"data1.bin", filepath.Join("img", "image1.jpg")},
+				&TestCommitSetupInput{ // 0
+					CommitDate: now.AddDate(0, 0, -9),
+					// data1.bin is never overwritten so will remain regardless of date
+					Files: []string{"data1.bin", filepath.Join("img", "image1.jpg")},
 				},
-				&TestCommitSetupInput{
-					CommitDate: now.AddDate(0, 0, -28),
+				&TestCommitSetupInput{ // 1
+					CommitDate: now.AddDate(0, 0, -8),
 					Files:      []string{"data2.bin", filepath.Join("img", "image2.jpg")},
 				},
 				// branch, modify & add
 				// this branch we'll leave hanging
-				&TestCommitSetupInput{
-					CommitDate: now.AddDate(0, 0, -27),
-					Files:      []string{"data1.bin", filepath.Join("bigdata", "something.dat")},
+				&TestCommitSetupInput{ // 2
+					CommitDate: now.AddDate(0, 0, -7),
+					Files:      []string{"data3.bin", filepath.Join("bigdata", "something.dat")},
 					FileSizes:  []int64{150, 2000},
 					NewBranch:  "feature/bigdata",
 				},
-				&TestCommitSetupInput{
-					CommitDate:     now.AddDate(0, 0, -23),
-					Files:          []string{"data3.bin", "data4.bin", "data5.bin"},
+				&TestCommitSetupInput{ // 3
+					CommitDate:     now.AddDate(0, 0, -3),
+					Files:          []string{"data3.bin", filepath.Join("bigdata", "something.dat")},
+					ParentBranches: []string{"feature/bigdata"},
+				},
+				// Tip commit includes no files; this is because including LOB changes here will
+				// cause previous state to also be preserved since 1 day back would need old LOB state
+				&TestCommitSetupInput{ // 4
+					CommitDate:     now.AddDate(0, 0, -3),
 					ParentBranches: []string{"feature/bigdata"},
 				},
 				// now back on master
-				&TestCommitSetupInput{
-					CommitDate:     now.AddDate(0, 0, -25),
+				&TestCommitSetupInput{ // 5
+					CommitDate:     now.AddDate(0, 0, -5),
 					Files:          []string{"data2.bin", "newfile1.dat", "newfile2.dat"},
 					ParentBranches: []string{"master"},
 				},
@@ -70,24 +77,24 @@ var _ = Describe("Prune", func() {
 				// to ensure that we pick up the cancelled LOB changes to retain
 				// in this case 'mergedata.bin' change at this commit is overwritten by the
 				// next commit when it comes to merging to master
-				&TestCommitSetupInput{
-					CommitDate: now.AddDate(0, 0, -24),
+				&TestCommitSetupInput{ // 6
+					CommitDate: now.AddDate(0, 0, -3),
 					Files:      []string{"mergedata.bin", "mergedata2.dat"},
 					NewBranch:  "feature/tomerge",
 				},
-				&TestCommitSetupInput{
-					CommitDate:     now.AddDate(0, 0, -23),
+				&TestCommitSetupInput{ // 7
+					CommitDate:     now.AddDate(0, 0, -2),
 					Files:          []string{"mergedata.bin", "mergedata3.dat"},
 					ParentBranches: []string{"feature/tomerge"},
 				},
 				// now merge (no changes added except from merge)
-				&TestCommitSetupInput{
-					CommitDate:     now.AddDate(0, 0, -22),
+				&TestCommitSetupInput{ // 8
+					CommitDate:     now.AddDate(0, 0, -1),
 					ParentBranches: []string{"master", "feature/tomerge"},
 				},
 				// one more commit on master
-				&TestCommitSetupInput{
-					CommitDate:     now.AddDate(0, 0, -20),
+				&TestCommitSetupInput{ // 9
+					CommitDate:     now,
 					Files:          []string{filepath.Join("img", "image30.jpg")},
 					ParentBranches: []string{"master"}, // unnecessary but make sure
 				},
@@ -101,7 +108,7 @@ var _ = Describe("Prune", func() {
 			GlobalOptions = NewOptions()
 		})
 
-		It("Removes nothing when everything within retention", func() {
+		It("Removes based on retention and pushed flags", func() {
 			GlobalOptions.RetentionRefsPeriod = 30
 			GlobalOptions.RetentionCommitsPeriodHEAD = 7
 			GlobalOptions.RetentionCommitsPeriodOther = 1 // not the default, retain by date
@@ -124,13 +131,38 @@ var _ = Describe("Prune", func() {
 			for _, out := range setupOutputs {
 				filestoretain += len(out.lobSHAs)
 			}
-			//fmt.Println(setupOutputs)
+			fmt.Println(setupOutputs)
 			deleted, err := PruneOld(false, callback)
 			Expect(err).To(BeNil(), "Should be no error pruning")
 			Expect(deleted).To(BeEmpty(), "No files should be deleted, all within range")
 			Expect(lobsdeleted).To(BeZero(), "No deletion callbacks should be made")
 			Expect(lobsretainedbydate).To(BeEquivalentTo(filestoretain), "Should be correct number of file SHAs retained by date")
 			Expect(lobsretainednotpushed).To(BeEquivalentTo(0), "Should not need to rely on not pushed to retain anything")
+			lobsretainedbydate = 0
+
+			// Now retain no extra versions on other branches, just latest versions
+			GlobalOptions.RetentionCommitsPeriodOther = 0
+			deleted, err = PruneOld(false, callback)
+			// However, not pushed flag should stop them being deleted
+			Expect(lobsretainednotpushed).To(BeEquivalentTo(2), "Should have kept a couple of files because not pushed")
+			Expect(err).To(BeNil(), "Should be no error pruning")
+			Expect(deleted).To(BeEmpty(), "No files should be deleted")
+			Expect(lobsdeleted).To(BeZero(), "No deletion callbacks should be made")
+			Expect(lobsretainedbydate).To(BeEquivalentTo(filestoretain-2), "Should be correct number of file SHAs retained by date")
+			lobsretainedbydate = 0
+			lobsretainednotpushed = 0
+
+			// now mark that branch as pushed so should delete
+			MarkBinariesAsPushed("origin", setupOutputs[4].commit, "")
+			deleted, err = PruneOld(false, callback)
+			// However, not pushed flag should stop them being deleted
+			Expect(err).To(BeNil(), "Should be no error pruning")
+			Expect(lobsretainednotpushed).To(BeEquivalentTo(0), "All files that would be deleted are pushed")
+			Expect(deleted).To(ConsistOf(setupOutputs[2].lobSHAs), "2 files should be deleted, old versions on non-HEAD")
+			Expect(lobsdeleted).To(BeEquivalentTo(len(setupOutputs[2].lobSHAs)), "2 deletion callbacks should be made")
+			filestoretain -= 2
+			Expect(lobsretainedbydate).To(BeEquivalentTo(filestoretain), "Should be correct number of file SHAs retained by date")
+			lobsretainedbydate = 0
 
 		})
 
