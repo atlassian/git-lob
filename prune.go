@@ -602,7 +602,7 @@ func PruneOld(dryRun, safeMode bool, callback PruneCallback) ([]string, error) {
 	} else {
 		return []string{}, errors.New("Unable to get list of binary files: " + err.Error())
 	}
-	LogDebugf("Also retained everything that hasn't been pushed to %v\n", remoteName)
+	LogDebugf("\rAlso retained everything that hasn't been pushed to %v\n", remoteName)
 
 	return removedList, nil
 }
