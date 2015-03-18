@@ -598,7 +598,6 @@ func DeleteLOB(sha string) error {
 		if err != nil {
 			return errors.New(fmt.Sprintf("Unable to delete file %v: %v", n, err))
 		}
-		LogDebugf("Deleted %v\n", n)
 	}
 
 	if isUsingSharedStorage() {
@@ -619,7 +618,6 @@ func DeleteLOB(sha string) error {
 				if err != nil {
 					return errors.New(fmt.Sprintf("Unable to delete file %v: %v", n, err))
 				}
-				LogDebugf("Deleted shared file %v\n", n)
 			}
 
 		}
