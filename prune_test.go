@@ -114,6 +114,13 @@ var _ = Describe("Prune", func() {
 			GlobalOptions.RetentionCommitsPeriodOther = 1 // not the default, retain by date
 			// we want to test that the older commit on the 'hanging' branch is retained when it's 1 day back, not because it's not pushed
 
+			// Confirm all files start off existing
+			for _, c := range setupOutputs {
+				for _, l := range c.lobSHAs {
+					Expect(FileExists(getLocalLOBMetaPath(l))).To(BeTrue(), "%v should exist prior to test")
+					Expect(FileExists(getLocalLOBChunkPath(l, 0))).To(BeTrue(), "%v should exist prior to test")
+				}
+			}
 			lobsdeleted := 0
 			lobsretainedbydate := 0
 			lobsretainednotpushed := 0
@@ -164,6 +171,10 @@ var _ = Describe("Prune", func() {
 			Expect(lobsretainedbydate).To(BeEquivalentTo(filestoretain), "Should be correct number of file SHAs retained by date")
 			lobsretainedbydate = 0
 			lobsdeleted = 0
+			for _, l := range setupOutputs[2].lobSHAs {
+				exists, _ := FileOrDirExists(getLocalLOBMetaPath(l))
+				Expect(exists).To(Equal(false), "File %v should have been deleted", l)
+			}
 
 			// Now retain less on current branch, and retain no other branches
 			GlobalOptions.RetentionCommitsPeriodHEAD = 2
@@ -221,6 +232,10 @@ var _ = Describe("Prune", func() {
 			Expect(deleted).To(ConsistOf(lobstodelete), "Correct files should be deleted, all non-HEADs and old HEADs")
 			Expect(lobsdeleted).To(BeEquivalentTo(len(lobstodelete)), "Correct deletion callbacks should be made")
 			Expect(lobsretainedbydate).To(BeEquivalentTo(len(lobstoretain)), "Should be correct number of file SHAs retained by date")
+			for _, l := range lobstodelete {
+				Expect(FileExists(getLocalLOBMetaPath(l))).To(BeFalse(), "%v should have been deleted")
+				Expect(FileExists(getLocalLOBChunkPath(l, 0))).To(BeFalse(), "%v should have been deleted")
+			}
 
 		})
 
