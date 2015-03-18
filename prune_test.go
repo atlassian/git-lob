@@ -39,36 +39,36 @@ var _ = Describe("Prune", func() {
 
 			setupInputs = []*TestCommitSetupInput{
 				&TestCommitSetupInput{ // 0
-					CommitDate: now.AddDate(0, 0, -9),
+					CommitDate: now.AddDate(0, 0, -9).Add(time.Hour),
 					// data1.bin is never overwritten so will remain regardless of date
 					Files: []string{"data1.bin", filepath.Join("img", "image1.jpg")},
 				},
 				&TestCommitSetupInput{ // 1
-					CommitDate: now.AddDate(0, 0, -8),
+					CommitDate: now.AddDate(0, 0, -8).Add(time.Hour),
 					Files:      []string{"data2.bin", filepath.Join("img", "image2.jpg")},
 				},
 				// branch, modify & add
 				// this branch we'll leave hanging
 				&TestCommitSetupInput{ // 2
-					CommitDate: now.AddDate(0, 0, -7),
+					CommitDate: now.AddDate(0, 0, -7).Add(time.Hour),
 					Files:      []string{"data3.bin", filepath.Join("bigdata", "something.dat")},
 					FileSizes:  []int64{150, 2000},
-					NewBranch:  "feature/bigdata",
+					NewBranch:  "feature/hanging",
 				},
 				&TestCommitSetupInput{ // 3
-					CommitDate:     now.AddDate(0, 0, -3),
+					CommitDate:     now.AddDate(0, 0, -3).Add(time.Hour),
 					Files:          []string{"data3.bin", filepath.Join("bigdata", "something.dat")},
-					ParentBranches: []string{"feature/bigdata"},
+					ParentBranches: []string{"feature/hanging"},
 				},
 				// Tip commit includes no files; this is because including LOB changes here will
 				// cause previous state to also be preserved since 1 day back would need old LOB state
 				&TestCommitSetupInput{ // 4
-					CommitDate:     now.AddDate(0, 0, -3),
-					ParentBranches: []string{"feature/bigdata"},
+					CommitDate:     now.AddDate(0, 0, -3).Add(time.Hour),
+					ParentBranches: []string{"feature/hanging"},
 				},
 				// now back on master
 				&TestCommitSetupInput{ // 5
-					CommitDate:     now.AddDate(0, 0, -5),
+					CommitDate:     now.AddDate(0, 0, -5).Add(time.Hour),
 					Files:          []string{"data2.bin", "newfile1.dat", "newfile2.dat"},
 					ParentBranches: []string{"master"},
 				},
@@ -78,18 +78,18 @@ var _ = Describe("Prune", func() {
 				// in this case 'mergedata.bin' change at this commit is overwritten by the
 				// next commit when it comes to merging to master
 				&TestCommitSetupInput{ // 6
-					CommitDate: now.AddDate(0, 0, -3),
+					CommitDate: now.AddDate(0, 0, -3).Add(time.Hour),
 					Files:      []string{"mergedata.bin", "mergedata2.dat"},
 					NewBranch:  "feature/tomerge",
 				},
 				&TestCommitSetupInput{ // 7
-					CommitDate:     now.AddDate(0, 0, -2),
+					CommitDate:     now.AddDate(0, 0, -2).Add(time.Hour),
 					Files:          []string{"mergedata.bin", "mergedata3.dat"},
 					ParentBranches: []string{"feature/tomerge"},
 				},
 				// now merge (no changes added except from merge)
 				&TestCommitSetupInput{ // 8
-					CommitDate:     now.AddDate(0, 0, -1),
+					CommitDate:     now.AddDate(0, 0, -1).Add(time.Hour),
 					ParentBranches: []string{"master", "feature/tomerge"},
 				},
 				// one more commit on master
@@ -131,7 +131,7 @@ var _ = Describe("Prune", func() {
 			for _, out := range setupOutputs {
 				filestoretain += len(out.lobSHAs)
 			}
-			fmt.Println(setupOutputs)
+			//fmt.Println(setupOutputs)
 			deleted, err := PruneOld(false, callback)
 			Expect(err).To(BeNil(), "Should be no error pruning")
 			Expect(deleted).To(BeEmpty(), "No files should be deleted, all within range")
@@ -163,6 +163,64 @@ var _ = Describe("Prune", func() {
 			filestoretain -= 2
 			Expect(lobsretainedbydate).To(BeEquivalentTo(filestoretain), "Should be correct number of file SHAs retained by date")
 			lobsretainedbydate = 0
+			lobsdeleted = 0
+
+			// Now retain less on current branch, and retain no other branches
+			GlobalOptions.RetentionCommitsPeriodHEAD = 2
+			GlobalOptions.RetentionRefsPeriod = 0
+			// Retention should be all files to be checked out within last 2 days, which is latest plus any '-' changes in 2 days
+			// needs to take account of what files were overwritten & which remained the same
+			// commits 7,8 & 9 will be included, 7 being a commit that gets merged
+			// final state from other commits bleeds through
+			var lobstoretain []string
+			var lobstodelete []string
+			// first determine the complete list of files ever committed
+			fileset := NewStringSet()
+			for _, c := range setupInputs {
+				// ignore hanging branch though
+				if c.NewBranch == "feature/hanging" || (len(c.ParentBranches) > 0 && c.ParentBranches[0] == "feature/hanging") {
+					continue
+				}
+				for _, l := range c.Files {
+					fileset.Add(l)
+				}
+			}
+			// Now add changes to keep
+			for i := 7; i <= 9; i++ {
+				out := setupOutputs[i]
+				for _, l := range out.lobSHAs {
+					lobstoretain = append(lobstoretain, l)
+				}
+			}
+			// Now add the latest version for all prior to that
+			for i := 6; i >= 0; i-- {
+				// Note we already deleted LOBs in [2] above
+				if i == 2 {
+					continue
+				}
+
+				in := setupInputs[i]
+				out := setupOutputs[i]
+				for j, f := range in.Files {
+					if fileset.Contains(f) {
+						lobstoretain = append(lobstoretain, out.lobSHAs[j])
+						// only record the latest
+						fileset.Remove(f)
+					} else {
+						lobstodelete = append(lobstodelete, out.lobSHAs[j])
+					}
+				}
+			}
+			// mark master as pushed so should delete
+			// hanging branch [4] was already marked as pushed, but now other refs are not being retained also
+			MarkBinariesAsPushed("origin", setupOutputs[9].commit, "")
+			deleted, err = PruneOld(false, callback)
+			// However, not pushed flag should stop them being deleted
+			Expect(err).To(BeNil(), "Should be no error pruning")
+			Expect(lobsretainednotpushed).To(BeEquivalentTo(0), "All files that would be deleted are pushed")
+			Expect(deleted).To(ConsistOf(lobstodelete), "Correct files should be deleted, all non-HEADs and old HEADs")
+			Expect(lobsdeleted).To(BeEquivalentTo(len(lobstodelete)), "Correct deletion callbacks should be made")
+			Expect(lobsretainedbydate).To(BeEquivalentTo(len(lobstoretain)), "Should be correct number of file SHAs retained by date")
 
 		})
 
