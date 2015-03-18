@@ -34,19 +34,19 @@ type PruneCallback func(t PruneCallbackType, lobsha string)
 
 var pruneCallbackImpl = func(t PruneCallbackType, lobsha string) {
 	// Include this stuff in the log because it's important
-	// Prefix with carriage return to overwrite any spinner from last time
+	LogConsoleDebugf("\r") // to reset any progress spinner but don't want \r in log
 	switch t {
 	case PruneRetainByDate:
-		LogDebugf("\rPrune: retaining %v (date)\n", lobsha)
+		LogDebugf("Prune: retaining %v (date)\n", lobsha)
 	case PruneRetainNotPushed:
-		LogDebugf("\rPrune: retaining %v (not pushed)\n", lobsha)
+		LogDebugf("Prune: retaining %v (not pushed)\n", lobsha)
 	case PruneRetainReferenced:
-		LogDebugf("\rPrune: retaining %v (referenced)\n", lobsha)
+		LogDebugf("Prune: retaining %v (referenced)\n", lobsha)
 	case PruneDeleted:
 		if GlobalOptions.DryRun {
-			LogDebugf("\rPrune: would delete %v (dry run)\n", lobsha)
+			LogDebugf("Prune: would delete %v (dry run)\n", lobsha)
 		} else {
-			LogDebugf("\rPrune: deleted %v\n", lobsha)
+			LogDebugf("Prune: deleted %v\n", lobsha)
 		}
 	case PruneWorking:
 		// nothing, just spinner below
@@ -485,7 +485,8 @@ func PruneOld(dryRun, safeMode bool, callback PruneCallback) ([]string, error) {
 	remoteName := GlobalOptions.PruneRemote
 
 	// First, include HEAD (we always want to keep that)
-	LogDebugf("\rRetaining HEAD and %dd of history\n", GlobalOptions.RetentionCommitsPeriodHEAD)
+	LogConsoleDebugf("\r") // to reset any progress spinner but don't want \r in log
+	LogDebugf("Retaining HEAD and %dd of history\n", GlobalOptions.RetentionCommitsPeriodHEAD)
 	headsha, _ := GitRefToFullSHA("HEAD")
 	err := retainLOBs(headsha, GlobalOptions.RetentionCommitsPeriodHEAD, false, remoteName)
 	if err != nil {
@@ -531,7 +532,8 @@ func PruneOld(dryRun, safeMode bool, callback PruneCallback) ([]string, error) {
 		}
 
 		if !notPushedScanOnly {
-			LogDebugf("\rRetaining %v and %dd of history\n", ref.Name, GlobalOptions.RetentionCommitsPeriodOther)
+			LogConsoleDebugf("\r") // to reset any progress spinner but don't want \r in log
+			LogDebugf("Retaining %v and %dd of history\n", ref.Name, GlobalOptions.RetentionCommitsPeriodOther)
 		}
 
 		// LOBs to keep for this ref
@@ -602,7 +604,8 @@ func PruneOld(dryRun, safeMode bool, callback PruneCallback) ([]string, error) {
 	} else {
 		return []string{}, errors.New("Unable to get list of binary files: " + err.Error())
 	}
-	LogDebugf("\rAlso retained everything that hasn't been pushed to %v\n", remoteName)
+	LogConsoleDebugf("\r") // to reset any progress spinner but don't want \r in log
+	LogDebugf("Also retained everything that hasn't been pushed to %v\n", remoteName)
 
 	return removedList, nil
 }
