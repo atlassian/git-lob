@@ -1,10 +1,10 @@
 package main
 
 import (
-	"crypto/sha1"
-	"fmt"
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
+	"crypto/sha1"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
@@ -623,8 +623,10 @@ var _ = Describe("Storage", func() {
 
 	Describe("Retrieving a LOB (shared store)", func() {
 		// Common git repo
+		var oldwd string
 		BeforeEach(func() {
 			os.MkdirAll(sharedStore, 0755)
+			oldwd, _ = os.Getwd()
 			GlobalOptions.SharedStore = sharedStore
 			// Set up git repo with some subfolders
 			CreateGitRepoForTest(root)
@@ -635,10 +637,12 @@ var _ = Describe("Storage", func() {
 					fmt.Printf("Can't MkdirAll %v: %v", f, err)
 				}
 			}
+			os.Chdir(root)
 
 		})
 
 		AfterEach(func() {
+			os.Chdir(oldwd)
 			// Delete repo
 			os.RemoveAll(root)
 			os.RemoveAll(sharedStore)
