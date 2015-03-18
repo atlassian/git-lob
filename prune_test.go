@@ -132,7 +132,7 @@ var _ = Describe("Prune", func() {
 				filestoretain += len(out.lobSHAs)
 			}
 			//fmt.Println(setupOutputs)
-			deleted, err := PruneOld(false, callback)
+			deleted, err := PruneOld(false, false, callback)
 			Expect(err).To(BeNil(), "Should be no error pruning")
 			Expect(deleted).To(BeEmpty(), "No files should be deleted, all within range")
 			Expect(lobsdeleted).To(BeZero(), "No deletion callbacks should be made")
@@ -142,7 +142,7 @@ var _ = Describe("Prune", func() {
 
 			// Now retain no extra versions on other branches, just latest versions
 			GlobalOptions.RetentionCommitsPeriodOther = 0
-			deleted, err = PruneOld(false, callback)
+			deleted, err = PruneOld(false, false, callback)
 			// However, not pushed flag should stop them being deleted
 			Expect(lobsretainednotpushed).To(BeEquivalentTo(2), "Should have kept a couple of files because not pushed")
 			Expect(err).To(BeNil(), "Should be no error pruning")
@@ -154,7 +154,7 @@ var _ = Describe("Prune", func() {
 
 			// now mark that branch as pushed so should delete
 			MarkBinariesAsPushed("origin", setupOutputs[4].commit, "")
-			deleted, err = PruneOld(false, callback)
+			deleted, err = PruneOld(false, false, callback)
 			// However, not pushed flag should stop them being deleted
 			Expect(err).To(BeNil(), "Should be no error pruning")
 			Expect(lobsretainednotpushed).To(BeEquivalentTo(0), "All files that would be deleted are pushed")
@@ -214,7 +214,7 @@ var _ = Describe("Prune", func() {
 			// mark master as pushed so should delete
 			// hanging branch [4] was already marked as pushed, but now other refs are not being retained also
 			MarkBinariesAsPushed("origin", setupOutputs[9].commit, "")
-			deleted, err = PruneOld(false, callback)
+			deleted, err = PruneOld(false, false, callback)
 			// However, not pushed flag should stop them being deleted
 			Expect(err).To(BeNil(), "Should be no error pruning")
 			Expect(lobsretainednotpushed).To(BeEquivalentTo(0), "All files that would be deleted are pushed")

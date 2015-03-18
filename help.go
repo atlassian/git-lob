@@ -129,6 +129,10 @@ Prune settings:
                                pushed to before pruning. Default: origin
                                You can set this to a remote name, or '*' to
                                allow any remote to count.
+  git-lob.prune-safe           Force --safe mode on all prune operations, which
+                               checks that the remote *actually* has each 
+                               binary before deleting. Without this only local 
+                               push records are used to determine this.
 
 
 `)

@@ -51,13 +51,21 @@ var pruneCallbackImpl = func(t PruneCallbackType, lobsha string) {
 }
 
 func cmdPrune() int {
-	errorList := validateCustomOptions(GlobalOptions, nil, []string{"unreferenced"})
+	errorList := validateCustomOptions(GlobalOptions, nil, []string{"unreferenced", "safe"})
 	if len(errorList) > 0 {
 		LogConsoleError(strings.Join(errorList, "\n"))
 		return 9
 	}
 
 	optOnlyUnreferenced := GlobalOptions.BoolOpts.Contains("unreferenced")
+	optSafeMode := GlobalOptions.BoolOpts.Contains("safe")
+
+	if optOnlyUnreferenced && optSafeMode {
+		LogConsole("The --safe option does nothing in --unreferenced mode because unreferenced\nbinaries are never pushed")
+	}
+
+	// Upgrade to safe mode if configured
+	optSafeMode = optSafeMode || GlobalOptions.PruneSafeMode
 
 	var shas []string
 	var err error
@@ -73,7 +81,7 @@ func cmdPrune() int {
 	} else {
 		// Purge old & unreferenced
 		LogConsole("Pruning old binaries...")
-		shas, err = PruneOld(GlobalOptions.DryRun, pruneCallbackImpl)
+		shas, err = PruneOld(GlobalOptions.DryRun, optSafeMode, pruneCallbackImpl)
 		LogConsoleSpinnerFinish("Processing: ")
 		if err != nil {
 			LogErrorf("Prune failed: %v\n", err)
@@ -146,6 +154,9 @@ func cmdPruneHelp() {
        copy is not the only one)
 
 Options:
+  --safe               Before deleting old binaries that we think we've pushed,
+                       doubly verify with the remote that it has a copy
+                       Also see git-lob.prune-safe config setting
   --unreferenced       Only prune totally unreferenced binaries, not old ones
   --quiet, -q          Print less output
   --verbose, -v        Print more output
@@ -171,6 +182,11 @@ DEFINITION OF "PUSHED"
   change the remote which is checked via the setting
   git-lob.prune-check-remote, which can be set to another remote name, or '*'
   to allow any remote to count.
+
+  By default, uses only the local records of whether something has been pushed.
+  If you use the --safe option or git-lob.prune-safe in your gitconfig, then
+  the remote is contacted for each binary to be deleted to confirm it exists
+  there, before it is deleted locally. This is slower of course.
 
 SHARED STORE
   If you are using a shared store, when a file is pruned locally, if there 
@@ -372,7 +388,8 @@ func PruneUnreferenced(dryRun bool, callback PruneCallback) ([]string, error) {
 
 // Remove LOBs from the local store if they fall outside the range we would normally fetch for
 // Returns a list of SHAs that were deleted (unless dryRun = true)
-func PruneOld(dryRun bool, callback PruneCallback) ([]string, error) {
+// Unreferenced binaries are also deleted by this
+func PruneOld(dryRun, safeMode bool, callback PruneCallback) ([]string, error) {
 	refSHAsDone := NewStringSet()
 	// Build a list to keep, then delete all else (includes deleting unreferenced)
 	// Can't just look at diffs (just like fetch) since LOB changed 3 years ago but still valid = recent
@@ -459,11 +476,8 @@ func PruneOld(dryRun bool, callback PruneCallback) ([]string, error) {
 
 	}
 
-	// What remote(s) do we check for push?
-	remoteName := strings.TrimSpace(GlobalOptions.GitConfig["git-lob.prune-check-remote"])
-	if remoteName == "" {
-		remoteName = "origin"
-	}
+	// What remote(s) do we check for push? Defaults to "origin"
+	remoteName := GlobalOptions.PruneRemote
 
 	// First, include HEAD (we always want to keep that)
 	LogDebugf("Retaining HEAD and %dd of history\n", GlobalOptions.RetentionCommitsPeriodHEAD)
@@ -523,12 +537,56 @@ func PruneOld(dryRun bool, callback PruneCallback) ([]string, error) {
 
 	}
 
+	var provider SyncProvider
+	safeRemote := "origin"
+	if safeMode {
+		if GlobalOptions.PruneRemote != "" {
+			safeRemote = GlobalOptions.PruneRemote
+			if safeRemote == "*" {
+				remotes, err := GetGitRemotes()
+				if err != nil {
+					return []string{}, fmt.Errorf("Can't determine remotes to check in safe mode for '*': %v", err.Error())
+				}
+				if len(remotes) == 0 {
+					return []string{}, fmt.Errorf("No remotes exist, cannot prune anything in --safe mode")
+				}
+
+				for _, remote := range remotes {
+					// default to origin if present
+					if remote == "origin" {
+						safeRemote = remote
+						break
+					}
+				}
+				// If not found, use the first one
+				if safeRemote == "*" {
+					safeRemote = remotes[0]
+				}
+			}
+		}
+		var err error
+		provider, err = GetProviderForRemote(safeRemote)
+		if err != nil {
+			return []string{}, err
+		}
+		if err = provider.ValidateConfig(safeRemote); err != nil {
+			return []string{}, fmt.Errorf("Remote %v has configuration problems:\n%v", safeRemote, err)
+		}
+
+	}
 	var removedList []string
 	localLOBs, err := getAllLocalLOBSHAs()
 	if err == nil {
 		for sha := range localLOBs.Iter() {
 			callback(PruneWorking, "")
 			if !retainSet.Contains(sha) {
+				if safeMode {
+					// check with remote before deleting
+					if CheckRemoteLOBFilesForSHA(sha, provider, safeRemote) != nil {
+						LogDebugf("Would have deleted %v but it does not exist on the remote %v, so keeping", sha, safeRemote)
+						continue
+					}
+				}
 				removedList = append(removedList, string(sha))
 				callback(PruneDeleted, sha)
 				if !dryRun {
@@ -595,7 +653,7 @@ func PruneSharedStore(dryRun bool, callback PruneCallback) ([]string, error) {
 // Perform the default prune after fetching or pulling
 // Only call this if pruning was requested & not dry running
 func PostFetchPullPrune() ([]string, error) {
-	shas, err := PruneOld(false, pruneCallbackImpl)
+	shas, err := PruneOld(false, GlobalOptions.PruneSafeMode, pruneCallbackImpl)
 	LogConsoleSpinnerFinish("Processing: ")
 	return shas, err
 }

@@ -63,6 +63,10 @@ type Options struct {
 	RetentionCommitsPeriodHEAD int
 	// Retention window in days for commits on other branches/tags compared to latest commit date
 	RetentionCommitsPeriodOther int
+	// The remote to check for unpushed commits before pruning ('*' means 'any')
+	PruneRemote string
+	// Whether to always operate prune old in safe mode
+	PruneSafeMode bool
 	// List of paths to include when fetching
 	FetchIncludePaths []string
 	// List of paths to exclude when fetching
@@ -85,6 +89,7 @@ func NewOptions() *Options {
 		RetentionRefsPeriod:         30,
 		RetentionCommitsPeriodHEAD:  7,
 		RetentionCommitsPeriodOther: 0,
+		PruneRemote:                 "origin",
 	}
 }
 
@@ -195,6 +200,12 @@ func parseConfig(configmap map[string]string, opts *Options) {
 			ex = strings.TrimSpace(ex)
 			opts.FetchExcludePaths = append(opts.FetchExcludePaths, ex)
 		}
+	}
+	if pruneremote := strings.TrimSpace(configmap["git-lob.prune-check-remote"]); pruneremote != "" {
+		opts.PruneRemote = pruneremote
+	}
+	if strings.ToLower(configmap["git-lob.prune-safe"]) == "true" {
+		opts.PruneSafeMode = true
 	}
 
 }
