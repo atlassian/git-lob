@@ -78,3 +78,29 @@ func IsNotFoundError(err error) bool {
 		return false
 	}
 }
+
+// Custom error type to indicate a 'wrong size' condition
+// This means a file is on disk but is the wrong size
+type WrongSizeError struct {
+	Message  string
+	Filename string
+}
+
+func (i *WrongSizeError) Error() string {
+	return i.Message
+}
+
+// Create a new WrongSize error
+func NewWrongSizeError(msg, filename string) error {
+	return &WrongSizeError{msg, filename}
+}
+
+// Is an error a NotFoundError?
+func IsWrongSizeError(err error) bool {
+	switch err.(type) {
+	case *WrongSizeError:
+		return true
+	default:
+		return false
+	}
+}
