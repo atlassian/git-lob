@@ -193,29 +193,46 @@ func getSharedLOBChunkPath(sha string, chunkIdx int) string {
 	return filepath.Join(fld, getLOBChunkFilename(sha, chunkIdx))
 }
 
-// Retrieve information about an existing stored LOB
-func GetLOBInfo(sha string) (*LOBInfo, error) {
-	meta := getLocalLOBMetaPath(sha)
-	_, err := os.Stat(meta)
+// Retrieve information about an existing stored LOB, from a base dir
+func getLOBInfoRelative(sha, basedir string) (*LOBInfo, error) {
+	file := filepath.Join(getLOBSubDir(basedir, sha), getLOBMetaFilename(sha))
+	_, err := os.Stat(file)
 	if err != nil {
 		if os.IsNotExist(err) {
+			return nil, NewNotFoundError(err.Error(), file)
+		}
+		return nil, err
+	}
+
+	info, err := parseLOBInfoFromFile(file)
+	if err != nil {
+		return nil, NewIntegrityErrorWithAdditionalMessage([]string{sha}, err.Error())
+	}
+	return info, nil
+}
+
+// Retrieve information about an existing stored LOB (local)
+func GetLOBInfo(sha string) (*LOBInfo, error) {
+	info, err := getLOBInfoRelative(sha, GetLocalLOBRoot())
+	if err != nil {
+		if IsNotFoundError(err) {
 			// Try to recover from shared
 			if recoverLocalLOBFilesFromSharedStore(sha) {
-				_, err := os.Stat(meta)
+				info, err = getLOBInfoRelative(sha, GetLocalLOBRoot())
 				if err != nil {
 					// Dang
 					return nil, err
 				}
 				// otherwise we recovered!
 			} else {
-				return nil, NewNotFoundError(err.Error())
+				return nil, err
 			}
 		} else {
 			return nil, err
 		}
 	}
 
-	return parseLOBInfoFromFile(meta)
+	return info, nil
 }
 
 // Parse a LOB meta file
@@ -640,7 +657,7 @@ func DeleteLOB(sha string) error {
 // store has it
 func GetLOBFilesForSHA(sha, basedir string, check bool, checkHash bool) (files []string, size int64, _err error) {
 	var ret []string
-	info, err := GetLOBInfo(sha)
+	info, err := getLOBInfoRelative(sha, basedir)
 	if err != nil {
 		return []string{}, 0, err
 	}
