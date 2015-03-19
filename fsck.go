@@ -190,7 +190,7 @@ func Fsck(deep, shared, deleteBadFiles bool, shas []string, callback func(data *
 func cmdFsckHelp() {
 	LogConsole(`Usage: git-lob fsck [options] [SHA...]
 
-  Validates that the local binary store is interally consistent. 
+  Validates that the local binary store is internally consistent. 
 
   This utility command checks the contents of the local binary store to make
   sure that each binary stored there is complete & correct. The basic mode
