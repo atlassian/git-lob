@@ -113,6 +113,12 @@ func mainImpl() int {
 			return 0
 		}
 		return cmdCleanFilter()
+	case "fsck":
+		if GlobalOptions.HelpRequested {
+			cmdFsckHelp()
+			return 0
+		}
+		return cmdFsck()
 	case "help":
 		// Support help as a command since 'git lob --help' uses git's help system
 		// You have to use "git-lob --help" otherwise
