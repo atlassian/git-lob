@@ -338,13 +338,13 @@ func RetrieveLOB(sha string, out io.Writer) (info *LOBInfo, err error) {
 					err = AutoFetch(sha, true)
 					if err != nil {
 						if IsNotFoundError(err) {
-							return info, NewNotFoundError(fmt.Sprintf("Missing chunk %d for %v & not on remote", i, sha))
+							return info, NewNotFoundError(fmt.Sprintf("Missing chunk %d for %v & not on remote", i, sha), chunkFilename)
 						} else {
 							return info, errors.New(fmt.Sprintf("Missing chunk %d for %v & failed fetch: %v", i, sha, err.Error()))
 						}
 					}
 				} else {
-					return info, NewNotFoundError(fmt.Sprintf("Missing chunk %d for %v", i, sha))
+					return info, NewNotFoundError(fmt.Sprintf("Missing chunk %d for %v", i, sha), chunkFilename)
 				}
 			}
 		}

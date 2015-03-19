@@ -40,6 +40,7 @@ func IsIntegrityError(err error) bool {
 // This type of error may be expected or tolerable so identify separately
 type NotFoundError struct {
 	Message string
+	Path    string
 }
 
 func (i *NotFoundError) Error() string {
@@ -47,8 +48,8 @@ func (i *NotFoundError) Error() string {
 }
 
 // Create a new NotFound error
-func NewNotFoundError(msg string) error {
-	return &NotFoundError{msg}
+func NewNotFoundError(msg, path string) error {
+	return &NotFoundError{msg, path}
 }
 
 // Custom error type to indicate a 'not found' condition for a list of SHAs

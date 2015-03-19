@@ -159,7 +159,8 @@ func Checkout(pathspecs []string, dryRun bool, callback CheckoutCallback) error 
 					if IsNotFoundError(err) {
 						// most common issue, log nicely
 						callback(ProgressNotFound, &filelob,
-							NewNotFoundError(fmt.Sprintf("%v: content not available, placeholder used [%v]", filelob.Filename, filelob.SHA[:7])))
+							NewNotFoundError(fmt.Sprintf("%v: content not available, placeholder used [%v]", filelob.Filename, filelob.SHA[:7]),
+								filelob.Filename))
 					} else {
 						// Still not fatal but log full detail
 						callback(ProgressError, &filelob,
