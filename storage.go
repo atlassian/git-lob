@@ -601,12 +601,17 @@ func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
 
 }
 
-// Delete all files associated with a given LOB SHA
+// Delete all files associated with a given LOB SHA from the local store
 func DeleteLOB(sha string) error {
 	// Delete from local always (either only copy, or hard link)
 	localdir := GetLocalLOBDir(sha)
+	return deleteLOBRelative(sha, localdir)
+}
 
-	names, err := filepath.Glob(filepath.Join(localdir, fmt.Sprintf("%v*", sha)))
+// Delete all files associated with a given LOB SHA from a specified root dir
+func deleteLOBRelative(sha, basedir string) error {
+
+	names, err := filepath.Glob(filepath.Join(basedir, fmt.Sprintf("%v*", sha)))
 	if err != nil {
 		return errors.New(fmt.Sprintf("Unable to glob local files for %v: %v", sha, err))
 	}
@@ -617,7 +622,7 @@ func DeleteLOB(sha string) error {
 		}
 	}
 
-	if isUsingSharedStorage() {
+	if isUsingSharedStorage() && basedir != GetSharedLOBRoot() {
 		// If we're using shared storage, then also check the number of links in
 		// shared storage for this SHA. See PruneSharedStore for a more general
 		// sweep for files that don't go through DeleteLOB (e.g. repo deleted manually)
@@ -739,6 +744,7 @@ func GetLOBFilesForSHA(sha, basedir string, check bool, checkHash bool) (files [
 // If checkHash = true, reads all the data in the files and re-calculates
 // the SHA for a deep validation of content (slower but complete)
 // If checkHash = false, just checks the presence & size of all files (quick & most likely correct)
+// Note that if basedir is the local root, will try to recover missing files from shared store
 func CheckLOBFilesForSHA(sha, basedir string, checkHash bool) error {
 	_, _, err := GetLOBFilesForSHA(sha, basedir, true, checkHash)
 	return err
