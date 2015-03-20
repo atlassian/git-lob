@@ -460,6 +460,8 @@ func isUsingSharedStorage() bool {
 
 // Write the contents of fromFile to final storage with sha, checking the size
 // If file already exists and is of the right size, will do nothing
+// fromChunkFile will be moved into its final location or deleted if the data is already valid,
+// so the file will not exist after this call (renamed to final location or deleted), unless error
 func storeLOBChunk(sha string, chunkNo int, fromChunkFile string, sz int64) error {
 	var destFile string
 
@@ -479,6 +481,8 @@ func storeLOBChunk(sha string, chunkNo int, fromChunkFile string, sz int64) erro
 		}
 	} else {
 		LogDebugf("LOB chunk file already exists & is valid: %v\n", destFile)
+		// Remove file that would have been moved
+		os.Remove(fromChunkFile)
 	}
 
 	// This may have stored in shared storage, so link if required
@@ -570,12 +574,14 @@ func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
 			break
 		}
 	}
-
-	if fatalError != nil {
-		// Clean up temporaries
+	defer func() {
+		// Clean up any temporaries on error or not used
 		for _, f := range chunkFilenames {
 			os.Remove(f)
 		}
+	}()
+
+	if fatalError != nil {
 		return nil, fatalError
 	}
 
@@ -586,6 +592,9 @@ func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
 	// Construct LOBInfo & write to final location
 	info := &LOBInfo{SHA: shaStr, Size: totalSize, NumChunks: len(chunkFilenames)}
 	err = storeLOBInfo(info)
+	if err != nil {
+		return nil, err
+	}
 
 	// Check each chunk file
 	for i, f := range chunkFilenames {
@@ -594,7 +603,10 @@ func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
 			// Last chunk, get size
 			sz = currentChunkSize
 		}
-		storeLOBChunk(shaStr, i, f, sz)
+		err = storeLOBChunk(shaStr, i, f, sz)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return info, nil
