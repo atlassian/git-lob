@@ -3,6 +3,7 @@ package main
 import (
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
+	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -12,6 +13,7 @@ import (
 var _ = Describe("Fsck", func() {
 
 	root := filepath.Join(os.TempDir(), "FsckTest")
+	shared := filepath.Join(os.TempDir(), "FsckShared")
 	var oldwd string
 	var smallLOBs []string
 	var largeLOBs []string
@@ -47,6 +49,8 @@ var _ = Describe("Fsck", func() {
 	AfterEach(func() {
 		os.Chdir(oldwd)
 		os.RemoveAll(root)
+		os.RemoveAll(shared)
+		GlobalOptions = NewOptions()
 	})
 
 	// Do everything in one test so we don't incur the setup cost more than once (large files)
@@ -199,18 +203,40 @@ var _ = Describe("Fsck", func() {
 		Expect(missingFiles).To(ConsistOf([]string{smallLOBs[0]}), "Detect missing file (deep)")
 		Expect(wrongSizeFiles).To(ConsistOf([]string{largeLOBs[1]}), "Detect a wrong size file (deep)")
 		// Check deletion
+		for i, s := range smallLOBs {
+			// we already broke smallLOBs[0]
+			if i == 0 {
+				continue
+			}
+			if i == 2 {
+				Expect(FileExists(getLocalLOBMetaPath(s))).To(BeFalse(), "Corrupt file should be deleted")
+				Expect(FileExists(getLocalLOBChunkPath(s, 0))).To(BeFalse(), "Corrupt file should be deleted")
+			} else {
+				Expect(FileExists(getLocalLOBMetaPath(s))).To(BeTrue(), fmt.Sprintf("Small meta file %d should still exist", i))
+				Expect(FileExists(getLocalLOBChunkPath(s, 0))).To(BeTrue(), fmt.Sprintf("Small chunk file %d should still exist", i))
+			}
+		}
 		Expect(FileExists(getLocalLOBChunkPath(largeLOBs[1], 2))).To(BeFalse(), "Wrong size file should be deleted")
 		Expect(FileExists(getLocalLOBMetaPath(largeLOBs[1]))).To(BeTrue(), "Metadata of wrong size chunk file should still exist")
 		Expect(FileExists(getLocalLOBChunkPath(largeLOBs[1], 0))).To(BeTrue(), "Earlier chunks of wrong size file should still exist")
 		Expect(FileExists(getLocalLOBChunkPath(largeLOBs[1], 1))).To(BeTrue(), "Earlier chunks of wrong size file should still exist")
-		Expect(FileExists(getLocalLOBMetaPath(smallLOBs[2]))).To(BeFalse(), "Corrupt file should be deleted")
-		Expect(FileExists(getLocalLOBChunkPath(smallLOBs[2], 0))).To(BeFalse(), "Corrupt file should be deleted")
 		Expect(FileExists(getLocalLOBMetaPath(largeLOBs[0]))).To(BeFalse(), "Corrupt file should be deleted")
 		Expect(FileExists(getLocalLOBChunkPath(largeLOBs[0], 0))).To(BeFalse(), "Corrupt file should be deleted")
 		Expect(FileExists(getLocalLOBChunkPath(largeLOBs[0], 1))).To(BeFalse(), "Corrupt file should be deleted")
 		missingFiles = nil
 		corruptFiles = nil
 		wrongSizeFiles = nil
+
+		// test shared
+		GlobalOptions.SharedStore = shared
+		err = os.Rename(GetLocalLOBRoot(), shared)
+		Expect(err).To(BeNil(), fmt.Sprintf("Should be no error renaming to shared"))
+		err = Fsck(false, true, false, nil, callback)
+		Expect(err).ToNot(BeNil(), "Should be an error calling Fsck (shared)")
+		Expect(corruptFiles).To(BeEmpty(), "No corruptions (they were deleted")
+		Expect(missingFiles).To(ConsistOf([]string{smallLOBs[0], largeLOBs[1]}), "Detect missing file, including deleted wrong size files (shared)")
+		Expect(wrongSizeFiles).To(BeEmpty(), "Should be no wrong size files (shared)")
+		missingFiles = nil
 
 	})
 
