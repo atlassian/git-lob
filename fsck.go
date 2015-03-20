@@ -71,26 +71,26 @@ func cmdFsck() int {
 		LogConsolef("\r")
 		switch data.Type {
 		case FsckMissing:
-			LogErrorf("fsck %v: %v has some missing data, try fetch/prune\n", data.SHA[:7], data.Desc)
+			LogErrorf(" * %v: file is missing, try fetch/prune (%v)\n", data.SHA[:7], data.Desc)
 		case FsckCorruptData:
-			LogErrorf("fsck %v: content is corrupt (deleted: %v)\n", data.SHA[:7], optDelete)
+			LogErrorf(" * %v: content is corrupt (deleted: %v)\n", data.SHA[:7], optDelete)
 		case FsckWrongSize:
-			LogErrorf("fsck %v: %v is wrong size (deleted: %v)\n", data.SHA[:7], data.Desc, optDelete)
+			LogErrorf(" * %v: file is wrong size (%v deleted: %v)\n", data.SHA[:7], data.Desc, optDelete)
 		case FsckWorking:
 			// Do nothing, just progress below
 		}
 		// Display progress always (fixed line width always large enough)
-		LogConsoleOverwrite(fmt.Sprintf("Progress: %d%", data.PercentComplete), 14)
+		LogConsoleOverwrite(fmt.Sprintf("Progress: %d%%", data.PercentComplete), 14)
 		// Always continue
 		return false
 	}
-
+	// Add newlines to messages since progress doesn't
 	err := Fsck(optDeep, optShared, optDelete, shas, callback)
 	if err != nil {
-		LogError("Error(s) in fsck: %v", err.Error())
+		LogConsoleError("\nError(s) in fsck, see above.")
 		return 12
 	}
-	LogConsole("Completed successfully, no problems found")
+	LogConsole("\nCompleted successfully, no problems found")
 	return 0
 }
 
@@ -131,8 +131,7 @@ func Fsck(deep, shared, deleteBadFiles bool, shas []string, callback func(data *
 	i := 0
 	var errorList []string
 	for sha := range shaSet.Iter() {
-		percent := int(float32(i) / float32(len(shas)))
-
+		percent := int(float32(i+1) * 100 / float32(len(shaSet)))
 		err := CheckLOBFilesForSHA(sha, basedir, deep)
 		var quit bool
 		if err != nil {
