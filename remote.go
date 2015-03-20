@@ -583,7 +583,7 @@ func CheckRemoteLOBFilesForSHA(sha string, provider SyncProvider, remoteName str
 	} else {
 		// We had the meta locally, so just check the file is on the remote
 		if !provider.FileExists(remoteName, meta) {
-			return NewNotFoundError(fmt.Sprintf("Meta file %v missing from %v", meta, remoteName))
+			return NewNotFoundError(fmt.Sprintf("Meta file %v missing from %v", meta, remoteName), meta)
 		}
 	}
 
@@ -592,7 +592,7 @@ func CheckRemoteLOBFilesForSHA(sha string, provider SyncProvider, remoteName str
 		expectedSize := getLOBExpectedChunkSize(info, i)
 		chunk := getLOBChunkRelativePath(sha, i)
 		if !provider.FileExistsAndIsOfSize(remoteName, chunk, expectedSize) {
-			return NewNotFoundError(fmt.Sprintf("Chunk file %v missing from %v", chunk, remoteName))
+			return NewNotFoundError(fmt.Sprintf("Chunk file %v missing from %v", chunk, remoteName), chunk)
 		}
 	}
 

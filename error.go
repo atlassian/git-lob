@@ -40,6 +40,7 @@ func IsIntegrityError(err error) bool {
 // This type of error may be expected or tolerable so identify separately
 type NotFoundError struct {
 	Message string
+	Path    string
 }
 
 func (i *NotFoundError) Error() string {
@@ -47,8 +48,8 @@ func (i *NotFoundError) Error() string {
 }
 
 // Create a new NotFound error
-func NewNotFoundError(msg string) error {
-	return &NotFoundError{msg}
+func NewNotFoundError(msg, path string) error {
+	return &NotFoundError{msg, path}
 }
 
 // Custom error type to indicate a 'not found' condition for a list of SHAs
@@ -72,6 +73,32 @@ func IsNotFoundError(err error) bool {
 	case *NotFoundError:
 		return true
 	case *NotFoundForSHAsError:
+		return true
+	default:
+		return false
+	}
+}
+
+// Custom error type to indicate a 'wrong size' condition
+// This means a file is on disk but is the wrong size
+type WrongSizeError struct {
+	Message  string
+	Filename string
+}
+
+func (i *WrongSizeError) Error() string {
+	return i.Message
+}
+
+// Create a new WrongSize error
+func NewWrongSizeError(msg, filename string) error {
+	return &WrongSizeError{msg, filename}
+}
+
+// Is an error a NotFoundError?
+func IsWrongSizeError(err error) bool {
+	switch err.(type) {
+	case *WrongSizeError:
 		return true
 	default:
 		return false

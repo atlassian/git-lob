@@ -193,29 +193,46 @@ func getSharedLOBChunkPath(sha string, chunkIdx int) string {
 	return filepath.Join(fld, getLOBChunkFilename(sha, chunkIdx))
 }
 
-// Retrieve information about an existing stored LOB
-func GetLOBInfo(sha string) (*LOBInfo, error) {
-	meta := getLocalLOBMetaPath(sha)
-	_, err := os.Stat(meta)
+// Retrieve information about an existing stored LOB, from a base dir
+func getLOBInfoRelative(sha, basedir string) (*LOBInfo, error) {
+	file := filepath.Join(getLOBSubDir(basedir, sha), getLOBMetaFilename(sha))
+	_, err := os.Stat(file)
 	if err != nil {
 		if os.IsNotExist(err) {
+			return nil, NewNotFoundError(err.Error(), file)
+		}
+		return nil, err
+	}
+
+	info, err := parseLOBInfoFromFile(file)
+	if err != nil {
+		return nil, NewIntegrityErrorWithAdditionalMessage([]string{sha}, err.Error())
+	}
+	return info, nil
+}
+
+// Retrieve information about an existing stored LOB (local)
+func GetLOBInfo(sha string) (*LOBInfo, error) {
+	info, err := getLOBInfoRelative(sha, GetLocalLOBRoot())
+	if err != nil {
+		if IsNotFoundError(err) {
 			// Try to recover from shared
 			if recoverLocalLOBFilesFromSharedStore(sha) {
-				_, err := os.Stat(meta)
+				info, err = getLOBInfoRelative(sha, GetLocalLOBRoot())
 				if err != nil {
 					// Dang
 					return nil, err
 				}
 				// otherwise we recovered!
 			} else {
-				return nil, NewNotFoundError(err.Error())
+				return nil, err
 			}
 		} else {
 			return nil, err
 		}
 	}
 
-	return parseLOBInfoFromFile(meta)
+	return info, nil
 }
 
 // Parse a LOB meta file
@@ -338,13 +355,13 @@ func RetrieveLOB(sha string, out io.Writer) (info *LOBInfo, err error) {
 					err = AutoFetch(sha, true)
 					if err != nil {
 						if IsNotFoundError(err) {
-							return info, NewNotFoundError(fmt.Sprintf("Missing chunk %d for %v & not on remote", i, sha))
+							return info, NewNotFoundError(fmt.Sprintf("Missing chunk %d for %v & not on remote", i, sha), chunkFilename)
 						} else {
 							return info, errors.New(fmt.Sprintf("Missing chunk %d for %v & failed fetch: %v", i, sha, err.Error()))
 						}
 					}
 				} else {
-					return info, NewNotFoundError(fmt.Sprintf("Missing chunk %d for %v", i, sha))
+					return info, NewNotFoundError(fmt.Sprintf("Missing chunk %d for %v", i, sha), chunkFilename)
 				}
 			}
 		}
@@ -584,12 +601,17 @@ func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
 
 }
 
-// Delete all files associated with a given LOB SHA
+// Delete all files associated with a given LOB SHA from the local store
 func DeleteLOB(sha string) error {
 	// Delete from local always (either only copy, or hard link)
-	localdir := GetLocalLOBDir(sha)
+	return deleteLOBRelative(sha, GetLocalLOBRoot())
+}
 
-	names, err := filepath.Glob(filepath.Join(localdir, fmt.Sprintf("%v*", sha)))
+// Delete all files associated with a given LOB SHA from a specified root dir
+func deleteLOBRelative(sha, basedir string) error {
+
+	dir := getLOBSubDir(basedir, sha)
+	names, err := filepath.Glob(filepath.Join(dir, fmt.Sprintf("%v*", sha)))
 	if err != nil {
 		return errors.New(fmt.Sprintf("Unable to glob local files for %v: %v", sha, err))
 	}
@@ -600,7 +622,7 @@ func DeleteLOB(sha string) error {
 		}
 	}
 
-	if isUsingSharedStorage() {
+	if isUsingSharedStorage() && basedir != GetSharedLOBRoot() {
 		// If we're using shared storage, then also check the number of links in
 		// shared storage for this SHA. See PruneSharedStore for a more general
 		// sweep for files that don't go through DeleteLOB (e.g. repo deleted manually)
@@ -640,7 +662,7 @@ func DeleteLOB(sha string) error {
 // store has it
 func GetLOBFilesForSHA(sha, basedir string, check bool, checkHash bool) (files []string, size int64, _err error) {
 	var ret []string
-	info, err := GetLOBInfo(sha)
+	info, err := getLOBInfoRelative(sha, basedir)
 	if err != nil {
 		return []string{}, 0, err
 	}
@@ -678,7 +700,14 @@ func GetLOBFilesForSHA(sha, basedir string, check bool, checkHash bool) (files [
 
 				if !recoveredFromShared {
 					msg := fmt.Sprintf("LOB file not found or wrong size: %v expected to be %d bytes", abschunk, expectedSize)
-					return ret, info.Size, NewNotFoundError(msg)
+					wrongSize := FileExists(abschunk)
+					var err error
+					if wrongSize {
+						err = NewWrongSizeError(msg, abschunk)
+					} else {
+						err = NewNotFoundError(msg, abschunk)
+					}
+					return ret, info.Size, err
 				}
 			}
 
@@ -715,6 +744,7 @@ func GetLOBFilesForSHA(sha, basedir string, check bool, checkHash bool) (files [
 // If checkHash = true, reads all the data in the files and re-calculates
 // the SHA for a deep validation of content (slower but complete)
 // If checkHash = false, just checks the presence & size of all files (quick & most likely correct)
+// Note that if basedir is the local root, will try to recover missing files from shared store
 func CheckLOBFilesForSHA(sha, basedir string, checkHash bool) error {
 	_, _, err := GetLOBFilesForSHA(sha, basedir, true, checkHash)
 	return err
