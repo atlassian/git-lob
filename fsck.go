@@ -14,8 +14,6 @@ const (
 	FsckWorking FsckCallbackType = iota
 	// A file was missing and not recovered from shared store (desc = name)
 	FsckMissing FsckCallbackType = iota
-	// A file was missing in the local store but was recovered from the shared store (desc = name)
-	FsckRecovered FsckCallbackType = iota
 	// A content file had the wrong size (desc = name)
 	// This file will be deleted if --delete was specified
 	FsckWrongSize FsckCallbackType = iota
@@ -74,8 +72,6 @@ func cmdFsck() int {
 		switch data.Type {
 		case FsckMissing:
 			LogErrorf("fsck %v: %v has some missing data, try fetch/prune\n", data.SHA[:7], data.Desc)
-		case FsckRecovered:
-			LogDebugf("fsck %v: %v was recovered from shared store\n", data.SHA[:7], data.Desc)
 		case FsckCorruptData:
 			LogErrorf("fsck %v: content is corrupt (deleted: %v)\n", data.SHA[:7], optDelete)
 		case FsckWrongSize:
@@ -195,7 +191,7 @@ func cmdFsckHelp() {
   This utility command checks the contents of the local binary store to make
   sure that each binary stored there is complete & correct. The basic mode
   just ensures that all the required file components are there and are of the
-  correct size, wheras --deep mode also checks every every byte of the content
+  correct size, wheras --deep mode also checks every byte of the content
   to ensure it is correct (by checking that the SHA matches the content).
 
   If you're using a shared store across repos (see git-lob.sharedstore in 
