@@ -604,14 +604,14 @@ func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
 // Delete all files associated with a given LOB SHA from the local store
 func DeleteLOB(sha string) error {
 	// Delete from local always (either only copy, or hard link)
-	localdir := GetLocalLOBDir(sha)
-	return deleteLOBRelative(sha, localdir)
+	return deleteLOBRelative(sha, GetLocalLOBRoot())
 }
 
 // Delete all files associated with a given LOB SHA from a specified root dir
 func deleteLOBRelative(sha, basedir string) error {
 
-	names, err := filepath.Glob(filepath.Join(basedir, fmt.Sprintf("%v*", sha)))
+	dir := getLOBSubDir(basedir, sha)
+	names, err := filepath.Glob(filepath.Join(dir, fmt.Sprintf("%v*", sha)))
 	if err != nil {
 		return errors.New(fmt.Sprintf("Unable to glob local files for %v: %v", sha, err))
 	}
