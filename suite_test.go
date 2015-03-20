@@ -220,6 +220,43 @@ func CreateRandomFileForTest(sz int64, filename string) {
 
 }
 
+// Create a file with less random data of size sz (faster than CreateRandomFileForTest)
+// Data is still random but written in repeating blocks
+func CreateFastFileForTest(sz int64, filename string) {
+	os.MkdirAll(filepath.Dir(filename), 0755)
+	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0644)
+	if err != nil {
+		Fail(fmt.Sprintf("Can't create test file %v: %v", filename, err))
+	}
+	defer f.Close()
+
+	szLeft := sz
+	// write in blocks of 16k
+	blockSize := 16 * 1024
+	blocks := [][]byte{
+		bytes.Repeat([]byte{byte(rand.Intn(255))}, blockSize),
+		bytes.Repeat([]byte{byte(rand.Intn(255))}, blockSize),
+		bytes.Repeat([]byte{byte(rand.Intn(255))}, blockSize),
+		bytes.Repeat([]byte{byte(rand.Intn(255))}, blockSize),
+	}
+	block := 0
+	for szLeft > 0 {
+		var data []byte
+		if szLeft < int64(blockSize) {
+			data = blocks[block][:szLeft]
+		} else {
+			data = blocks[block]
+		}
+		_, err := f.Write(data)
+		if err != nil {
+			Fail(fmt.Sprintf("Can't write data to test file %v: %v", filename, err))
+		}
+		szLeft -= int64(len(data))
+		block = (block + 1) % len(blocks)
+	}
+
+}
+
 // Store a random file LOB, then overwrite it with a placeholder ready for commit (without filters)
 func CreateAndStoreLOBFileForTest(sz int64, filename string) *LOBInfo {
 	CreateRandomFileForTest(sz, filename)
