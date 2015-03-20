@@ -1,12 +1,12 @@
 package main
 
 import (
-	"fmt"
 	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/mitchellh/goamz/aws"
 	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/mitchellh/goamz/s3"
 	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/mitchellh/goamz/testutil"
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -17,6 +17,7 @@ var _ = Describe("S3", func() {
 		var testServer *testutil.HTTPServer
 		var auth = aws.Auth{"abc", "123", ""}
 		var s3sync *S3SyncProvider
+		var tempsToDelete []string
 		BeforeEach(func() {
 			// Mock server
 			// No shutdown available so must only do this once
@@ -33,6 +34,10 @@ var _ = Describe("S3", func() {
 		AfterEach(func() {
 			GlobalOptions = NewOptions()
 			testServer.Flush()
+			for _, temp := range tempsToDelete {
+				os.RemoveAll(temp)
+			}
+			tempsToDelete = nil
 		})
 
 		It("Detects whether files exist", func() {
@@ -96,6 +101,7 @@ var _ = Describe("S3", func() {
 			// 3 Upload
 			testServer.Response(200, nil, "")
 			tmp, _ := ioutil.TempDir("", "s3test")
+			tempsToDelete = append(tempsToDelete, tmp)
 			filename := filepath.Join(tmp, "file1.txt")
 			CreateRandomFileForTest(100, filename)
 			err := s3sync.Upload("origin", []string{filepath.Base(filename)}, filepath.Dir(filename), false, callback)
@@ -149,6 +155,7 @@ var _ = Describe("S3", func() {
 
 			fileContent := "Hello from S3"
 			tmp, _ := ioutil.TempDir("", "s3test")
+			tempsToDelete = append(tempsToDelete, tmp)
 			filename := "tests3file.txt"
 			absfile := filepath.Join(tmp, filename)
 
