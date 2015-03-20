@@ -10,7 +10,7 @@ import (
 var (
 	GlobalOptions  *Options = NewOptions()
 	VersionMajor            = 0
-	VersionMinor            = 3
+	VersionMinor            = 4
 	VersionPatch            = 0
 	VersionBuildID string   // populated in build.sh to the git hash
 )
