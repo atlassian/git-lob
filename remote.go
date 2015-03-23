@@ -373,7 +373,7 @@ func MarkBinariesAsPushed(remoteName, commitSHA, replaceCommitSHA string) error 
 
 	// insert or append, then re-sort
 	if replaceCommitSHA != "" {
-		LogDebugf("Updating remote state for %v to mark %v as pushed (replaces %v)", remoteName, commitSHA, replaceCommitSHA)
+		//LogDebugf("Updating remote state for %v to mark %v as pushed (replaces %v)\n", remoteName, commitSHA, replaceCommitSHA)
 		found, insertAt := StringBinarySearch(shas, replaceCommitSHA)
 		if found {
 			shas[insertAt] = commitSHA
@@ -381,7 +381,7 @@ func MarkBinariesAsPushed(remoteName, commitSHA, replaceCommitSHA string) error 
 			shas = append(shas, commitSHA)
 		}
 	} else {
-		LogDebugf("Updating remote state for %v to mark %v as pushed", remoteName, commitSHA)
+		//LogDebugf("Updating remote state for %v to mark %v as pushed\n", remoteName, commitSHA)
 		shas = append(shas, commitSHA)
 	}
 	sort.Strings(shas)
@@ -402,7 +402,6 @@ func WritePushedState(remoteName string, shas []string) error {
 		// Have to re-insert the line break
 		f.WriteString(sha + "\n")
 	}
-	LogDebugf("Initialised remote state cache for %v", remoteName)
 
 	return nil
 }
