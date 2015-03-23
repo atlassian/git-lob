@@ -132,7 +132,7 @@ func cmdFetchLob() int {
 	// git-lob fetch-lob [--force] <remote> <sha>...
 
 	// Validate custom options
-	errorList := validateCustomOptions(GlobalOptions, nil, []string{"force"})
+	errorList := validateCustomOptions(GlobalOptions, nil, []string{"force", "f"})
 	if len(errorList) > 0 {
 		LogConsoleError(strings.Join(errorList, "\n"))
 		return 9
@@ -143,7 +143,7 @@ func cmdFetchLob() int {
 		return 9
 	}
 
-	optForce := GlobalOptions.BoolOpts.Contains("force")
+	optForce := GlobalOptions.BoolOpts.Contains("force") || GlobalOptions.BoolOpts.Contains("f")
 
 	// Determine remote
 	var remoteName string
@@ -772,7 +772,7 @@ Parameters:
             to fetch binaries for a commit, use regular 'git lob fetch'
 
 Options:
-  --force       Always download files even if the provider believes the file is 
+  --force, -f   Always download files even if the provider believes the file is 
                 already present locally. 
   --quiet, -q   Print less output
   --verbose, -v Print more output

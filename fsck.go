@@ -40,15 +40,15 @@ func cmdFsck() int {
 	// git-lob fsck [--deep] [--shared]
 
 	// Validate custom options
-	errorList := validateCustomOptions(GlobalOptions, nil, []string{"deep", "shared", "delete"})
+	errorList := validateCustomOptions(GlobalOptions, nil, []string{"deep", "d", "shared", "s", "delete", "x"})
 	if len(errorList) > 0 {
 		LogConsoleError(strings.Join(errorList, "\n"))
 		return 9
 	}
 
-	optDeep := GlobalOptions.BoolOpts.Contains("deep")
-	optShared := GlobalOptions.BoolOpts.Contains("shared")
-	optDelete := GlobalOptions.BoolOpts.Contains("delete")
+	optDeep := GlobalOptions.BoolOpts.Contains("deep") || GlobalOptions.BoolOpts.Contains("d")
+	optShared := GlobalOptions.BoolOpts.Contains("shared") || GlobalOptions.BoolOpts.Contains("s")
+	optDelete := GlobalOptions.BoolOpts.Contains("delete") || GlobalOptions.BoolOpts.Contains("x")
 
 	if optShared {
 		// Check we have a shared store
@@ -214,11 +214,11 @@ Parameters:
                 object.
 
 Options:
-  --deep        Recalculates the SHA of each binary file to ensure the contents
+  --deep, -d    Recalculates the SHA of each binary file to ensure the contents
                 are correct. Without this option, just checks that all files
                 are present and the correct size.
-  --shared      Checks the shared store instead of the local repo
-  --delete      Delete files which are invalid. Doesn't delete partial binaries
+  --shared, -s  Checks the shared store instead of the local repo
+  --delete, -x  Delete files which are invalid. Doesn't delete partial binaries
                 where 1 or more chunks are missing, but deletes files which are
                 internally inconsistent; e.g. invalid meta files, partial 
                 chunks, and all files where --deep is used and SHA doesn't 

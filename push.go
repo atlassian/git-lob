@@ -13,15 +13,15 @@ func cmdPush() int {
 	// git-lob push [--all] [--recheck] [--force] [<remote> [<ref>...]]
 
 	// Validate custom options
-	errorList := validateCustomOptions(GlobalOptions, nil, []string{"all", "recheck", "force"})
+	errorList := validateCustomOptions(GlobalOptions, nil, []string{"all", "a", "recheck", "r", "force", "f"})
 	if len(errorList) > 0 {
 		LogConsoleError(strings.Join(errorList, "\n"))
 		return 9
 	}
 
-	optAll := GlobalOptions.BoolOpts.Contains("all")
-	optRecheck := GlobalOptions.BoolOpts.Contains("recheck")
-	optForce := GlobalOptions.BoolOpts.Contains("force")
+	optAll := GlobalOptions.BoolOpts.Contains("all") || GlobalOptions.BoolOpts.Contains("a")
+	optRecheck := GlobalOptions.BoolOpts.Contains("recheck") || GlobalOptions.BoolOpts.Contains("r")
+	optForce := GlobalOptions.BoolOpts.Contains("force") || GlobalOptions.BoolOpts.Contains("f")
 	optDryRun := GlobalOptions.DryRun
 
 	// Determine remote
@@ -172,7 +172,7 @@ func cmdPushLob() int {
 	// git-lob push-lob [--force] <remote> <sha>...
 
 	// Validate custom options
-	errorList := validateCustomOptions(GlobalOptions, nil, []string{"force"})
+	errorList := validateCustomOptions(GlobalOptions, nil, []string{"force", "f"})
 	if len(errorList) > 0 {
 		LogConsoleError(strings.Join(errorList, "\n"))
 		return 9
@@ -183,7 +183,7 @@ func cmdPushLob() int {
 		return 9
 	}
 
-	optForce := GlobalOptions.BoolOpts.Contains("force")
+	optForce := GlobalOptions.BoolOpts.Contains("force") || GlobalOptions.BoolOpts.Contains("f")
 
 	// first parameter must be remote
 	remoteName := GlobalOptions.Args[0]
@@ -628,11 +628,11 @@ Parameters:
 
 
 Options:
-  --all         Push all branches; cannot be used with other refs.
-  --recheck     Re-check entire commit history to each ref instead of only 
+  --all, -a     Push all branches; cannot be used with other refs.
+  --recheck, -r Re-check entire commit history to each ref instead of only 
                 back to last commit we believe is already pushed. 
                 See HISTORY CHECKING below for more details.
-  --force       Always upload files even if the provider believes the file is 
+  --force, -f   Always upload files even if the provider believes the file is 
                 already present on the remote. You shouldn't need this.
   --quiet, -q   Print less output
   --verbose, -v Print more output
@@ -704,7 +704,7 @@ Parameters:
             to push binaries for a commit, use regular 'git lob push'
 
 Options:
-  --force       Always upload files even if the provider believes the file is 
+  --force, -f   Always upload files even if the provider believes the file is 
                 already present on the remote. You shouldn't need this.
   --quiet, -q   Print less output
   --verbose, -v Print more output

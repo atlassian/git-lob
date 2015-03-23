@@ -56,14 +56,14 @@ var pruneCallbackImpl = func(t PruneCallbackType, lobsha string) {
 }
 
 func cmdPrune() int {
-	errorList := validateCustomOptions(GlobalOptions, nil, []string{"unreferenced", "safe"})
+	errorList := validateCustomOptions(GlobalOptions, nil, []string{"unreferenced", "u", "safe", "k"})
 	if len(errorList) > 0 {
 		LogConsoleError(strings.Join(errorList, "\n"))
 		return 9
 	}
 
-	optOnlyUnreferenced := GlobalOptions.BoolOpts.Contains("unreferenced")
-	optSafeMode := GlobalOptions.BoolOpts.Contains("safe")
+	optOnlyUnreferenced := GlobalOptions.BoolOpts.Contains("unreferenced") || GlobalOptions.BoolOpts.Contains("u")
+	optSafeMode := GlobalOptions.BoolOpts.Contains("safe") || GlobalOptions.BoolOpts.Contains("k")
 
 	if optOnlyUnreferenced && optSafeMode {
 		LogConsole("The --safe option does nothing in --unreferenced mode because unreferenced\nbinaries are never pushed")
@@ -159,10 +159,10 @@ func cmdPruneHelp() {
        copy is not the only one)
 
 Options:
-  --safe               Before deleting old binaries that we think we've pushed,
+  --safe, -k           Before deleting old binaries that we think we've pushed,
                        doubly verify with the remote that it has a copy
                        Also see git-lob.prune-safe config setting
-  --unreferenced       Only prune totally unreferenced binaries, not old ones
+  --unreferenced, -u   Only prune totally unreferenced binaries, not old ones
   --quiet, -q          Print less output
   --verbose, -v        Print more output
   --dry-run            Don't actually delete anything, just report
