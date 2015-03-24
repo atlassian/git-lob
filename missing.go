@@ -140,6 +140,10 @@ func Missing(checkout bool, paths []string, callback func(data *MissingCallbackD
 // Check the contents of a directory for placeholders
 // path is relative to the working dir & we'll use that as-is
 func missingCheckDir(dir string, checkout bool, callback func(data *MissingCallbackData) (quit bool)) (quit bool) {
+	// Never cascade into git dir
+	if filepath.Base(dir) == ".git" {
+		return false
+	}
 	// os.File.Readdirnames is the most efficient but having Stat() output is quickest way to identify potential placeholders
 	// os.File.Readdir retrieves Stat() which lets us check size & whether dir (to cascade)
 	if callback(&MissingCallbackData{Type: MissingWorking, Path: dir}) {
