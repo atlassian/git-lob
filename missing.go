@@ -131,7 +131,7 @@ func Missing(checkout bool, paths []string, callback func(data *MissingCallbackD
 		}
 	} else {
 		// cascade from working dir
-		missingCheckDir("", checkout, callback)
+		missingCheckDir(".", checkout, callback)
 	}
 
 	return
