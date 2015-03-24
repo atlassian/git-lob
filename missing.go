@@ -82,7 +82,7 @@ func cmdMissing() int {
 			LogConsoleErrorf("Error: %v\n", data.Error.Error())
 			anyErrors = true // still continue
 		case MissingWorking:
-			// Do nothing, just progress below
+			LogConsoleDebugf("Checking %v\n", data.Path)
 		}
 		// Display progress always (fixed line width always large enough)
 		LogConsoleSpinner("Searching: ")
