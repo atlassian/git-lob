@@ -1,10 +1,11 @@
 package main
 
 import (
-	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -17,27 +18,27 @@ const (
 	MissingAvailable MissingCallbackType = iota
 	// Placeholder WAS present, content available & checked out
 	MissingFixed MissingCallbackType = iota
+	// Placeholder present, content corrupted (use fsck)
+	MissingCorrupt MissingCallbackType = iota
 	// Placeholder present, content not available (commit details included)
 	MissingBlamed MissingCallbackType = iota
 	// Placeholder present, but file is untracked or modified & therefore it's local user's fault
 	// resolution is probably to delete or reset/checkout this file again
 	MissingModified MissingCallbackType = iota
+	// Some other error was encountered
+	MissingError MissingCallbackType = iota
 )
 
-// Collected callback data for a fsck operation
+// Collected callback data for a missing operation
 type MissingCallbackData struct {
 	// What stage of the process this is for
 	Type MissingCallbackType
 	// Path to the file (relative to working dir)
 	Path string
-	// Commit SHA of last update
-	Commit string
-	// Committer name of last update
-	CommitterName string
-	// Committer email of last update
-	CommitterEmail string
-	// 1-line description of commit of last update
-	CommitSummary string
+	// Commit summary for MissingBlamed
+	CommitSummary *GitCommitSummary
+	// Error details for MissingError
+	Error error
 }
 
 // Missing command line tool
@@ -60,6 +61,7 @@ func cmdMissing() int {
 		paths = GlobalOptions.Args
 	}
 
+	anyErrors := false
 	callback := func(data *MissingCallbackData) (quit bool) {
 		// Ensure we clear previous progress
 		LogConsolef("\r")
@@ -74,7 +76,11 @@ func cmdMissing() int {
 			LogErrorf("%v is locally modified with no content, delete or reset/checkout to resolve\n", data.Path)
 		case MissingBlamed:
 			LogConsolef("%v no content available\n", data.Path)
-			LogConsolef("  Blame: %v(%v) [%v] %v\n", data.CommitterName, data.CommitterEmail, data.Commit[:7], data.CommitSummary)
+			LogConsolef("  Blame: %v(%v) [%v] %v\n", data.CommitSummary.CommitterName, data.CommitSummary.CommitterEmail,
+				data.CommitSummary.ShortSHA, data.CommitSummary.Subject)
+		case MissingError:
+			LogConsoleErrorf("Error: %v\n", data.Error.Error())
+			anyErrors = true // still continue
 		case MissingWorking:
 			// Do nothing, just progress below
 		}
@@ -84,40 +90,42 @@ func cmdMissing() int {
 		return false
 	}
 	// Add newlines to messages since progress doesn't
-	err := Missing(optCheckout, paths, callback)
+	Missing(optCheckout, paths, callback)
 	LogConsoleSpinnerFinish("Searching: ")
-	if err != nil {
-		LogConsoleErrorf("Error: %v\n", err.Error())
+	if anyErrors {
 		return 12
 	}
 	return 0
 }
 
 // Check for placeholders
-func Missing(checkout bool, paths []string, callback func(data *MissingCallbackData) (quit bool)) error {
+func Missing(checkout bool, paths []string, callback func(data *MissingCallbackData) (quit bool)) {
 	if len(paths) > 0 {
 		for _, path := range paths {
 			matches, err := filepath.Glob(path)
 			if err != nil {
-				return err
+				if callback(&MissingCallbackData{Type: MissingError, Path: path,
+					Error: fmt.Errorf("Unable to glob %v: %v\n", path, err)}) {
+					return
+				}
 			}
 			for _, match := range matches {
 				stat, err := os.Stat(match)
 				if err != nil {
-					return err
+					if callback(&MissingCallbackData{Type: MissingError, Path: match,
+						Error: fmt.Errorf("Unable to stat %v: %v\n", match, err)}) {
+						return
+					}
 				}
 				var quit bool
 				if stat.IsDir() {
 					// Matched a dir, so just cascade
-					err, quit = missingCheckDir(match, checkout, callback)
+					quit = missingCheckDir(match, checkout, callback)
 				} else {
-					err, quit = missingCheckFile(match, stat, checkout, callback)
-				}
-				if err != nil {
-					return err
+					quit = missingCheckFile(match, stat, checkout, callback)
 				}
 				if quit {
-					return nil
+					return
 				}
 			}
 		}
@@ -126,51 +134,132 @@ func Missing(checkout bool, paths []string, callback func(data *MissingCallbackD
 		missingCheckDir("", checkout, callback)
 	}
 
-	return nil
+	return
 }
 
 // Check the contents of a directory for placeholders
 // path is relative to the working dir & we'll use that as-is
-func missingCheckDir(dir string, checkout bool, callback func(data *MissingCallbackData) (quit bool)) (err error, quit bool) {
+func missingCheckDir(dir string, checkout bool, callback func(data *MissingCallbackData) (quit bool)) (quit bool) {
 	// os.File.Readdirnames is the most efficient but having Stat() output is quickest way to identify potential placeholders
 	// os.File.Readdir retrieves Stat() which lets us check size & whether dir (to cascade)
 	if callback(&MissingCallbackData{Type: MissingWorking, Path: dir}) {
-		return nil, true
+		return true
 	}
 
 	dirf, err := os.Open(dir)
 	if err != nil {
-		return errors.New(fmt.Sprintf("Unable to open dir %v: %v\n", dir, err)), true
+		return callback(&MissingCallbackData{Type: MissingError, Path: dir,
+			Error: fmt.Errorf("Unable to open dir %v: %v\n", dir, err)})
 	}
+
 	defer dirf.Close()
 
 	contents, err := dirf.Readdir(0)
 	if err != nil {
-		return errors.New(fmt.Sprintf("Unable to read read dir %v: %v\n", dir, err)), true
+		return callback(&MissingCallbackData{Type: MissingError, Path: dir,
+			Error: fmt.Errorf("Unable to read read dir %v: %v\n", dir, err)})
 	}
 	for _, entry := range contents {
 		relpath := filepath.Join(dir, entry.Name())
 		if entry.IsDir() {
-			err, quit = missingCheckDir(relpath, checkout, callback)
-			if err != nil || quit {
-				return err, quit
-			}
+			quit = missingCheckDir(relpath, checkout, callback)
 		} else {
-			err, quit = missingCheckFile(relpath, entry, checkout, callback)
-			if err != nil || quit {
-				return err, quit
-			}
+			quit = missingCheckFile(relpath, entry, checkout, callback)
 		}
 	}
 
-	return nil, false
+	return quit
 }
 
 // Check a file to see if it's a placeholder & what to do about it if so
 // path is relative to the working dir & we'll use that as-is
-func missingCheckFile(path string, fi os.FileInfo, checkout bool, callback func(data *MissingCallbackData) (quit bool)) (err error, quit bool) {
-	// TODO
-	return nil, false
+func missingCheckFile(path string, fi os.FileInfo, checkout bool, callback func(data *MissingCallbackData) (quit bool)) (quit bool) {
+	if callback(&MissingCallbackData{Type: MissingWorking, Path: path}) {
+		return true
+	}
+
+	// Smoke test on file size
+	if fi.Size() == int64(SHALineLen) {
+		// It's the right size for a placeholder
+		filebytes, err := ioutil.ReadFile(path)
+		if err != nil {
+			return callback(&MissingCallbackData{Type: MissingError, Path: path,
+				Error: fmt.Errorf("Unable to read file %v: %v\n", path, err)})
+		}
+		shaRegex := regexp.MustCompile(SHALineMatchRegexStr)
+		if match := shaRegex.FindStringSubmatch(string(filebytes)); match != nil {
+			// Definitely a placeholder
+			sha := match[1]
+			err := CheckLOBFilesForSHA(sha, GetLocalLOBRoot(), false)
+			if err != nil {
+				if IsIntegrityError(err) {
+					if callback(&MissingCallbackData{Type: MissingCorrupt, Path: path}) {
+						return true
+					}
+				} else if IsNotFoundError(err) {
+					// LOB not available, find out who committed this or if it's modified
+					// extract latest change
+					// first, root the filename for use in Git since path is relative to working dir
+					root, _, err := GetRepoRoot()
+					if err != nil {
+						callback(&MissingCallbackData{Type: MissingError, Path: path, Error: err})
+						return true // cannot continue
+					}
+					var absfilename string
+					if filepath.IsAbs(path) {
+						absfilename = path
+					} else {
+						wd, _ := os.Getwd()
+						absfilename = filepath.Join(wd, path)
+					}
+					rootedfilename, _ := filepath.Rel(root, absfilename)
+					summary, lobshaincommit, err := GetGitLatestLOBChangeDetails(rootedfilename, "HEAD")
+					if err != nil {
+						return callback(&MissingCallbackData{Type: MissingError, Path: path,
+							Error: fmt.Errorf("Unable to get latest commit for file %v: %v\n", path, err)})
+					}
+					if lobshaincommit == sha {
+						// unmodified, so blame case
+						if callback(&MissingCallbackData{Type: MissingBlamed, Path: path, CommitSummary: summary}) {
+							return true
+						}
+					} else {
+						// sha in file doesn't agree with SHA in last commit, so modified
+						if callback(&MissingCallbackData{Type: MissingModified, Path: path, CommitSummary: summary}) {
+							return true
+						}
+					}
+
+				} else {
+					// Some other error
+					return callback(&MissingCallbackData{Type: MissingError, Path: path,
+						Error: fmt.Errorf("Error checking binary %v for file %v: %v\n", sha, path, err)})
+				}
+			} else {
+				// LOB is present
+				if checkout {
+					err := checkoutFile(path, sha)
+					if err != nil {
+						return callback(&MissingCallbackData{Type: MissingError, Path: path,
+							Error: fmt.Errorf("Unable to checkout %v to file %v: %v\n", sha, path, err)})
+					}
+					// checked out OK
+					if callback(&MissingCallbackData{Type: MissingFixed, Path: path}) {
+						return true
+					}
+
+				} else {
+					// no checkout, just notify it's there
+					if callback(&MissingCallbackData{Type: MissingAvailable, Path: path}) {
+						return true
+					}
+				}
+			}
+
+		}
+
+	}
+	return false
 }
 
 func cmdMissingHelp() {

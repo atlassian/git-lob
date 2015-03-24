@@ -127,6 +127,12 @@ func mainImpl() int {
 		return 0
 	case "listproviders":
 		return cmdListProviders()
+	case "missing":
+		if GlobalOptions.HelpRequested {
+			cmdMissingHelp()
+			return 0
+		}
+		return cmdMissing()
 	case "provider":
 		return cmdProviderDetails()
 	case "pull":
