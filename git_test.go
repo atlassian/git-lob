@@ -499,6 +499,14 @@ var _ = Describe("Git", func() {
 			})
 
 		})
+
+		It("Gets latest LOB change and commit summary", func() {
+			summary, lobsha, err := GetGitLatestLOBChangeDetails("file1.txt", "HEAD")
+			Expect(err).To(BeNil(), "Should not be error getting latest change")
+			Expect(lobsha).To(Equal(lobshas[5]), "Should be correct LOB SHA")
+			Expect(summary.Subject).To(Equal("4th commit"), "Commit details should be retrieved")
+
+		})
 	})
 	Describe("Git commit summary", func() {
 
