@@ -100,6 +100,13 @@ func cmdMissing() int {
 
 // Check for placeholders
 func Missing(checkout bool, paths []string, callback func(data *MissingCallbackData) (quit bool)) {
+	// Make sure we're in a git repo
+	_, _, err := GetRepoRoot()
+	if err != nil {
+		callback(&MissingCallbackData{Type: MissingError, Error: err})
+		return
+	}
+
 	if len(paths) > 0 {
 		for _, path := range paths {
 			matches, err := filepath.Glob(path)
