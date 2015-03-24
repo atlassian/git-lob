@@ -12,7 +12,8 @@ import (
 const SHAPrefix = "git-lob: "
 const SHALen = 40
 const SHALineLen = len(SHAPrefix) + SHALen
-const SHALineRegex = "^git-lob: [A-Fa-f0-9]{40}$"
+const SHALineRegexStr = "^git-lob: [A-Fa-f0-9]{40}$"
+const SHALineMatchRegexStr = "^git-lob: ([0-9A-Fa-f]{40})$"
 
 func getLOBPlaceholderContent(sha string) string {
 	return SHAPrefix + sha
@@ -33,7 +34,7 @@ func cmdSmudgeFilter() int {
 func SmudgeFilterWithReaderWriter(in io.Reader, out io.Writer, filename string) int {
 	LogDebug("Running smudge filter for ", filename)
 
-	shaRegex := regexp.MustCompile("^git-lob: ([0-9A-Fa-f]{40})$")
+	shaRegex := regexp.MustCompile(SHALineMatchRegexStr)
 	// read committed content from stdin
 	// write actual file content to stdout if a git-lob SHA
 	buf := make([]byte, SHALineLen)
@@ -82,7 +83,7 @@ func cmdCleanFilter() int {
 
 func CleanFilterWithReaderWriter(in io.Reader, out io.Writer, filename string) int {
 	LogDebug("Running clean filter for ", filename)
-	shaRegex := regexp.MustCompile("^git-lob: ([0-9A-Fa-f]{40})$")
+	shaRegex := regexp.MustCompile(SHALineMatchRegexStr)
 	// read working copy content from stdin
 	// First check if this is an unexpanded LOB SHA (not downloaded)
 	buf := make([]byte, SHALineLen)

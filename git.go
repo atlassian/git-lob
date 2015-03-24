@@ -168,7 +168,7 @@ func WalkGitCommitLOBsToPush(remoteName, ref string, recheck bool, callback func
 		args := []string{"log", `--format=commitsha: %H %P`, "-p",
 			"--topo-order",
 			"--reverse",
-			"-G", SHALineRegex,
+			"-G", SHALineRegexStr,
 			ref}
 
 		for _, p := range pushedSHAs {
@@ -663,7 +663,7 @@ func walkGitCommitsReferencingLOBsInRange(from, to string, additions, removals b
 	args := []string{"log", `--format=commitsha: %H %P`, "-p",
 		"--topo-order", "--first-parent",
 		"--reverse", // we want to list them in ascending order
-		"-G", SHALineRegex}
+		"-G", SHALineRegexStr}
 
 	if from != "" && to != "" {
 		args = append(args, fmt.Sprintf("%v..%v", from, to))
@@ -777,7 +777,7 @@ func GetGitAllLOBsToCheckoutAtCommitAndRecent(commit string, days int, includePa
 		// that we haven't included yet in shasAtCommit
 		args := []string{"log", `--format=commitsha: %H %P`, "-p",
 			fmt.Sprintf("--since=%v", FormatGitDate(sinceDate)),
-			"-G", SHALineRegex,
+			"-G", SHALineRegexStr,
 			commit}
 
 		cmd := exec.Command("git", args...)
