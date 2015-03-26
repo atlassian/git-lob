@@ -223,6 +223,11 @@ func CreateRandomFileForTest(sz int64, filename string) {
 // Create a file with less random data of size sz (faster than CreateRandomFileForTest)
 // Data is still random but written in repeating blocks
 func CreateFastFileForTest(sz int64, filename string) {
+	// Use fully random method if size is too small
+	if sz < 16*1024*5 {
+		CreateRandomFileForTest(sz, filename)
+		return
+	}
 	os.MkdirAll(filepath.Dir(filename), 0755)
 	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0644)
 	if err != nil {
@@ -259,7 +264,7 @@ func CreateFastFileForTest(sz int64, filename string) {
 
 // Store a random file LOB, then overwrite it with a placeholder ready for commit (without filters)
 func CreateAndStoreLOBFileForTest(sz int64, filename string) *LOBInfo {
-	CreateRandomFileForTest(sz, filename)
+	CreateFastFileForTest(sz, filename)
 	info, err := StoreLOBForTest(filename)
 	if err != nil {
 		Fail(fmt.Sprintf("Failed to store test LOB %v: %v", filename, err))
