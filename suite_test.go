@@ -457,13 +457,27 @@ type TestCommitSetupInput struct {
 	ParentBranches []string
 	// Name of a new branch we should create at this commit (optional - master not required)
 	NewBranch string
+	// Name of committer
+	CommitterName string
+	// Email of committer
+	CommitterEmail string
 }
 
-func CommitAtDateForTest(t time.Time, msg string) error {
-	cmd := exec.Command("git", "commit", "--allow-empty", "-m", msg)
+func CommitAtDateForTest(t time.Time, committerName, committerEmail, msg string) error {
+	var args []string
+	if committerName != "" && committerEmail != "" {
+		args = append(args, "-c", fmt.Sprintf("user.name=%v", committerName))
+		args = append(args, "-c", fmt.Sprintf("user.email=%v", committerEmail))
+	}
+	args = append(args, "commit", "--allow-empty", "-m", msg)
+	cmd := exec.Command("git", args...)
 	env := os.Environ()
 	// set GIT_COMMITTER_DATE environment var e.g. "Fri Jun 21 20:26:41 2013 +0900"
-	env = append(env, fmt.Sprintf("GIT_COMMITTER_DATE=%v", FormatGitDate(t)))
+	if t.IsZero() {
+		env = append(env, "GIT_COMMITTER_DATE=")
+	} else {
+		env = append(env, fmt.Sprintf("GIT_COMMITTER_DATE=%v", FormatGitDate(t)))
+	}
 	cmd.Env = env
 	return cmd.Run()
 }
@@ -504,11 +518,8 @@ func SetupRepoForTest(inputs []*TestCommitSetupInput) []*CommitLOBRef {
 			RunGitCommandForTest(true, "add", filename)
 		}
 		// Now commit
-		if input.CommitDate.IsZero() {
-			RunGitCommandForTest(true, "commit", "-m", fmt.Sprintf("Test commit %d", i))
-		} else {
-			CommitAtDateForTest(input.CommitDate, fmt.Sprintf("Test commit %d", i))
-		}
+		CommitAtDateForTest(input.CommitDate, input.CommitterName, input.CommitterEmail,
+			fmt.Sprintf("Test commit %d", i))
 		commit, err := GetGitCommitSummary("HEAD")
 		if err != nil {
 			Fail("Error determining commit SHA: " + err.Error())
