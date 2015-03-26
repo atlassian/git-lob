@@ -168,7 +168,7 @@ func WalkGitCommitLOBsToPush(remoteName, ref string, recheck bool, callback func
 		args := []string{"log", `--format=commitsha: %H %P`, "-p",
 			"--topo-order",
 			"--reverse",
-			"-G", SHALineRegex,
+			"-G", SHALineRegexStr,
 			ref}
 
 		for _, p := range pushedSHAs {
@@ -663,7 +663,7 @@ func walkGitCommitsReferencingLOBsInRange(from, to string, additions, removals b
 	args := []string{"log", `--format=commitsha: %H %P`, "-p",
 		"--topo-order", "--first-parent",
 		"--reverse", // we want to list them in ascending order
-		"-G", SHALineRegex}
+		"-G", SHALineRegexStr}
 
 	if from != "" && to != "" {
 		args = append(args, fmt.Sprintf("%v..%v", from, to))
@@ -777,7 +777,7 @@ func GetGitAllLOBsToCheckoutAtCommitAndRecent(commit string, days int, includePa
 		// that we haven't included yet in shasAtCommit
 		args := []string{"log", `--format=commitsha: %H %P`, "-p",
 			fmt.Sprintf("--since=%v", FormatGitDate(sinceDate)),
-			"-G", SHALineRegex,
+			"-G", SHALineRegexStr,
 			commit}
 
 		cmd := exec.Command("git", args...)
@@ -1198,4 +1198,54 @@ func GetGitBestAncestor(refs []string) (ancestor string, err error) {
 	}
 	base := strings.TrimSpace(string(outp))
 	return base, nil
+}
+
+// Gets the latest change to a specific LOB file at ref, returning the SHA and the commit details
+func GetGitLatestLOBChangeDetails(filename, ref string) (summary *GitCommitSummary, lobsha string, err error) {
+	cmd := exec.Command("git", "log", "-p",
+		"-n", "1", // one commit
+		"-G", SHALineRegexStr, // if this file was ever embedded verbatim, ignore those
+		`--format=commit:%H|%h|%P|%ai|%ci|%ae|%an|%ce|%cn|%s`, // standard summary info
+		ref, "--", filename)
+	outp, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, "", errors.New(fmt.Sprintf("Unable to get latest commit from %v: %v", ref, err.Error()))
+	}
+	cmd.Start()
+	scanner := bufio.NewScanner(outp)
+	summary = &GitCommitSummary{}
+	lobsha = ""
+	lobsharegex := regexp.MustCompile(`^\+git-lob: ([A-Fa-f0-9]{40})`)
+	err = nil
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "commit:") {
+			// At most 10 substrings so subject line is not split on anything
+			fields := strings.SplitN(string(line[7:]), "|", 10)
+			// Cope with the case where subject is blank
+			if len(fields) >= 9 {
+				// Get SHAs from output, not commit input, so we can support symbolic refs
+				summary.SHA = fields[0]
+				summary.ShortSHA = fields[1]
+				summary.Parents = strings.Split(fields[2], " ")
+				// %aD & %cD (RFC2822) matches Go's RFC1123Z format
+				summary.AuthorDate, _ = ParseGitDate(fields[3])
+				summary.CommitDate, _ = ParseGitDate(fields[4])
+				summary.AuthorEmail = fields[5]
+				summary.AuthorName = fields[6]
+				summary.CommitterEmail = fields[7]
+				summary.CommitterName = fields[8]
+				if len(fields) > 9 {
+					summary.Subject = strings.TrimRight(fields[9], "\n")
+				}
+			} else {
+				msg := fmt.Sprintf("Unexpected output from git log: %v", line)
+				return nil, "", errors.New(msg)
+			}
+		} else if match := lobsharegex.FindStringSubmatch(line); match != nil {
+			lobsha = match[1]
+		}
+	}
+	return
+
 }

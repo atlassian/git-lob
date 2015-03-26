@@ -223,6 +223,11 @@ func CreateRandomFileForTest(sz int64, filename string) {
 // Create a file with less random data of size sz (faster than CreateRandomFileForTest)
 // Data is still random but written in repeating blocks
 func CreateFastFileForTest(sz int64, filename string) {
+	// Use fully random method if size is too small
+	if sz < 16*1024*5 {
+		CreateRandomFileForTest(sz, filename)
+		return
+	}
 	os.MkdirAll(filepath.Dir(filename), 0755)
 	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0644)
 	if err != nil {
@@ -259,7 +264,7 @@ func CreateFastFileForTest(sz int64, filename string) {
 
 // Store a random file LOB, then overwrite it with a placeholder ready for commit (without filters)
 func CreateAndStoreLOBFileForTest(sz int64, filename string) *LOBInfo {
-	CreateRandomFileForTest(sz, filename)
+	CreateFastFileForTest(sz, filename)
 	info, err := StoreLOBForTest(filename)
 	if err != nil {
 		Fail(fmt.Sprintf("Failed to store test LOB %v: %v", filename, err))
@@ -452,13 +457,27 @@ type TestCommitSetupInput struct {
 	ParentBranches []string
 	// Name of a new branch we should create at this commit (optional - master not required)
 	NewBranch string
+	// Name of committer
+	CommitterName string
+	// Email of committer
+	CommitterEmail string
 }
 
-func CommitAtDateForTest(t time.Time, msg string) error {
-	cmd := exec.Command("git", "commit", "--allow-empty", "-m", msg)
+func CommitAtDateForTest(t time.Time, committerName, committerEmail, msg string) error {
+	var args []string
+	if committerName != "" && committerEmail != "" {
+		args = append(args, "-c", fmt.Sprintf("user.name=%v", committerName))
+		args = append(args, "-c", fmt.Sprintf("user.email=%v", committerEmail))
+	}
+	args = append(args, "commit", "--allow-empty", "-m", msg)
+	cmd := exec.Command("git", args...)
 	env := os.Environ()
 	// set GIT_COMMITTER_DATE environment var e.g. "Fri Jun 21 20:26:41 2013 +0900"
-	env = append(env, fmt.Sprintf("GIT_COMMITTER_DATE=%v", FormatGitDate(t)))
+	if t.IsZero() {
+		env = append(env, "GIT_COMMITTER_DATE=")
+	} else {
+		env = append(env, fmt.Sprintf("GIT_COMMITTER_DATE=%v", FormatGitDate(t)))
+	}
 	cmd.Env = env
 	return cmd.Run()
 }
@@ -499,11 +518,8 @@ func SetupRepoForTest(inputs []*TestCommitSetupInput) []*CommitLOBRef {
 			RunGitCommandForTest(true, "add", filename)
 		}
 		// Now commit
-		if input.CommitDate.IsZero() {
-			RunGitCommandForTest(true, "commit", "-m", fmt.Sprintf("Test commit %d", i))
-		} else {
-			CommitAtDateForTest(input.CommitDate, fmt.Sprintf("Test commit %d", i))
-		}
+		CommitAtDateForTest(input.CommitDate, input.CommitterName, input.CommitterEmail,
+			fmt.Sprintf("Test commit %d", i))
 		commit, err := GetGitCommitSummary("HEAD")
 		if err != nil {
 			Fail("Error determining commit SHA: " + err.Error())

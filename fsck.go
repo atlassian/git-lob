@@ -204,8 +204,8 @@ func cmdFsckHelp() {
   incorrectly sized chunks, and content where the SHA doesn't agree (only
   checked with the --deep option) are deleted.
 
-  This command doesn't check your working copy, use 'git lob status' for that,
-  for example to help figure out why a binary file is still a placeholder.
+  This command doesn't check your working copy, use 'git lob missing' to check
+  why a binary file is still a placeholder.
 
 Parameters:
   SHA...        If you supply one or more 40-character SHA arguments, only

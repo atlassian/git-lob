@@ -139,22 +139,7 @@ func Checkout(pathspecs []string, dryRun bool, callback CheckoutCallback) error 
 
 		if replaceContent {
 			if !dryRun {
-				err = os.MkdirAll(filepath.Dir(absfile), 0755)
-				if err != nil {
-					// This is not fatal but log it
-					callback(ProgressError, &filelob,
-						errors.New(fmt.Sprintf("Can't create parent directory of %v: %v\n", absfile, err.Error())))
-					continue
-				}
-				f, err := os.OpenFile(absfile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
-				if err != nil {
-					// This is not fatal but log it
-					callback(ProgressError, &filelob,
-						errors.New(fmt.Sprintf("Can't open %v for writing: %v", absfile, err.Error())))
-					continue
-				}
-				_, err = RetrieveLOB(filelob.SHA, f)
-				f.Close()
+				err = checkoutFile(absfile, filelob.SHA)
 				if err != nil {
 					if IsNotFoundError(err) {
 						// most common issue, log nicely
@@ -166,8 +151,6 @@ func Checkout(pathspecs []string, dryRun bool, callback CheckoutCallback) error 
 						callback(ProgressError, &filelob,
 							errors.New(fmt.Sprintf("Can't retrieve content for %v: %v", filelob.Filename, err.Error())))
 					}
-					// Either way, we already truncated the file so we need to re-write the contents
-					ioutil.WriteFile(absfile, []byte(getLOBPlaceholderContent(filelob.SHA)), 0644)
 				} else {
 					// Success
 					callback(ProgressTransferBytes, &filelob, nil)
@@ -199,6 +182,28 @@ func Checkout(pathspecs []string, dryRun bool, callback CheckoutCallback) error 
 	}
 
 	return retErr
+
+}
+
+// Checkout a single file to a specific path
+func checkoutFile(path, sha string) error {
+	err := os.MkdirAll(filepath.Dir(path), 0755)
+	if err != nil {
+		return errors.New(fmt.Sprintf("Can't create parent directory of %v: %v\n", path, err.Error()))
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		return errors.New(fmt.Sprintf("Can't open %v for writing: %v", path, err.Error()))
+	}
+	defer f.Close()
+	_, err = RetrieveLOB(sha, f)
+	if err != nil {
+		// We already truncated the file so we need to re-write the placeholder contents
+		ioutil.WriteFile(path, []byte(getLOBPlaceholderContent(sha)), 0644)
+		return err
+	}
+
+	return nil
 
 }
 

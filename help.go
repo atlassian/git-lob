@@ -22,6 +22,7 @@ var helpTopicMap = map[string]func(){
 	"checkout":  cmdCheckoutHelp,
 	"prune":     cmdPruneHelp,
 	"fsck":      cmdFsckHelp,
+	"missing":   cmdMissingHelp,
 }
 
 func cmdHelp() {
