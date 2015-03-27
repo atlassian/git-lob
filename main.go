@@ -1,27 +1,14 @@
 package main
 
 import (
+	"bitbucket.org/sinbad/git-lob/cmd"
+	. "bitbucket.org/sinbad/git-lob/core"
+	"bitbucket.org/sinbad/git-lob/util"
 	"fmt"
 	"os"
 	"runtime/debug"
 	"strings"
 )
-
-var (
-	GlobalOptions  *Options = NewOptions()
-	VersionMajor            = 0
-	VersionMinor            = 4
-	VersionPatch            = 0
-	VersionBuildID string   // populated in build.sh to the git hash
-)
-
-func Version() string {
-	if VersionBuildID != "" {
-		return fmt.Sprintf("%d.%d.%d [%v]", VersionMajor, VersionMinor, VersionPatch, VersionBuildID)
-	} else {
-		return fmt.Sprintf("%d.%d.%d", VersionMajor, VersionMinor, VersionPatch)
-	}
-}
 
 func main() {
 	// Need to send the result code to the OS but also need to support 'defer'
@@ -42,21 +29,21 @@ func mainImpl() int {
 	}()
 
 	// Load up configuration from gitconfig
-	LoadConfig(GlobalOptions)
+	util.LoadConfig(util.GlobalOptions)
 
 	// Command line processing
 	// Don't use flag package because it doesn't support options after commands, and
 	// uses the form -option instead of --option which is non-standard for git
 	var errors []string
-	errors = parseCommandLine(GlobalOptions, os.Args)
+	errors = ParseCommandLine(util.GlobalOptions, os.Args)
 
 	// Init logging after command line opts
-	InitLogging()
+	util.InitLogging()
 	InitCoreProviders()
-	defer ShutDownLogging()
+	defer util.ShutDownLogging()
 
 	if len(errors) > 0 {
-		LogConsoleError(strings.Join(errors, "\n"))
+		util.LogConsoleError(strings.Join(errors, "\n"))
 		cmdHelpUsage()
 		return 1
 	}
@@ -64,57 +51,57 @@ func mainImpl() int {
 	// Check we're in a git repo and if not fail early
 	// Unless help requested, in which case allow from anywhere
 	_, _, err := GetRepoRoot()
-	if err != nil && !GlobalOptions.HelpRequested &&
-		GlobalOptions.Command != "help" {
-		LogConsole(err.Error())
+	if err != nil && !util.GlobalOptions.HelpRequested &&
+		util.GlobalOptions.Command != "help" {
+		util.LogConsole(err.Error())
 		return 33
 	}
 
-	switch GlobalOptions.Command {
+	switch util.GlobalOptions.Command {
 	case "checkout":
-		if GlobalOptions.HelpRequested {
-			cmdCheckoutHelp()
+		if util.GlobalOptions.HelpRequested {
+			cmd.CheckoutHelp()
 			return 0
 		}
-		return cmdCheckout()
+		return cmd.Checkout()
 	case "prune":
-		if GlobalOptions.HelpRequested {
+		if util.GlobalOptions.HelpRequested {
 			cmdPruneHelp()
 			return 0
 		}
 		return cmdPrune()
 	case "prune-shared":
-		if GlobalOptions.HelpRequested {
+		if util.GlobalOptions.HelpRequested {
 			cmdPruneSharedHelp()
 			return 0
 		}
 		return cmdPruneShared()
 	case "fetch":
-		if GlobalOptions.HelpRequested {
+		if util.GlobalOptions.HelpRequested {
 			cmdFetchHelp()
 			return 0
 		}
 		return cmdFetch()
 	case "fetch-lob":
-		if GlobalOptions.HelpRequested {
+		if util.GlobalOptions.HelpRequested {
 			cmdFetchLobHelp()
 			return 0
 		}
 		return cmdFetchLob()
 	case "filter-smudge":
-		if GlobalOptions.HelpRequested {
+		if util.GlobalOptions.HelpRequested {
 			cmdSmudgeFilterHelp()
 			return 0
 		}
 		return cmdSmudgeFilter()
 	case "filter-clean":
-		if GlobalOptions.HelpRequested {
+		if util.GlobalOptions.HelpRequested {
 			cmdCleanFilterHelp()
 			return 0
 		}
 		return cmdCleanFilter()
 	case "fsck":
-		if GlobalOptions.HelpRequested {
+		if util.GlobalOptions.HelpRequested {
 			cmdFsckHelp()
 			return 0
 		}
@@ -128,7 +115,7 @@ func mainImpl() int {
 	case "listproviders":
 		return cmdListProviders()
 	case "missing":
-		if GlobalOptions.HelpRequested {
+		if util.GlobalOptions.HelpRequested {
 			cmdMissingHelp()
 			return 0
 		}
@@ -136,47 +123,47 @@ func mainImpl() int {
 	case "provider":
 		return cmdProviderDetails()
 	case "pull":
-		if GlobalOptions.HelpRequested {
+		if util.GlobalOptions.HelpRequested {
 			cmdPullHelp()
 			return 0
 		}
 		return cmdPull()
 	case "push":
-		if GlobalOptions.HelpRequested {
+		if util.GlobalOptions.HelpRequested {
 			cmdPushHelp()
 			return 0
 		}
 		return cmdPush()
 	case "push-lob":
-		if GlobalOptions.HelpRequested {
+		if util.GlobalOptions.HelpRequested {
 			cmdPushLobHelp()
 			return 0
 		}
 		return cmdPushLob()
 	case "mark-pushed":
-		if GlobalOptions.HelpRequested {
+		if util.GlobalOptions.HelpRequested {
 			cmdMarkPushedHelp()
 			return 0
 		}
 		return cmdMarkPushed()
 	case "reset-pushed":
-		if GlobalOptions.HelpRequested {
+		if util.GlobalOptions.HelpRequested {
 			cmdResetPushedHelp()
 			return 0
 		}
 		return cmdResetPushed()
 	case "last-pushed":
-		if GlobalOptions.HelpRequested {
+		if util.GlobalOptions.HelpRequested {
 			cmdLastPushedHelp()
 			return 0
 		}
 		return cmdLastPushed()
 	default:
-		if GlobalOptions.HelpRequested {
+		if util.GlobalOptions.HelpRequested {
 			cmdHelp()
 			return 0
 		}
-		LogConsoleErrorf("git-lob: unknown command '%v'\n", GlobalOptions.Command)
+		util.LogConsoleErrorf("git-lob: unknown command '%v'\n", util.GlobalOptions.Command)
 		return 1
 	}
 

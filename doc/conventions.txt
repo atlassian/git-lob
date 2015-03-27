@@ -10,11 +10,11 @@ Coding Conventions
 2. Command line entry points
    
    When implementing a new command:
-   a. Implement it in <command>.go
-   b. The main entry point should be a function called cmdCommand()
+   a. Implement entry point in cmd/cmd<command>.go
+   b. The main entry point should be a function called cmd.Command()
    c. Use this to validate input & parse arguments, then call an implementation
-      function called Command(), passing in the parsed arguments
-   d. Implement a function called cmdCommandHelp() to display the --help output
+      function called core.Command(), implemented in core/<command>.go, passing in the parsed arguments
+   d. Implement a function called cmd.CommandHelp() to display the --help output
    e. Modify main.go and add a new command entry in the switch
 
 3. Output messages and logging
@@ -36,7 +36,7 @@ Coding Conventions
      Info:   Log, Logf 
              Informational messages, displayed to the console and log unless --quiet
              You almost never need these since you don't really need to send
-             informational messages to the log, you'd want LogConsole[f] below instead.
+             informational messages to the log, you'd want util.LogConsole[f] below instead.
      Debug:  LogDebug, LogDebugf
              Debug messages that are displayed to the console if --verbose and to the
              log if git-lob.logverbose
@@ -47,7 +47,7 @@ Coding Conventions
      they're only useful for an interactive user. 
 
      Errors: LogConsoleError, LogConsoleErrorf
-     Info:   LogConsole, LogConsolef
+     Info:   util.LogConsole, LogConsolef
      Debug:  LogConsoleDebug, LogConsoleDebugf
      Progress: LogConsoleOverwrite
 
@@ -88,7 +88,7 @@ Coding Conventions
    modest, each command shouldn't really need more than 5 info messages IN
    TOTAL for a successful call, and usually less. Save the more detailed 
    output for --verbose mode (LogDebug etc).
-   You'll almost always want to use LogConsole[f] and not Log[f] for
+   You'll almost always want to use util.LogConsole[f] and not Log[f] for
    informational messages, since they're not usually of any use in the log.
 
    
