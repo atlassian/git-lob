@@ -1,17 +1,17 @@
-package core
+package cmd
 
 import (
 	"bitbucket.org/sinbad/git-lob/util"
 )
 
-func cmdPull() int {
+func Pull() int {
 	// extract the 'prune' option & perform it AFTER the checkout instead of in the Fetch
 	// this is so that user can abort the prune if they want (or carry on working)
 	optPrune := util.GlobalOptions.BoolOpts.Contains("prune")
 	if optPrune {
 		util.GlobalOptions.BoolOpts.Remove("prune")
 	}
-	fetchret := cmdFetch()
+	fetchret := Fetch()
 	if fetchret != 0 {
 		// Fetch failed, abort
 		return fetchret
@@ -19,7 +19,7 @@ func cmdPull() int {
 	// Now run checkout but with no args
 	oldArgs := util.GlobalOptions.Args
 	util.GlobalOptions.Args = []string{}
-	ret := cmdCheckout()
+	ret := Checkout()
 	util.GlobalOptions.Args = oldArgs
 
 	if optPrune && !util.GlobalOptions.DryRun {
@@ -33,7 +33,7 @@ func cmdPull() int {
 
 }
 
-func cmdPullHelp() {
+func PullHelp() {
 	util.LogConsole(`Usage: git-lob pull [options] [<remote> [<ref>...]]
 
   Run the 'git lob fetch' command with the same parameters to download binaries

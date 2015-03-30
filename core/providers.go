@@ -82,6 +82,11 @@ func RegisterSyncProvider(p SyncProvider) error {
 	return nil
 }
 
+// Retrieve all sync providers, keyed on name
+func GetSyncProviders() map[string]SyncProvider {
+	return syncProviders
+}
+
 // Retrieve a SyncProvider with the associated typeID
 func GetSyncProvider(typeID string) (SyncProvider, error) {
 	p, ok := syncProviders[typeID]
@@ -95,38 +100,6 @@ func GetSyncProvider(typeID string) (SyncProvider, error) {
 func InitCoreProviders() {
 	RegisterSyncProvider(&FileSystemSyncProvider{})
 	RegisterSyncProvider(&S3SyncProvider{})
-}
-
-func cmdListProviders() int {
-	util.LogConsole()
-	util.LogConsole("Available remote providers:")
-	for _, p := range syncProviders {
-		util.LogConsole(" *", p.HelpTextSummary())
-	}
-	util.LogConsole()
-	return 0
-}
-
-func cmdProviderDetails() int {
-	if len(util.GlobalOptions.Args) == 0 {
-		return cmdListProviders()
-	}
-
-	util.LogConsole()
-	// Potentially list many
-	ret := 0
-	for _, arg := range util.GlobalOptions.Args {
-		p, err := GetSyncProvider(arg)
-		if err != nil {
-			util.LogConsole(err)
-			ret++
-		} else {
-			util.LogConsole(p.HelpTextDetail())
-			util.LogConsole()
-		}
-
-	}
-	return ret
 }
 
 // Get the provider name specified for the named remote in the current git repo

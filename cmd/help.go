@@ -1,10 +1,11 @@
-package core
+package cmd
 
 import (
+	"bitbucket.org/sinbad/git-lob/core"
 	"bitbucket.org/sinbad/git-lob/util"
 )
 
-func cmdHelpUsage() {
+func HelpUsage() {
 	// For safety, these always go to stderr not stdout
 	// That's because this is before the command has been chosen and therefore has not
 	// had the chanced to call LogAllConsoleOutputToStdErr. A poorly
@@ -15,21 +16,21 @@ func cmdHelpUsage() {
 // Map from topic->help function
 // Replicate the help functions for all other commands here too
 var helpTopicMap = map[string]func(){
-	"topics":    cmdTopicsHelp,
-	"config":    cmdConfigHelp,
-	"commands":  cmdCommandsHelp,
-	"remotes":   cmdRemotesHelp,
-	"providers": cmdProvidersHelp,
-	"fetch":     cmdFetchHelp,
-	"pull":      cmdPullHelp,
-	"push":      cmdPushHelp,
-	"checkout":  cmdCheckoutHelp,
-	"prune":     cmdPruneHelp,
-	"fsck":      cmdFsckHelp,
-	"missing":   cmdMissingHelp,
+	"topics":    TopicsHelp,
+	"config":    ConfigHelp,
+	"commands":  CommandsHelp,
+	"remotes":   RemotesHelp,
+	"providers": ProvidersHelp,
+	"fetch":     FetchHelp,
+	"pull":      PullHelp,
+	"push":      PushHelp,
+	"checkout":  CheckoutHelp,
+	"prune":     PruneHelp,
+	"fsck":      FsckHelp,
+	"missing":   MissingHelp,
 }
 
-func cmdHelp() {
+func Help() {
 	// See above for why this is stderr not stdout
 	if len(util.GlobalOptions.Args) > 0 {
 		// Topic or command-specific help requested
@@ -43,7 +44,7 @@ func cmdHelp() {
 			return
 		} else {
 			// Also search the providers for anything called that & use their help
-			p, err := GetSyncProvider(arg)
+			p, err := core.GetSyncProvider(arg)
 			if err == nil {
 				util.LogConsole(p.HelpTextDetail())
 				return
@@ -58,7 +59,7 @@ func cmdHelp() {
 
 }
 
-func cmdConfigHelp() {
+func ConfigHelp() {
 	util.LogConsole(`Config files:
 
   git-lob uses ~/.gitconfig and $REPO/.git/config to modify default behaviour.
@@ -144,7 +145,7 @@ Prune settings:
 `)
 }
 
-func cmdTopicsHelp() {
+func TopicsHelp() {
 	util.LogConsole(`Usage: git lob help <topic>
 Available topics:
   topics        Show this list
@@ -157,14 +158,14 @@ Available topics:
 `)
 }
 
-func cmdCommandsHelp() {
+func CommandsHelp() {
 	// Start with root commands, then add
 	util.LogConsole(rootHelpTxt)
 	util.LogConsole(plumbingCommandsHelpTxt)
 	util.LogConsole(rootOptionsTxt)
 }
 
-func cmdRemotesHelp() {
+func RemotesHelp() {
 	util.LogConsole(`How remotes work in git-lob
 
 Binaries in git-lob are not stored in the regular git repo, but a corresponding
@@ -200,8 +201,8 @@ Of course, access control may be an issue to consider here though.
 `)
 }
 
-func cmdProvidersHelp() {
-	cmdListProviders()
+func ProvidersHelp() {
+	ListProviders()
 }
 
 const usageTxt = `Usage: git lob [command] [options] [file...]

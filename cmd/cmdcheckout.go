@@ -23,17 +23,17 @@ func Checkout() int {
 	var filesCheckedOut int
 	var filesFailed int
 	var filesUpToDate int
-	callback := func(t ProgressCallbackType, filelob *FileLOB, err error) {
+	callback := func(t core.ProgressCallbackType, filelob *core.FileLOB, err error) {
 		switch t {
-		case ProgressSkip:
+		case core.ProgressSkip:
 			filesUpToDate++
-		case ProgressNotFound:
+		case core.ProgressNotFound:
 			util.LogConsole(err.Error())
 			filesFailed++
-		case ProgressError:
+		case core.ProgressError:
 			util.LogConsoleError("ERROR:", err.Error())
 			filesFailed++
-		case ProgressTransferBytes:
+		case core.ProgressTransferBytes:
 			if optDryRun {
 				util.LogConsoleDebug(filelob.Filename, "needs check out.")
 			} else {

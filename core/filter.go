@@ -3,7 +3,6 @@ package core
 import (
 	"bitbucket.org/sinbad/git-lob/util"
 	"io"
-	"os"
 	"regexp"
 )
 
@@ -18,18 +17,6 @@ const SHALineMatchRegexStr = "^git-lob: ([0-9A-Fa-f]{40})$"
 
 func getLOBPlaceholderContent(sha string) string {
 	return SHAPrefix + sha
-}
-func cmdSmudgeFilter() int {
-	// Make sure we never write log output to stdout, filter uses it for content
-	util.LogAllConsoleOutputToStdErr()
-	// Optional filename context that can be passed
-	var filename string
-	if len(util.GlobalOptions.Args) > 0 {
-		filename = util.GlobalOptions.Args[0]
-	} else {
-		filename = "[Unknown filename]"
-	}
-	return SmudgeFilterWithReaderWriter(os.Stdin, os.Stdout, filename)
 }
 
 func SmudgeFilterWithReaderWriter(in io.Reader, out io.Writer, filename string) int {
@@ -67,19 +54,6 @@ func SmudgeFilterWithReaderWriter(in io.Reader, out io.Writer, filename string) 
 	}
 
 	return 0
-}
-
-func cmdCleanFilter() int {
-	// Make sure we never write log output to stdout, filter uses it for content
-	util.LogAllConsoleOutputToStdErr()
-	// Optional filename context that can be passed
-	var filename string
-	if len(util.GlobalOptions.Args) > 0 {
-		filename = util.GlobalOptions.Args[0]
-	} else {
-		filename = "[Unknown filename]"
-	}
-	return CleanFilterWithReaderWriter(os.Stdin, os.Stdout, filename)
 }
 
 func CleanFilterWithReaderWriter(in io.Reader, out io.Writer, filename string) int {
@@ -125,38 +99,4 @@ func CleanFilterWithReaderWriter(in io.Reader, out io.Writer, filename string) i
 	util.LogDebug("Successful clean filter for ", filename)
 
 	return 0
-}
-
-func cmdSmudgeFilterHelp() {
-	util.LogConsole(`Usage: git-lob filter-smudge [options] <filename>
-
-  The smudge filter converts a file stored in git to a file in the working
-  directory. In this case we look for files containing the git-lob marker
-  and replace the content with real binary data from the binary store.
-
-  Not intended to be called directly, see README.md for how to configure
-  the filter for your repository.
-
-Options:
-  --quiet, -q          Print less output
-  --verbose, -v        Print more output
-  --dry-run            Don't actually delete anything, just report
-`)
-}
-func cmdCleanFilterHelp() {
-	util.LogConsole(`Usage: git-lob filter-clean [options] <filename>
-
-  The clean filter converts a file in the working directory to a form which
-  will be stored in git. In this case we calculate the SHA-1 of the binary
-  content and write this to git, while storing the real data in the separate
-  binary store.
-
-  Not intended to be called directly, see README.md for how to configure
-  the filter for your repository.
-
-Options:
-  --quiet, -q          Print less output
-  --verbose, -v        Print more output
-  --dry-run            Don't actually delete anything, just report
-`)
 }

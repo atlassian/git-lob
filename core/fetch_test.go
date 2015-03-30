@@ -227,12 +227,12 @@ var _ = Describe("Fetch", func() {
 				return false
 			}
 			// dry run first, with no params so all recents
-			err = Fetch(provider, "origin", []*GitRefSpec{}, true, false, false, callback)
+			err = Fetch(provider, "origin", []*GitRefSpec{}, true, false, callback)
 			Expect(err).To(BeNil(), "Should be no error fetching")
 			Expect(FileExists(getLocalLOBMetaPath(correctLOBsMaster[0]))).To(BeFalse(), "Should not have downloaded anything")
 
 			// Now do it
-			err = Fetch(provider, "origin", []*GitRefSpec{}, false, false, false, callback)
+			err = Fetch(provider, "origin", []*GitRefSpec{}, false, false, callback)
 			Expect(err).To(BeNil(), "Should be no error fetching")
 			// Get unique SHAs for all recent refs
 			uniques := append(correctLOBsMaster, correctLOBsFeature1...)
@@ -255,7 +255,7 @@ var _ = Describe("Fetch", func() {
 
 			// Now do it again & confirm it does nothing
 			filesTransferred = 0
-			err = Fetch(provider, "origin", []*GitRefSpec{}, false, false, false, callback)
+			err = Fetch(provider, "origin", []*GitRefSpec{}, false, false, callback)
 			Expect(err).To(BeNil(), "Should be no error fetching")
 			Expect(filesTransferred).To(BeEquivalentTo(0), "Should be no files transferred")
 			Expect(filesSkipped).To(BeEquivalentTo(0), "Should be no files skipped because no need to try to download them")
@@ -263,7 +263,7 @@ var _ = Describe("Fetch", func() {
 			Expect(filesNotFound).To(BeEquivalentTo(0), "Should be no files not found")
 
 			// Now repeat & force
-			err = Fetch(provider, "origin", []*GitRefSpec{}, false, true, false, callback)
+			err = Fetch(provider, "origin", []*GitRefSpec{}, false, true, callback)
 			Expect(err).To(BeNil(), "Should be no error fetching")
 			Expect(filesTransferred).To(BeEquivalentTo(expectedFiles), "Should be all files transferred again (force)")
 			Expect(filesSkipped).To(BeEquivalentTo(0), "Should be no files skipped because no need to try to download them")
@@ -273,7 +273,7 @@ var _ = Describe("Fetch", func() {
 			// Delete again & do single ref
 			os.RemoveAll(GetLocalLOBRoot())
 			filesTransferred = 0
-			err = Fetch(provider, "origin", []*GitRefSpec{&GitRefSpec{Ref1: "master"}}, false, false, false, callback)
+			err = Fetch(provider, "origin", []*GitRefSpec{&GitRefSpec{Ref1: "master"}}, false, false, callback)
 			Expect(err).To(BeNil(), "Should be no error fetching")
 			// Count should be the files required *at* master, not in history ie file1-5.txt
 			Expect(filesTransferred).To(BeEquivalentTo(5*2), "Should be just master files transferred")
@@ -285,7 +285,7 @@ var _ = Describe("Fetch", func() {
 			os.RemoveAll(GetLocalLOBRoot())
 			RemoveLOBsForTest(correctLOBsFeature1, originBinStore)
 			filesTransferred = 0
-			err = Fetch(provider, "origin", []*GitRefSpec{}, false, false, false, callback)
+			err = Fetch(provider, "origin", []*GitRefSpec{}, false, false, callback)
 			Expect(err).To(BeNil(), "Should be no error fetching even though some missing")
 			Expect(filesTransferred).To(BeEquivalentTo(expectedFiles-len(correctLOBsFeature1)*2), "Should be all files transferred again (force)")
 			Expect(filesSkipped).To(BeEquivalentTo(0), "Should be no files skipped because no need to try to download them")
@@ -425,7 +425,7 @@ var _ = Describe("Fetch", func() {
 
 			// Firstly we'll fetch at commit 0 just for local
 			RunGitCommandForTest(true, "checkout", setupOutputs[0].commit)
-			err = Fetch(provider, "origin", []*GitRefSpec{}, false, false, false, callback)
+			err = Fetch(provider, "origin", []*GitRefSpec{}, false, false, callback)
 			Expect(err).To(BeNil(), "Should be no error fetching")
 			Expect(filesTransferred).To(BeEquivalentTo(len(setupOutputs[0].lobSHAs)*2), "File count check should be right")
 			filesTransferred = 0
@@ -436,7 +436,7 @@ var _ = Describe("Fetch", func() {
 			MarkBinariesAsPushed("origin", setupOutputs[0].commit, "")
 			// now fetch for commit 1, this should update the push state to this SHA
 			RunGitCommandForTest(true, "checkout", setupOutputs[1].commit)
-			err = Fetch(provider, "origin", []*GitRefSpec{}, false, false, false, callback)
+			err = Fetch(provider, "origin", []*GitRefSpec{}, false, false, callback)
 			Expect(err).To(BeNil(), "Should be no error fetching")
 			Expect(filesTransferred).To(BeEquivalentTo(len(setupOutputs[1].lobSHAs)*2), "File count check should be right")
 			pushed, err := FindLatestAncestorWhereBinariesPushed("origin", "master")
@@ -448,7 +448,7 @@ var _ = Describe("Fetch", func() {
 			// Commit 5 is > 2 days ahead of previous commit so this will only fetch 5
 			// but will actually get 2 sets; the change at 5 and the change before 5
 			RunGitCommandForTest(true, "checkout", setupOutputs[5].commit)
-			err = Fetch(provider, "origin", []*GitRefSpec{}, false, false, false, callback)
+			err = Fetch(provider, "origin", []*GitRefSpec{}, false, false, callback)
 			Expect(err).To(BeNil(), "Should be no error fetching")
 			Expect(filesTransferred).To(BeEquivalentTo(len(setupOutputs[5].lobSHAs)*4), "File count check should be right (2 commits)")
 			pushed, err = FindLatestAncestorWhereBinariesPushed("origin", "master")
@@ -466,7 +466,7 @@ var _ = Describe("Fetch", func() {
 			origRemoteBinary := filepath.Join(originBinStore, getLOBChunkRelativePath(setupOutputs[3].lobSHAs[0], 0))
 			renamedRemoteBinary := origRemoteBinary + "_old"
 			os.Rename(origRemoteBinary, renamedRemoteBinary)
-			err = Fetch(provider, "origin", []*GitRefSpec{}, false, false, false, callback)
+			err = Fetch(provider, "origin", []*GitRefSpec{}, false, false, callback)
 			Expect(err).To(BeNil(), "Should be no error fetching")
 			Expect(filesTransferred).To(BeEquivalentTo(0), "Should be nothing new to fetch (already done)")
 			pushed, err = FindLatestAncestorWhereBinariesPushed("origin", "master")
@@ -487,7 +487,7 @@ var _ = Describe("Fetch", func() {
 			origRemoteBinary = filepath.Join(originBinStore, getLOBChunkRelativePath(setupOutputs[6].lobSHAs[0], 0))
 			renamedRemoteBinary = origRemoteBinary + "_old"
 			os.Rename(origRemoteBinary, renamedRemoteBinary)
-			err = Fetch(provider, "origin", []*GitRefSpec{}, false, false, false, callback)
+			err = Fetch(provider, "origin", []*GitRefSpec{}, false, false, callback)
 			Expect(err).To(BeNil(), "Should be no error fetching")
 			Expect(filesTransferred).To(BeEquivalentTo(len(setupOutputs[6].lobSHAs)*2+len(setupOutputs[7].lobSHAs)*2-1),
 				"Should be 2 more commits to fetch, minus one which is missing")
@@ -499,7 +499,7 @@ var _ = Describe("Fetch", func() {
 			os.Rename(renamedRemoteBinary, origRemoteBinary)
 
 			// now confirm that once the missing files are resolved, push state updates
-			err = Fetch(provider, "origin", []*GitRefSpec{}, false, false, false, callback)
+			err = Fetch(provider, "origin", []*GitRefSpec{}, false, false, callback)
 			Expect(err).To(BeNil(), "Should be no error fetching")
 			Expect(filesTransferred).To(BeEquivalentTo(1), "Should fetch the 1 file that was missing")
 			pushed, err = FindLatestAncestorWhereBinariesPushed("origin", "master")

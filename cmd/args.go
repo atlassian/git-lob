@@ -1,6 +1,7 @@
-package core
+package cmd
 
 import (
+	"bitbucket.org/sinbad/git-lob/core"
 	"bitbucket.org/sinbad/git-lob/util"
 	"fmt"
 	"os"
@@ -83,8 +84,8 @@ func ParseCommandLine(opts *util.Options, args []string) (errors []string) {
 // only to accept certain options. Errors will be returned for any options present that are
 // not in validValueOpts / validBoolOpts
 func validateCustomOptions(opts *util.Options, validValueOpts, validBoolOpts []string) (errors []string) {
-	validValueSet := NewStringSetFromSlice(validValueOpts)
-	validBoolSet := NewStringSetFromSlice(validBoolOpts)
+	validValueSet := core.NewStringSetFromSlice(validValueOpts)
+	validBoolSet := core.NewStringSetFromSlice(validBoolOpts)
 
 	for k, v := range opts.StringOpts {
 		if !validValueSet.Contains(k) {
