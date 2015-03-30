@@ -38,16 +38,16 @@ var (
 )
 
 // Retrieve the full set of SHAs that currently have files locally (complete or not)
-func getAllLocalLOBSHAs() (StringSet, error) {
+func getAllLocalLOBSHAs() (util.StringSet, error) {
 	return getAllLOBSHAsInDir(GetLocalLOBRoot())
 }
 
 // Retrieve the full set of SHAs that currently have files in the shared store (complete or not)
-func getAllSharedLOBSHAs() (StringSet, error) {
+func getAllSharedLOBSHAs() (util.StringSet, error) {
 	return getAllLOBSHAsInDir(GetSharedLOBRoot())
 }
 
-func getAllLOBSHAsInDir(lobroot string) (StringSet, error) {
+func getAllLOBSHAsInDir(lobroot string) (util.StringSet, error) {
 
 	// os.File.Readdirnames is the most efficient
 	// os.File.Readdir retrieves extra info we don't usually need but in case other unexpected files
@@ -59,7 +59,7 @@ func getAllLOBSHAsInDir(lobroot string) (StringSet, error) {
 	}
 	// Readdir returns in 'directory order' which means we may not get files for same SHA together
 	// so use set to find uniques
-	ret := NewStringSet()
+	ret := util.NewStringSet()
 
 	// We only need to support a 2-folder structure here & know that all files are at the bottom level
 	// We always work on the local LOB folder (either only copy or hard link)
@@ -144,7 +144,7 @@ func PruneUnreferenced(dryRun bool, callback PruneCallback) ([]string, error) {
 	multi := io.MultiReader(stdout, stderr)
 	scanner := bufio.NewScanner(multi)
 	cmd.Start()
-	referencedSHAs := NewStringSet()
+	referencedSHAs := util.NewStringSet()
 	for scanner.Scan() {
 		callback(PruneWorking, "")
 		line := scanner.Text()
@@ -200,10 +200,10 @@ func PruneUnreferenced(dryRun bool, callback PruneCallback) ([]string, error) {
 // Returns a list of SHAs that were deleted (unless dryRun = true)
 // Unreferenced binaries are also deleted by this
 func PruneOld(dryRun, safeMode bool, callback PruneCallback) ([]string, error) {
-	refSHAsDone := NewStringSet()
+	refSHAsDone := util.NewStringSet()
 	// Build a list to keep, then delete all else (includes deleting unreferenced)
 	// Can't just look at diffs (just like fetch) since LOB changed 3 years ago but still valid = recent
-	retainSet := NewStringSet()
+	retainSet := util.NewStringSet()
 
 	// Add LOBs to retainSet for this commit and history
 	retainLOBs := func(commit string, days int, notPushedScanOnly bool, remoteName string) error {

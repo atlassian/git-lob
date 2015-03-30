@@ -20,7 +20,7 @@ func Push(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dryR
 	util.LogDebugf("Pushing to %v via %v\n", remoteName, provider.TypeID())
 
 	// for use when --force used
-	filesUploaded := NewStringSet()
+	filesUploaded := util.NewStringSet()
 	for i, refspec := range refspecs {
 		// We now perform a complete push per refspec before proceeding to the nex
 		// estimates & progress is measured within the refspec
@@ -192,7 +192,7 @@ func Push(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dryR
 					// We can end up duplicating uploads when in force mode because the underlying provider will not
 					// stop the upload in force mode if it's already there. So instead, make sure we only upload each
 					// file at most once
-					commitFilesSet := NewStringSetFromSlice(commit.Files)
+					commitFilesSet := util.NewStringSetFromSlice(commit.Files)
 					newFilesSet := commitFilesSet.Difference(filesUploaded)
 					if len(newFilesSet) > 0 {
 						newFiles := make([]string, 0, len(newFilesSet))

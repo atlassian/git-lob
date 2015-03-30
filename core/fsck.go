@@ -48,7 +48,7 @@ func Fsck(deep, shared, deleteBadFiles bool, shas []string, callback func(data *
 	// When listing all LOBs it returns a set to eliminate dupes so use this across both
 	// cheaper to construct a set from small number of arguments than a slice from potentially
 	// unlimited number of items on the disk
-	var shaSet StringSet
+	var shaSet util.StringSet
 	if len(shas) == 0 {
 		var err error
 		if shared {
@@ -60,7 +60,7 @@ func Fsck(deep, shared, deleteBadFiles bool, shas []string, callback func(data *
 			return err
 		}
 	} else {
-		shaSet = NewStringSetFromSlice(shas)
+		shaSet = util.NewStringSetFromSlice(shas)
 	}
 
 	var basedir string
