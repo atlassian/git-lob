@@ -97,7 +97,7 @@ var _ = Describe("Fsck", func() {
 		// restore, then break a chunk & test again
 		os.Rename(backupFile, fileToBreak)
 		missingFiles = nil
-		fileToBreak = getLocalLOBChunkPath(smallLOBs[0], 0)
+		fileToBreak = GetLocalLOBChunkPath(smallLOBs[0], 0)
 		backupFile = fileToBreak + "_bak"
 		os.Rename(fileToBreak, backupFile)
 		err = Fsck(false, false, false, nil, callback)
@@ -107,7 +107,7 @@ var _ = Describe("Fsck", func() {
 		Expect(wrongSizeFiles).To(BeEmpty(), "Should be no wrong size files (shallow)")
 		// now try with a secondary chunk (leave smallLOBs[0] broken to test multiples)
 		missingFiles = nil
-		fileToBreak = getLocalLOBChunkPath(largeLOBs[1], 1)
+		fileToBreak = GetLocalLOBChunkPath(largeLOBs[1], 1)
 		backupFile = fileToBreak + "_bak"
 		os.Rename(fileToBreak, backupFile)
 		err = Fsck(false, false, false, nil, callback)
@@ -137,8 +137,8 @@ var _ = Describe("Fsck", func() {
 		corruptFiles = nil
 
 		// Now test 'wrong size' detection
-		fileToBreak = getLocalLOBChunkPath(smallLOBs[2], 0)
-		fileToBreak2 := getLocalLOBChunkPath(largeLOBs[0], 1)
+		fileToBreak = GetLocalLOBChunkPath(smallLOBs[2], 0)
+		fileToBreak2 := GetLocalLOBChunkPath(largeLOBs[0], 1)
 		backupFile = fileToBreak + "_bak"
 		backupFile2 := fileToBreak2 + "_bak"
 		os.Rename(fileToBreak, backupFile)
@@ -159,8 +159,8 @@ var _ = Describe("Fsck", func() {
 		wrongSizeFiles = nil
 
 		// Now break the data by keeping it the right size but overwrite a few bytes with different data
-		fileToBreak = getLocalLOBChunkPath(smallLOBs[2], 0)
-		fileToBreak2 = getLocalLOBChunkPath(largeLOBs[0], 1)
+		fileToBreak = GetLocalLOBChunkPath(smallLOBs[2], 0)
+		fileToBreak2 = GetLocalLOBChunkPath(largeLOBs[0], 1)
 		f, _ := os.OpenFile(fileToBreak, os.O_RDWR, 0644)
 		f.Write([]byte{5, 4, 3, 2, 1})
 		f.Close()
@@ -195,7 +195,7 @@ var _ = Describe("Fsck", func() {
 		// Now test deletion
 		// Make a chunk the wrong size to test only that chunk gets deleted
 		// also smallLOBs[2], largeLOBs[0] still corrupt from previous
-		fileToBreak = getLocalLOBChunkPath(largeLOBs[1], 2)
+		fileToBreak = GetLocalLOBChunkPath(largeLOBs[1], 2)
 		ioutil.WriteFile(fileToBreak, []byte{0, 1, 2, 3, 4, 5}, 0644)
 		err = Fsck(true, false, true, nil, callback)
 		Expect(err).ToNot(BeNil(), "Should be an error calling Fsck (deep)")
@@ -210,19 +210,19 @@ var _ = Describe("Fsck", func() {
 			}
 			if i == 2 {
 				Expect(FileExists(getLocalLOBMetaPath(s))).To(BeFalse(), "Corrupt file should be deleted")
-				Expect(FileExists(getLocalLOBChunkPath(s, 0))).To(BeFalse(), "Corrupt file should be deleted")
+				Expect(FileExists(GetLocalLOBChunkPath(s, 0))).To(BeFalse(), "Corrupt file should be deleted")
 			} else {
 				Expect(FileExists(getLocalLOBMetaPath(s))).To(BeTrue(), fmt.Sprintf("Small meta file %d should still exist", i))
-				Expect(FileExists(getLocalLOBChunkPath(s, 0))).To(BeTrue(), fmt.Sprintf("Small chunk file %d should still exist", i))
+				Expect(FileExists(GetLocalLOBChunkPath(s, 0))).To(BeTrue(), fmt.Sprintf("Small chunk file %d should still exist", i))
 			}
 		}
-		Expect(FileExists(getLocalLOBChunkPath(largeLOBs[1], 2))).To(BeFalse(), "Wrong size file should be deleted")
+		Expect(FileExists(GetLocalLOBChunkPath(largeLOBs[1], 2))).To(BeFalse(), "Wrong size file should be deleted")
 		Expect(FileExists(getLocalLOBMetaPath(largeLOBs[1]))).To(BeTrue(), "Metadata of wrong size chunk file should still exist")
-		Expect(FileExists(getLocalLOBChunkPath(largeLOBs[1], 0))).To(BeTrue(), "Earlier chunks of wrong size file should still exist")
-		Expect(FileExists(getLocalLOBChunkPath(largeLOBs[1], 1))).To(BeTrue(), "Earlier chunks of wrong size file should still exist")
+		Expect(FileExists(GetLocalLOBChunkPath(largeLOBs[1], 0))).To(BeTrue(), "Earlier chunks of wrong size file should still exist")
+		Expect(FileExists(GetLocalLOBChunkPath(largeLOBs[1], 1))).To(BeTrue(), "Earlier chunks of wrong size file should still exist")
 		Expect(FileExists(getLocalLOBMetaPath(largeLOBs[0]))).To(BeFalse(), "Corrupt file should be deleted")
-		Expect(FileExists(getLocalLOBChunkPath(largeLOBs[0], 0))).To(BeFalse(), "Corrupt file should be deleted")
-		Expect(FileExists(getLocalLOBChunkPath(largeLOBs[0], 1))).To(BeFalse(), "Corrupt file should be deleted")
+		Expect(FileExists(GetLocalLOBChunkPath(largeLOBs[0], 0))).To(BeFalse(), "Corrupt file should be deleted")
+		Expect(FileExists(GetLocalLOBChunkPath(largeLOBs[0], 1))).To(BeFalse(), "Corrupt file should be deleted")
 		missingFiles = nil
 		corruptFiles = nil
 		wrongSizeFiles = nil

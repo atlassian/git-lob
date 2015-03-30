@@ -79,7 +79,7 @@ func ParseCommandLine(opts *util.Options, args []string) (errors []string) {
 
 }
 
-// Having already called parseCommandLine, perform context-specific validation
+// Having already called ParseCommandLine, perform context-specific validation
 // only to accept certain options. Errors will be returned for any options present that are
 // not in validValueOpts / validBoolOpts
 func validateCustomOptions(opts *util.Options, validValueOpts, validBoolOpts []string) (errors []string) {

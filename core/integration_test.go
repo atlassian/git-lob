@@ -120,7 +120,7 @@ var _ = Describe("Integration", func() {
 				err := os.Rename(meta, meta+"_bak")
 				Expect(err).To(BeNil(), fmt.Sprintf("Rename should succeed for %v", meta))
 				// Assuming only one chunk for this test
-				chunk := getLocalLOBChunkPath(sha, 0)
+				chunk := GetLocalLOBChunkPath(sha, 0)
 				err = os.Rename(chunk, chunk+"_bak")
 				Expect(err).To(BeNil(), fmt.Sprintf("Rename should succeed for %v", chunk))
 			}
@@ -132,7 +132,7 @@ var _ = Describe("Integration", func() {
 				err := os.Rename(meta+"_bak", meta)
 				Expect(err).To(BeNil(), fmt.Sprintf("Rename should succeed for %v", meta))
 				// Assuming only one chunk for this test
-				chunk := getLocalLOBChunkPath(sha, 0)
+				chunk := GetLocalLOBChunkPath(sha, 0)
 				err = os.Rename(chunk+"_bak", chunk)
 				Expect(err).To(BeNil(), fmt.Sprintf("Rename should succeed for %v", chunk))
 			}

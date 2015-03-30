@@ -37,7 +37,7 @@ func Push(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dryR
 
 		// First we walk the commits to push & build up a picture of size etc
 		walkFunc := func(commit *CommitLOBRef) (quit bool, err error) {
-			filenames, basedir, totalSize, err := GetLOBFilenamesWithBaseDir(commit.lobSHAs, true)
+			filenames, basedir, totalSize, err := GetLOBFilenamesWithBaseDir(commit.LobSHAs, true)
 			commitIncomplete := false
 			if err != nil {
 				var problemSHAs []string
@@ -62,7 +62,7 @@ func Push(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dryR
 					remoteerr := CheckRemoteLOBFilesForSHA(sha, provider, remoteName)
 					if remoteerr != nil {
 						// Damn, missing
-						util.LogDebug(fmt.Sprintf("Commit %v locally missing %v, not on remote: %v", commit.commit[:7], sha, remoteerr.Error()))
+						util.LogDebug(fmt.Sprintf("Commit %v locally missing %v, not on remote: %v", commit.Commit[:7], sha, remoteerr.Error()))
 						remoteHasOurMissingSHAs = false
 						break
 					}
@@ -74,8 +74,8 @@ func Push(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dryR
 					// push everything we can
 					commitIncomplete = true
 					anyIncomplete = true
-					util.LogDebug(fmt.Sprintf("Some content for commit %v is missing & not on remote already", commit.commit[:7]))
-					callback(&ProgressCallbackData{ProgressNotFound, fmt.Sprintf("data for commit %v", commit.commit[:7]),
+					util.LogDebug(fmt.Sprintf("Some content for commit %v is missing & not on remote already", commit.Commit[:7]))
+					callback(&ProgressCallbackData{ProgressNotFound, fmt.Sprintf("data for commit %v", commit.Commit[:7]),
 						int64(i + 1), int64(len(refspecs)), 0, 0})
 				}
 				// If we DID manage to find the missing data on the remote though, we treat this as
@@ -83,7 +83,7 @@ func Push(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dryR
 			}
 
 			refCommitsToPush = append(refCommitsToPush, &PushCommitContentDetails{
-				CommitSHA:  commit.commit,
+				CommitSHA:  commit.Commit,
 				Files:      filenames,
 				BaseDir:    basedir,
 				TotalBytes: totalSize,

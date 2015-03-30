@@ -334,7 +334,7 @@ func CheckRemoteLOBFilesForSHA(sha string, provider SyncProvider, remoteName str
 	// We need LOB info to know size / how many chunks it had
 	var info *LOBInfo
 	info, err := GetLOBInfo(sha)
-	meta := getLOBMetaRelativePath(sha)
+	meta := GetLOBMetaRelativePath(sha)
 	if err != nil {
 		// We have to actually download meta file in order to figure out what else is needed
 		dlerr := provider.Download(remoteName, []string{meta}, os.TempDir(), false, DummySyncProgressCallback)
@@ -359,7 +359,7 @@ func CheckRemoteLOBFilesForSHA(sha string, provider SyncProvider, remoteName str
 	// Now we get the list of chunks & check they are present
 	for i := 0; i < info.NumChunks; i++ {
 		expectedSize := getLOBExpectedChunkSize(info, i)
-		chunk := getLOBChunkRelativePath(sha, i)
+		chunk := GetLOBChunkRelativePath(sha, i)
 		if !provider.FileExistsAndIsOfSize(remoteName, chunk, expectedSize) {
 			return NewNotFoundError(fmt.Sprintf("Chunk file %v missing from %v", chunk, remoteName), chunk)
 		}

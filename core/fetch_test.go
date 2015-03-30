@@ -3,6 +3,7 @@ package core
 import (
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
+	. "bitbucket.org/sinbad/git-lob/util"
 	"fmt"
 	"os"
 	"os/exec"
@@ -424,36 +425,36 @@ var _ = Describe("Fetch", func() {
 			}
 
 			// Firstly we'll fetch at commit 0 just for local
-			RunGitCommandForTest(true, "checkout", setupOutputs[0].commit)
+			RunGitCommandForTest(true, "checkout", setupOutputs[0].Commit)
 			err = Fetch(provider, "origin", []*GitRefSpec{}, false, false, callback)
 			Expect(err).To(BeNil(), "Should be no error fetching")
-			Expect(filesTransferred).To(BeEquivalentTo(len(setupOutputs[0].lobSHAs)*2), "File count check should be right")
+			Expect(filesTransferred).To(BeEquivalentTo(len(setupOutputs[0].LobSHAs)*2), "File count check should be right")
 			filesTransferred = 0
 			// This should have initialised ALL the push state (because no local LOBs) including all other branches, so reset it
 			// then manually set it to [0]. We're trying to replicate the case where more than one fetch has taken place when the
 			// git repo has had new commits pulled
 			ResetPushedBinaryState("origin")
-			MarkBinariesAsPushed("origin", setupOutputs[0].commit, "")
+			MarkBinariesAsPushed("origin", setupOutputs[0].Commit, "")
 			// now fetch for commit 1, this should update the push state to this SHA
-			RunGitCommandForTest(true, "checkout", setupOutputs[1].commit)
+			RunGitCommandForTest(true, "checkout", setupOutputs[1].Commit)
 			err = Fetch(provider, "origin", []*GitRefSpec{}, false, false, callback)
 			Expect(err).To(BeNil(), "Should be no error fetching")
-			Expect(filesTransferred).To(BeEquivalentTo(len(setupOutputs[1].lobSHAs)*2), "File count check should be right")
+			Expect(filesTransferred).To(BeEquivalentTo(len(setupOutputs[1].LobSHAs)*2), "File count check should be right")
 			pushed, err := FindLatestAncestorWhereBinariesPushed("origin", "master")
 			Expect(err).To(BeNil(), "Should be no error finding pushed ancestor")
-			Expect(pushed).To(Equal(setupOutputs[1].commit), "Fetch should have updated pushed state to the latest fetched point")
+			Expect(pushed).To(Equal(setupOutputs[1].Commit), "Fetch should have updated pushed state to the latest fetched point")
 			filesTransferred = 0
 
 			// Now test leaving a gap unpushed but present on remote
 			// Commit 5 is > 2 days ahead of previous commit so this will only fetch 5
 			// but will actually get 2 sets; the change at 5 and the change before 5
-			RunGitCommandForTest(true, "checkout", setupOutputs[5].commit)
+			RunGitCommandForTest(true, "checkout", setupOutputs[5].Commit)
 			err = Fetch(provider, "origin", []*GitRefSpec{}, false, false, callback)
 			Expect(err).To(BeNil(), "Should be no error fetching")
-			Expect(filesTransferred).To(BeEquivalentTo(len(setupOutputs[5].lobSHAs)*4), "File count check should be right (2 commits)")
+			Expect(filesTransferred).To(BeEquivalentTo(len(setupOutputs[5].LobSHAs)*4), "File count check should be right (2 commits)")
 			pushed, err = FindLatestAncestorWhereBinariesPushed("origin", "master")
 			Expect(err).To(BeNil(), "Should be no error finding pushed ancestor")
-			Expect(pushed).To(Equal(setupOutputs[5].commit), "Fetch should have updated pushed state to the latest fetched point because files in gap are already on remote")
+			Expect(pushed).To(Equal(setupOutputs[5].Commit), "Fetch should have updated pushed state to the latest fetched point because files in gap are already on remote")
 			filesTransferred = 0
 
 			// Now try that again, but this time for a commit in the gap which is not fetched, make a file be missing on remote
@@ -461,9 +462,9 @@ var _ = Describe("Fetch", func() {
 			// (might be this client or any other)
 			// Put the pushed state back to 1
 			ResetPushedBinaryState("origin")
-			MarkBinariesAsPushed("origin", setupOutputs[1].commit, "")
+			MarkBinariesAsPushed("origin", setupOutputs[1].Commit, "")
 			// this test is for a missing file in the GAP, not a file we would fetch
-			origRemoteBinary := filepath.Join(originBinStore, getLOBChunkRelativePath(setupOutputs[3].lobSHAs[0], 0))
+			origRemoteBinary := filepath.Join(originBinStore, GetLOBChunkRelativePath(setupOutputs[3].LobSHAs[0], 0))
 			renamedRemoteBinary := origRemoteBinary + "_old"
 			os.Rename(origRemoteBinary, renamedRemoteBinary)
 			err = Fetch(provider, "origin", []*GitRefSpec{}, false, false, callback)
@@ -471,7 +472,7 @@ var _ = Describe("Fetch", func() {
 			Expect(filesTransferred).To(BeEquivalentTo(0), "Should be nothing new to fetch (already done)")
 			pushed, err = FindLatestAncestorWhereBinariesPushed("origin", "master")
 			Expect(err).To(BeNil(), "Should be no error finding pushed ancestor")
-			Expect(pushed).To(Equal(setupOutputs[1].commit), "Fetch should not have updated pushed state because remote files were missing in the gap")
+			Expect(pushed).To(Equal(setupOutputs[1].Commit), "Fetch should not have updated pushed state because remote files were missing in the gap")
 			filesTransferred = 0
 			// put this file back so it's not stopping push state update any more
 			os.Rename(renamedRemoteBinary, origRemoteBinary)
@@ -484,16 +485,16 @@ var _ = Describe("Fetch", func() {
 			RunGitCommandForTest(true, "checkout", "master")
 
 			// this test is for a missing file in the FETCH
-			origRemoteBinary = filepath.Join(originBinStore, getLOBChunkRelativePath(setupOutputs[6].lobSHAs[0], 0))
+			origRemoteBinary = filepath.Join(originBinStore, GetLOBChunkRelativePath(setupOutputs[6].LobSHAs[0], 0))
 			renamedRemoteBinary = origRemoteBinary + "_old"
 			os.Rename(origRemoteBinary, renamedRemoteBinary)
 			err = Fetch(provider, "origin", []*GitRefSpec{}, false, false, callback)
 			Expect(err).To(BeNil(), "Should be no error fetching")
-			Expect(filesTransferred).To(BeEquivalentTo(len(setupOutputs[6].lobSHAs)*2+len(setupOutputs[7].lobSHAs)*2-1),
+			Expect(filesTransferred).To(BeEquivalentTo(len(setupOutputs[6].LobSHAs)*2+len(setupOutputs[7].LobSHAs)*2-1),
 				"Should be 2 more commits to fetch, minus one which is missing")
 			pushed, err = FindLatestAncestorWhereBinariesPushed("origin", "master")
 			Expect(err).To(BeNil(), "Should be no error finding pushed ancestor")
-			Expect(pushed).To(Equal(setupOutputs[1].commit), "Fetch should not have updated pushed state because remote files were missing in the gap")
+			Expect(pushed).To(Equal(setupOutputs[1].Commit), "Fetch should not have updated pushed state because remote files were missing in the gap")
 			filesTransferred = 0
 			// put this file back so it's not stopping push state update any more
 			os.Rename(renamedRemoteBinary, origRemoteBinary)
@@ -504,7 +505,7 @@ var _ = Describe("Fetch", func() {
 			Expect(filesTransferred).To(BeEquivalentTo(1), "Should fetch the 1 file that was missing")
 			pushed, err = FindLatestAncestorWhereBinariesPushed("origin", "master")
 			Expect(err).To(BeNil(), "Should be no error finding pushed ancestor")
-			Expect(pushed).To(Equal(setupOutputs[7].commit), "Fetch should now have updated the push state to master")
+			Expect(pushed).To(Equal(setupOutputs[7].Commit), "Fetch should now have updated the push state to master")
 			filesTransferred = 0
 
 		})

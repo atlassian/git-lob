@@ -184,38 +184,38 @@ var _ = Describe("Remote", func() {
 			Expect(sha).To(Equal(""), "Should be no pushed binaries at start")
 
 			// Mark pushed at feature/hanging but not at tip
-			err = MarkBinariesAsPushed(remote, setupOutputs[2].commit, "")
+			err = MarkBinariesAsPushed(remote, setupOutputs[2].Commit, "")
 			Expect(err).To(BeNil())
 			// The ancestor that's pushed should be the common parent of hanging branch & master,
 			// which is index 1
 			sha, err = FindLatestAncestorWhereBinariesPushed(remote, "master")
 			Expect(err).To(BeNil())
-			Expect(sha).To(Equal(setupOutputs[1].commit), "Should find common ancestor that's pushed")
+			Expect(sha).To(Equal(setupOutputs[1].Commit), "Should find common ancestor that's pushed")
 
 			// Mark a commit on master as pushed too
-			err = MarkBinariesAsPushed(remote, setupOutputs[4].commit, "")
+			err = MarkBinariesAsPushed(remote, setupOutputs[4].Commit, "")
 			Expect(err).To(BeNil())
 			// The ancestor that's pushed from master should now be this one
 			sha, err = FindLatestAncestorWhereBinariesPushed(remote, "master")
 			Expect(err).To(BeNil())
-			Expect(sha).To(Equal(setupOutputs[4].commit), "Should find latest ancestor that's pushed")
+			Expect(sha).To(Equal(setupOutputs[4].Commit), "Should find latest ancestor that's pushed")
 			// but if measured from hanging branch this should be its own
 			sha, err = FindLatestAncestorWhereBinariesPushed(remote, "feature/hanging")
 			Expect(err).To(BeNil())
-			Expect(sha).To(Equal(setupOutputs[2].commit), "Should find hanging branch ancestor that's pushed")
+			Expect(sha).To(Equal(setupOutputs[2].Commit), "Should find hanging branch ancestor that's pushed")
 
 			// Now mark a commit on the merge line as pushed, but not where it's merged
 			// Again don't mark the tip to make the test more interesting
-			err = MarkBinariesAsPushed(remote, setupOutputs[5].commit, "")
+			err = MarkBinariesAsPushed(remote, setupOutputs[5].Commit, "")
 			Expect(err).To(BeNil())
 			// The ancestor that's pushed from master should now be the one in the middle of the merge
 			sha, err = FindLatestAncestorWhereBinariesPushed(remote, "master")
 			Expect(err).To(BeNil())
-			Expect(sha).To(Equal(setupOutputs[5].commit), "Should find merge ancestor that's pushed")
+			Expect(sha).To(Equal(setupOutputs[5].Commit), "Should find merge ancestor that's pushed")
 			// but should not affect hanging branch this should be its own
 			sha, err = FindLatestAncestorWhereBinariesPushed(remote, "feature/hanging")
 			Expect(err).To(BeNil())
-			Expect(sha).To(Equal(setupOutputs[2].commit), "Should find hanging branch ancestor that's pushed")
+			Expect(sha).To(Equal(setupOutputs[2].Commit), "Should find hanging branch ancestor that's pushed")
 			// However even though merge ancestor is 'latest pushed' from master, we should still see commits on master in parallel with merge to push
 			commits, err := GetCommitLOBsToPushForRef(remote, "master", false)
 			Expect(err).To(BeNil())
@@ -223,12 +223,12 @@ var _ = Describe("Remote", func() {
 			Expect(commits).To(ConsistOf(getOutputSubset(6, 7, 8, 10)), "Should be correct list to push")
 			// now mark something in the middle on master as pushed & make sure remnants of merge branch still get picked up
 			// Also replace the previously marked SHA on master because assume we picked this up from master (since merged) but didn't finish
-			err = MarkBinariesAsPushed(remote, setupOutputs[8].commit, setupOutputs[4].commit)
+			err = MarkBinariesAsPushed(remote, setupOutputs[8].Commit, setupOutputs[4].Commit)
 			Expect(err).To(BeNil())
 			// The ancestor that's pushed from master should now be this one
 			sha, err = FindLatestAncestorWhereBinariesPushed(remote, "master")
 			Expect(err).To(BeNil())
-			Expect(sha).To(Equal(setupOutputs[8].commit), "Should find master ancestor that's pushed")
+			Expect(sha).To(Equal(setupOutputs[8].Commit), "Should find master ancestor that's pushed")
 			// Now test we pick up the commits from the merge branch on master, after what was marked there
 			commits, err = GetCommitLOBsToPushForRef(remote, "master", false)
 			Expect(err).To(BeNil())
@@ -240,30 +240,30 @@ var _ = Describe("Remote", func() {
 		It("consolidates pushed state", func() {
 			// This time we're just inserting push markers and making sure that they are consolidated correctly
 			remote := "origin"
-			err := MarkBinariesAsPushed(remote, setupOutputs[0].commit, "") // redundant since 4 is descendent
+			err := MarkBinariesAsPushed(remote, setupOutputs[0].Commit, "") // redundant since 4 is descendent
 			Expect(err).To(BeNil())
-			err = MarkBinariesAsPushed(remote, setupOutputs[4].commit, "")
+			err = MarkBinariesAsPushed(remote, setupOutputs[4].Commit, "")
 			Expect(err).To(BeNil())
-			err = MarkBinariesAsPushed(remote, setupOutputs[3].commit, "") // 3 is on a separate branch
+			err = MarkBinariesAsPushed(remote, setupOutputs[3].Commit, "") // 3 is on a separate branch
 			Expect(err).To(BeNil())
 			CleanupPushState(remote)
 			pushed := GetPushedCommits(remote)
-			Expect(pushed).To(ConsistOf([]string{setupOutputs[4].commit, setupOutputs[3].commit}), "Should still record 2 pushed states")
+			Expect(pushed).To(ConsistOf([]string{setupOutputs[4].Commit, setupOutputs[3].Commit}), "Should still record 2 pushed states")
 
-			err = MarkBinariesAsPushed(remote, setupOutputs[7].commit, "") // on merge path
+			err = MarkBinariesAsPushed(remote, setupOutputs[7].Commit, "") // on merge path
 			Expect(err).To(BeNil())
-			err = MarkBinariesAsPushed(remote, setupOutputs[8].commit, "") // in parallel on master (overrides 4)
+			err = MarkBinariesAsPushed(remote, setupOutputs[8].Commit, "") // in parallel on master (overrides 4)
 			Expect(err).To(BeNil())
 			CleanupPushState(remote)
 			pushed = GetPushedCommits(remote)
-			Expect(pushed).To(ConsistOf([]string{setupOutputs[8].commit, setupOutputs[3].commit, setupOutputs[7].commit}),
+			Expect(pushed).To(ConsistOf([]string{setupOutputs[8].Commit, setupOutputs[3].Commit, setupOutputs[7].Commit}),
 				"Should record 3 pushed states; master, hanging and merge path")
 			// Now once we say pushed after merge commit point, should resolve back to 2 again
-			err = MarkBinariesAsPushed(remote, setupOutputs[10].commit, "") // post-merge
+			err = MarkBinariesAsPushed(remote, setupOutputs[10].Commit, "") // post-merge
 			Expect(err).To(BeNil())
 			CleanupPushState(remote)
 			pushed = GetPushedCommits(remote)
-			Expect(pushed).To(ConsistOf([]string{setupOutputs[10].commit, setupOutputs[3].commit}),
+			Expect(pushed).To(ConsistOf([]string{setupOutputs[10].Commit, setupOutputs[3].Commit}),
 				"Should be nack to 2 pushed states; master & hanging")
 		})
 
@@ -272,7 +272,7 @@ var _ = Describe("Remote", func() {
 			// Make sure that we can recover correctly
 			remote := "origin"
 			// Add valid post-merge push point (hanging is not pushed)
-			err := MarkBinariesAsPushed(remote, setupOutputs[9].commit, "")
+			err := MarkBinariesAsPushed(remote, setupOutputs[9].Commit, "")
 			Expect(err).To(BeNil())
 			// Now add a completely incorrect SHA
 			err = MarkBinariesAsPushed(remote, "1111111111222222222233333333334444444444", "")

@@ -269,7 +269,7 @@ func PruneOld(dryRun, safeMode bool, callback PruneCallback) ([]string, error) {
 			// so that it corresponds with the push flag. Snapshots above include that already, so
 			// here we only deal with differences.
 			// We have to use the '-' diffs *between* commits (arbitrary date), but can use '+' when *on* commits
-			for _, l := range commitLOB.lobSHAs {
+			for _, l := range commitLOB.LobSHAs {
 				if retainSet.Add(l) {
 					callback(PruneRetainNotPushed, l)
 				}

@@ -55,12 +55,12 @@ func getLOBRelativeDir(sha string) string {
 }
 
 // Get a relative file name for a meta file (no dirs created as not rooted)
-func getLOBMetaRelativePath(sha string) string {
+func GetLOBMetaRelativePath(sha string) string {
 	return filepath.Join(getLOBRelativeDir(sha), getLOBMetaFilename(sha))
 }
 
 // Get a relative file name for a meta file (no dirs created as not rooted)
-func getLOBChunkRelativePath(sha string, chunkIdx int) string {
+func GetLOBChunkRelativePath(sha string, chunkIdx int) string {
 	return filepath.Join(getLOBRelativeDir(sha), getLOBChunkFilename(sha, chunkIdx))
 }
 
@@ -117,7 +117,7 @@ func getLocalLOBMetaPath(sha string) string {
 }
 
 // Gets the absolute path to the chunk file for a LOB in local store
-func getLocalLOBChunkPath(sha string, chunkIdx int) string {
+func GetLocalLOBChunkPath(sha string, chunkIdx int) string {
 	fld := GetLocalLOBDir(sha)
 	return filepath.Join(fld, getLOBChunkFilename(sha, chunkIdx))
 }
@@ -129,7 +129,7 @@ func getSharedLOBMetaPath(sha string) string {
 }
 
 // Gets the absolute path to the chunk file for a LOB in local store
-func getSharedLOBChunkPath(sha string, chunkIdx int) string {
+func GetSharedLOBChunkPath(sha string, chunkIdx int) string {
 	fld := GetSharedLOBDir(sha)
 	return filepath.Join(fld, getLOBChunkFilename(sha, chunkIdx))
 }
@@ -201,7 +201,7 @@ func parseLOBInfoFromFile(file string) (*LOBInfo, error) {
 // because of hardlinking the files are either missing entirely or the
 // same as the shared store
 func recoverLocalLOBFilesFromSharedStore(sha string) bool {
-	if !isUsingSharedStorage() {
+	if !IsUsingSharedStorage() {
 		return false
 	}
 
@@ -224,10 +224,10 @@ func recoverLocalLOBFilesFromSharedStore(sha string) bool {
 		return false
 	}
 	for i := 0; i < info.NumChunks; i++ {
-		local := getLocalLOBChunkPath(sha, i)
+		local := GetLocalLOBChunkPath(sha, i)
 		expectedSize := getLOBExpectedChunkSize(info, i)
 		if !util.FileExistsAndIsOfSize(local, expectedSize) {
-			shared := getSharedLOBChunkPath(sha, i)
+			shared := GetSharedLOBChunkPath(sha, i)
 			if util.FileExistsAndIsOfSize(shared, expectedSize) {
 				err := linkSharedLOBFilename(shared)
 				if err != nil {
@@ -273,7 +273,7 @@ func RetrieveLOB(sha string, out io.Writer) (info *LOBInfo, err error) {
 	lastChunkSize := fileSize - (int64(info.NumChunks-1) * ChunkSize)
 	// Check all files
 	for i := 0; i < info.NumChunks; i++ {
-		chunkFilename := getLocalLOBChunkPath(sha, i)
+		chunkFilename := GetLocalLOBChunkPath(sha, i)
 		var expectedSize int64
 		if i+1 < info.NumChunks {
 			expectedSize = ChunkSize
@@ -310,7 +310,7 @@ func RetrieveLOB(sha string, out io.Writer) (info *LOBInfo, err error) {
 	// If all was well, start reading & streaming content
 	for i := 0; i < info.NumChunks; i++ {
 		// Check each chunk file exists
-		chunkFilename := getLocalLOBChunkPath(info.SHA, i)
+		chunkFilename := GetLocalLOBChunkPath(info.SHA, i)
 		in, err := os.OpenFile(chunkFilename, os.O_RDONLY, 0644)
 		if err != nil {
 			return info, errors.New(fmt.Sprintf("Error reading LOB file %v: %v", chunkFilename, err))
@@ -359,13 +359,13 @@ func linkSharedLOBFilename(destSharedFile string) error {
 
 // Store the metadata for a given sha
 // If it already exists and is of the right size, will do nothing
-func storeLOBInfo(info *LOBInfo) error {
+func StoreLOBInfo(info *LOBInfo) error {
 	infoBytes, err := json.Marshal(info)
 	if err != nil {
 		return errors.New(fmt.Sprintf("Unable to convert LOB info to JSON: %v", err))
 	}
 	var infoFilename string
-	if isUsingSharedStorage() {
+	if IsUsingSharedStorage() {
 		infoFilename = getSharedLOBMetaPath(info.SHA)
 	} else {
 		infoFilename = getLocalLOBMetaPath(info.SHA)
@@ -383,7 +383,7 @@ func storeLOBInfo(info *LOBInfo) error {
 	}
 
 	// This may have stored in shared storage, so link if required
-	if isUsingSharedStorage() {
+	if IsUsingSharedStorage() {
 		return linkSharedLOBFilename(infoFilename)
 	} else {
 		return nil
@@ -391,7 +391,7 @@ func storeLOBInfo(info *LOBInfo) error {
 
 }
 
-func isUsingSharedStorage() bool {
+func IsUsingSharedStorage() bool {
 	if util.GlobalOptions.SharedStore != "" {
 		// We create the folder on loading config
 		return util.DirExists(util.GlobalOptions.SharedStore)
@@ -406,10 +406,10 @@ func isUsingSharedStorage() bool {
 func storeLOBChunk(sha string, chunkNo int, fromChunkFile string, sz int64) error {
 	var destFile string
 
-	if isUsingSharedStorage() {
-		destFile = getSharedLOBChunkPath(sha, chunkNo)
+	if IsUsingSharedStorage() {
+		destFile = GetSharedLOBChunkPath(sha, chunkNo)
 	} else {
-		destFile = getLocalLOBChunkPath(sha, chunkNo)
+		destFile = GetLocalLOBChunkPath(sha, chunkNo)
 	}
 	if !util.FileExistsAndIsOfSize(destFile, int64(sz)) {
 		util.LogDebugf("Saving final LOB metadata file: %v\n", destFile)
@@ -427,7 +427,7 @@ func storeLOBChunk(sha string, chunkNo int, fromChunkFile string, sz int64) erro
 	}
 
 	// This may have stored in shared storage, so link if required
-	if isUsingSharedStorage() {
+	if IsUsingSharedStorage() {
 		return linkSharedLOBFilename(destFile)
 	}
 	return nil
@@ -532,7 +532,7 @@ func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
 	// We won't if it already exists & is the correct size
 	// Construct LOBInfo & write to final location
 	info := &LOBInfo{SHA: shaStr, Size: totalSize, NumChunks: len(chunkFilenames)}
-	err = storeLOBInfo(info)
+	err = StoreLOBInfo(info)
 	if err != nil {
 		return nil, err
 	}
@@ -575,7 +575,7 @@ func deleteLOBRelative(sha, basedir string) error {
 		}
 	}
 
-	if isUsingSharedStorage() && basedir != GetSharedLOBRoot() {
+	if IsUsingSharedStorage() && basedir != GetSharedLOBRoot() {
 		// If we're using shared storage, then also check the number of links in
 		// shared storage for this SHA. See PruneSharedStore for a more general
 		// sweep for files that don't go through DeleteLOB (e.g. repo deleted manually)
@@ -620,7 +620,7 @@ func GetLOBFilesForSHA(sha, basedir string, check bool, checkHash bool) (files [
 		return []string{}, 0, err
 	}
 	// add meta file (relative) - already checked by GetLOBInfo above
-	relmeta := getLOBMetaRelativePath(sha)
+	relmeta := GetLOBMetaRelativePath(sha)
 	ret = append(ret, relmeta)
 
 	var shaRecalc hash.Hash
@@ -629,7 +629,7 @@ func GetLOBFilesForSHA(sha, basedir string, check bool, checkHash bool) (files [
 	}
 	lastChunkSize := info.Size - (int64(info.NumChunks-1) * ChunkSize)
 	for i := 0; i < info.NumChunks; i++ {
-		relchunk := getLOBChunkRelativePath(sha, i)
+		relchunk := GetLOBChunkRelativePath(sha, i)
 		ret = append(ret, relchunk)
 		if check {
 			abschunk := filepath.Join(basedir, relchunk)
@@ -715,7 +715,7 @@ func GetMissingLOBs(lobshas []string, checkHash bool) []string {
 		err := CheckLOBFilesForSHA(sha, localroot, false)
 		if err != nil {
 			// Recover from shared storage if possible
-			if isUsingSharedStorage() && recoverLocalLOBFilesFromSharedStore(sha) {
+			if IsUsingSharedStorage() && recoverLocalLOBFilesFromSharedStore(sha) {
 				// then we're OK
 			} else {
 				missing = append(missing, sha)

@@ -116,7 +116,7 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 			allUnpushedCommitsAreOnRemote := true
 			unpushedCallback := func(commit *CommitLOBRef) (quit bool, err error) {
 				anyCommitsUnpushed = true
-				for _, sha := range commit.lobSHAs {
+				for _, sha := range commit.LobSHAs {
 					// check remote
 					remoteerr := CheckRemoteLOBFilesForSHA(sha, provider, remoteName)
 					if remoteerr != nil {
@@ -232,7 +232,7 @@ func fetchLOBs(lobshas []string, provider SyncProvider, remoteName string, force
 		filesTotalBytes += info.Size
 		for i := 0; i < info.NumChunks; i++ {
 			// get relative filename for download purposes
-			files = append(files, getLOBChunkRelativePath(sha, i))
+			files = append(files, GetLOBChunkRelativePath(sha, i))
 		}
 	}
 	callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf("Metadata done, downloading content (%v)", util.FormatSize(filesTotalBytes)),
@@ -270,14 +270,14 @@ func fetchMetadata(lobshas []string, provider SyncProvider, remoteName string, f
 	var metafilesToDownload []string
 	for _, sha := range lobshas {
 		// Note get relative file name
-		metafilesToDownload = append(metafilesToDownload, getLOBMetaRelativePath(sha))
+		metafilesToDownload = append(metafilesToDownload, GetLOBMetaRelativePath(sha))
 	}
 	// Download to shared if using shared area (we link later)
 	destDir := getFetchDestination()
 	err := provider.Download(remoteName, metafilesToDownload, destDir, force, metacallback)
 
 	// If shared store, link any metadata we downloaded into local
-	if isUsingSharedStorage() {
+	if IsUsingSharedStorage() {
 		for _, sha := range lobshas {
 			// filenames are relative (for download)
 			localfile := getLocalLOBMetaPath(sha)
@@ -301,7 +301,7 @@ func fetchMetadata(lobshas []string, provider SyncProvider, remoteName string, f
 
 func getFetchDestination() string {
 	// Download to shared if using shared area (we link later)
-	if isUsingSharedStorage() {
+	if IsUsingSharedStorage() {
 		return GetSharedLOBRoot()
 	} else {
 		return GetLocalLOBRoot()
@@ -358,7 +358,7 @@ func fetchContentFiles(files []string, filesTotalBytes int64, provider SyncProvi
 	}
 	// Also if shared store, link meta into local
 	// Link any we successfully downloaded
-	if isUsingSharedStorage() {
+	if IsUsingSharedStorage() {
 		localroot := GetLocalLOBRoot()
 		sharedroot := GetSharedLOBRoot()
 		for _, relfile := range files {

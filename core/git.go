@@ -77,13 +77,13 @@ func (r *GitRefSpec) String() string {
 
 // A record of a set of LOB shas that are associated with a commit
 type CommitLOBRef struct {
-	commit  string
-	parents []string
-	lobSHAs []string
+	Commit  string
+	Parents []string
+	LobSHAs []string
 }
 
 func (self *CommitLOBRef) String() string {
-	return fmt.Sprintf("Commit: %v\n  Files:%v\n", self.commit, self.lobSHAs)
+	return fmt.Sprintf("Commit: %v\n  Files:%v\n", self.Commit, self.LobSHAs)
 }
 
 // Walk first parents starting from startSHA and call callback
@@ -263,7 +263,7 @@ func walkGitLogOutputForLOBReferences(outp io.Reader, additions, removals bool,
 			parentSHAs := match[2:]
 			// Set commit context
 			if currentCommit != nil {
-				if len(currentCommit.lobSHAs) > 0 {
+				if len(currentCommit.LobSHAs) > 0 {
 					quit, err := callback(currentCommit)
 					if err != nil {
 						return quit, err
@@ -273,7 +273,7 @@ func walkGitLogOutputForLOBReferences(outp io.Reader, additions, removals bool,
 				}
 				currentCommit = nil
 			}
-			currentCommit = &CommitLOBRef{commit: sha, parents: parentSHAs}
+			currentCommit = &CommitLOBRef{Commit: sha, Parents: parentSHAs}
 		} else if match := fileHeaderRegex.FindStringSubmatch(line); match != nil {
 			// Finding a regular file header
 			// Pertinent file name depends on whether we're listening to additions or removals
@@ -292,13 +292,13 @@ func walkGitLogOutputForLOBReferences(outp io.Reader, additions, removals bool,
 			sha := match[1]
 			// Use filename context to include/exclude if paths were used
 			if currentFileIncluded {
-				currentCommit.lobSHAs = append(currentCommit.lobSHAs, sha)
+				currentCommit.LobSHAs = append(currentCommit.LobSHAs, sha)
 			}
 		}
 	}
 	// Final commit
 	if currentCommit != nil {
-		if len(currentCommit.lobSHAs) > 0 {
+		if len(currentCommit.LobSHAs) > 0 {
 			quit, err := callback(currentCommit)
 			if err != nil {
 				return quit, err
@@ -733,7 +733,7 @@ func GetGitAllLOBsToCheckoutInRefSpec(refspec *GitRefSpec, includePaths, exclude
 		for _, commit := range commits {
 			// possible to end up with duplicates here if same SHA referenced more than once
 			// caller to resolve if they need uniques
-			ret = append(ret, commit.lobSHAs...)
+			ret = append(ret, commit.LobSHAs...)
 		}
 
 	}
@@ -792,8 +792,8 @@ func GetGitAllLOBsToCheckoutAtCommitAndRecent(commit string, days int, includePa
 		ret := shasAtCommit
 		earliestCommit := commit
 		callback := func(lobcommit *CommitLOBRef) (quit bool, err error) {
-			ret = append(ret, lobcommit.lobSHAs...)
-			earliestCommit = lobcommit.commit
+			ret = append(ret, lobcommit.LobSHAs...)
+			earliestCommit = lobcommit.Commit
 			return false, nil
 		}
 		walkGitLogOutputForLOBReferences(outp, false, true, includePaths, excludePaths, callback)

@@ -116,9 +116,9 @@ var _ = Describe("Prune", func() {
 
 			// Confirm all files start off existing
 			for _, c := range setupOutputs {
-				for _, l := range c.lobSHAs {
+				for _, l := range c.LobSHAs {
 					Expect(FileExists(getLocalLOBMetaPath(l))).To(BeTrue(), "%v should exist prior to test")
-					Expect(FileExists(getLocalLOBChunkPath(l, 0))).To(BeTrue(), "%v should exist prior to test")
+					Expect(FileExists(GetLocalLOBChunkPath(l, 0))).To(BeTrue(), "%v should exist prior to test")
 				}
 			}
 			lobsdeleted := 0
@@ -136,7 +136,7 @@ var _ = Describe("Prune", func() {
 			}
 			filestoretain := 0
 			for _, out := range setupOutputs {
-				filestoretain += len(out.lobSHAs)
+				filestoretain += len(out.LobSHAs)
 			}
 			//fmt.Println(setupOutputs)
 			deleted, err := PruneOld(false, false, callback)
@@ -160,18 +160,18 @@ var _ = Describe("Prune", func() {
 			lobsretainednotpushed = 0
 
 			// now mark that branch as pushed so should delete
-			MarkBinariesAsPushed("origin", setupOutputs[4].commit, "")
+			MarkBinariesAsPushed("origin", setupOutputs[4].Commit, "")
 			deleted, err = PruneOld(false, false, callback)
 			// However, not pushed flag should stop them being deleted
 			Expect(err).To(BeNil(), "Should be no error pruning")
 			Expect(lobsretainednotpushed).To(BeEquivalentTo(0), "All files that would be deleted are pushed")
-			Expect(deleted).To(ConsistOf(setupOutputs[2].lobSHAs), "2 files should be deleted, old versions on non-HEAD")
-			Expect(lobsdeleted).To(BeEquivalentTo(len(setupOutputs[2].lobSHAs)), "2 deletion callbacks should be made")
+			Expect(deleted).To(ConsistOf(setupOutputs[2].LobSHAs), "2 files should be deleted, old versions on non-HEAD")
+			Expect(lobsdeleted).To(BeEquivalentTo(len(setupOutputs[2].LobSHAs)), "2 deletion callbacks should be made")
 			filestoretain -= 2
 			Expect(lobsretainedbydate).To(BeEquivalentTo(filestoretain), "Should be correct number of file SHAs retained by date")
 			lobsretainedbydate = 0
 			lobsdeleted = 0
-			for _, l := range setupOutputs[2].lobSHAs {
+			for _, l := range setupOutputs[2].LobSHAs {
 				exists, _ := FileOrDirExists(getLocalLOBMetaPath(l))
 				Expect(exists).To(Equal(false), "File %v should have been deleted", l)
 			}
@@ -199,7 +199,7 @@ var _ = Describe("Prune", func() {
 			// Now add changes to keep
 			for i := 7; i <= 9; i++ {
 				out := setupOutputs[i]
-				for _, l := range out.lobSHAs {
+				for _, l := range out.LobSHAs {
 					lobstoretain = append(lobstoretain, l)
 				}
 			}
@@ -214,17 +214,17 @@ var _ = Describe("Prune", func() {
 				out := setupOutputs[i]
 				for j, f := range in.Files {
 					if fileset.Contains(f) {
-						lobstoretain = append(lobstoretain, out.lobSHAs[j])
+						lobstoretain = append(lobstoretain, out.LobSHAs[j])
 						// only record the latest
 						fileset.Remove(f)
 					} else {
-						lobstodelete = append(lobstodelete, out.lobSHAs[j])
+						lobstodelete = append(lobstodelete, out.LobSHAs[j])
 					}
 				}
 			}
 			// mark master as pushed so should delete
 			// hanging branch [4] was already marked as pushed, but now other refs are not being retained also
-			MarkBinariesAsPushed("origin", setupOutputs[9].commit, "")
+			MarkBinariesAsPushed("origin", setupOutputs[9].Commit, "")
 			deleted, err = PruneOld(false, false, callback)
 			// However, not pushed flag should stop them being deleted
 			Expect(err).To(BeNil(), "Should be no error pruning")
@@ -234,7 +234,7 @@ var _ = Describe("Prune", func() {
 			Expect(lobsretainedbydate).To(BeEquivalentTo(len(lobstoretain)), "Should be correct number of file SHAs retained by date")
 			for _, l := range lobstodelete {
 				Expect(FileExists(getLocalLOBMetaPath(l))).To(BeFalse(), "%v should have been deleted")
-				Expect(FileExists(getLocalLOBChunkPath(l, 0))).To(BeFalse(), "%v should have been deleted")
+				Expect(FileExists(GetLocalLOBChunkPath(l, 0))).To(BeFalse(), "%v should have been deleted")
 			}
 
 		})
@@ -297,7 +297,7 @@ var _ = Describe("Prune", func() {
 					lobfiles = append(lobfiles, metafile)
 					numChunks := rand.Intn(3) + 1
 					for c := 0; c < numChunks; c++ {
-						chunkfile := getLocalLOBChunkPath(s, c)
+						chunkfile := GetLocalLOBChunkPath(s, c)
 						lobfiles = append(lobfiles, chunkfile)
 						ioutil.WriteFile(chunkfile, []byte("data something"), 0644)
 					}
@@ -449,11 +449,11 @@ var _ = Describe("Prune", func() {
 					lobfiles = append(lobfiles, metalinkfile)
 					numChunks := rand.Intn(3) + 1
 					for c := 0; c < numChunks; c++ {
-						chunkfile := getSharedLOBChunkPath(s, c)
+						chunkfile := GetSharedLOBChunkPath(s, c)
 						lobfiles = append(lobfiles, chunkfile)
 						ioutil.WriteFile(chunkfile, []byte("data something"), 0644)
 						// link shared locally
-						linkfile := getLocalLOBChunkPath(s, c)
+						linkfile := GetLocalLOBChunkPath(s, c)
 						CreateHardLink(chunkfile, linkfile)
 						lobfiles = append(lobfiles, linkfile)
 					}
@@ -585,7 +585,7 @@ var _ = Describe("Prune", func() {
 					sharedlobfiles = append(sharedlobfiles, metafile)
 					numChunks := rand.Intn(3) + 1
 					for c := 0; c < numChunks; c++ {
-						chunkfile := getSharedLOBChunkPath(s, c)
+						chunkfile := GetSharedLOBChunkPath(s, c)
 						sharedlobfiles = append(sharedlobfiles, chunkfile)
 						ioutil.WriteFile(chunkfile, []byte("data something"), 0644)
 					}

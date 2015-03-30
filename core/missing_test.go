@@ -62,18 +62,18 @@ var _ = Describe("Missing", func() {
 		// Now make some of these files placeholders
 		// Case 1. placeholder for missing data (small file and missing chunk) - blamed
 		// ./file1.bin
-		Expect(ioutil.WriteFile(setupInputs[2].Files[0], []byte(getLOBPlaceholderContent(setupOutputs[2].lobSHAs[0])), 0644)).To(BeNil())
-		Expect(os.Remove(getLocalLOBMetaPath(setupOutputs[2].lobSHAs[0]))).To(BeNil())     // remove meta
-		Expect(os.Remove(getLocalLOBChunkPath(setupOutputs[2].lobSHAs[0], 0))).To(BeNil()) // remove chunk 1
+		Expect(ioutil.WriteFile(setupInputs[2].Files[0], []byte(getLOBPlaceholderContent(setupOutputs[2].LobSHAs[0])), 0644)).To(BeNil())
+		Expect(os.Remove(getLocalLOBMetaPath(setupOutputs[2].LobSHAs[0]))).To(BeNil())     // remove meta
+		Expect(os.Remove(GetLocalLOBChunkPath(setupOutputs[2].LobSHAs[0], 0))).To(BeNil()) // remove chunk 1
 		// ./fld/large/large1.bin
-		Expect(ioutil.WriteFile(setupInputs[3].Files[0], []byte(getLOBPlaceholderContent(setupOutputs[3].lobSHAs[0])), 0644)).To(BeNil())
-		Expect(os.Remove(getLocalLOBChunkPath(setupOutputs[3].lobSHAs[0], 1))).To(BeNil()) // remove chunk 2 (partial)
+		Expect(ioutil.WriteFile(setupInputs[3].Files[0], []byte(getLOBPlaceholderContent(setupOutputs[3].LobSHAs[0])), 0644)).To(BeNil())
+		Expect(os.Remove(GetLocalLOBChunkPath(setupOutputs[3].LobSHAs[0], 1))).To(BeNil()) // remove chunk 2 (partial)
 
 		// Case 2. placeholder for corrupt data
 		// for this one we just mess up the metadata
 		// ./fld/file4.bin
-		Expect(ioutil.WriteFile(setupInputs[1].Files[1], []byte(getLOBPlaceholderContent(setupOutputs[1].lobSHAs[1])), 0644)).To(BeNil())
-		Expect(ioutil.WriteFile(getLocalLOBMetaPath(setupOutputs[1].lobSHAs[1]), []byte("{ garbage }"), 0644)).To(BeNil()) // corrupt meta
+		Expect(ioutil.WriteFile(setupInputs[1].Files[1], []byte(getLOBPlaceholderContent(setupOutputs[1].LobSHAs[1])), 0644)).To(BeNil())
+		Expect(ioutil.WriteFile(getLocalLOBMetaPath(setupOutputs[1].LobSHAs[1]), []byte("{ garbage }"), 0644)).To(BeNil()) // corrupt meta
 
 		// Case 3. placeholder locally modified (random SHA)
 		// ./file4.bin
@@ -81,7 +81,7 @@ var _ = Describe("Missing", func() {
 
 		// Case 4. placeholder with data available
 		// ./file5.bin
-		Expect(ioutil.WriteFile(setupInputs[5].Files[1], []byte(getLOBPlaceholderContent(setupOutputs[5].lobSHAs[1])), 0644)).To(BeNil())
+		Expect(ioutil.WriteFile(setupInputs[5].Files[1], []byte(getLOBPlaceholderContent(setupOutputs[5].LobSHAs[1])), 0644)).To(BeNil())
 
 	})
 	AfterEach(func() {
@@ -114,7 +114,7 @@ var _ = Describe("Missing", func() {
 		Expect(r).ToNot(BeNil(), "Should find response for"+setupInputs[2].Files[0])
 		Expect(r.Type).To(BeEquivalentTo(MissingBlamed), "Should be blamed")
 		Expect(r.CommitSummary).ToNot(BeNil(), "Should have commit details")
-		Expect(r.CommitSummary.SHA).To(Equal(setupOutputs[2].commit), "Should blame correct commit")
+		Expect(r.CommitSummary.SHA).To(Equal(setupOutputs[2].Commit), "Should blame correct commit")
 		Expect(r.CommitSummary.CommitterName).To(Equal("Nigel"), "Should blame correct person")
 		Expect(r.CommitSummary.CommitterEmail).To(Equal("nig@foo.com"), "Should blame correct person")
 		// Case 1b
@@ -122,7 +122,7 @@ var _ = Describe("Missing", func() {
 		Expect(r).ToNot(BeNil(), "Should find response for"+setupInputs[3].Files[0])
 		Expect(r.Type).To(BeEquivalentTo(MissingBlamed), "Should be blamed")
 		Expect(r.CommitSummary).ToNot(BeNil(), "Should have commit details")
-		Expect(r.CommitSummary.SHA).To(Equal(setupOutputs[3].commit), "Should blame correct commit")
+		Expect(r.CommitSummary.SHA).To(Equal(setupOutputs[3].Commit), "Should blame correct commit")
 		Expect(r.CommitSummary.CommitterName).To(Equal("Barry"), "Should blame correct person")
 		Expect(r.CommitSummary.CommitterEmail).To(Equal("baz@foo.com"), "Should blame correct person")
 		// Case 2
@@ -140,7 +140,7 @@ var _ = Describe("Missing", func() {
 
 		content, err := ioutil.ReadFile(setupInputs[5].Files[1])
 		Expect(err).To(BeNil(), "Should be ok to read placeholder")
-		Expect(string(content)).To(Equal(getLOBPlaceholderContent(setupOutputs[5].lobSHAs[1])), "Available file should still be a placeholder")
+		Expect(string(content)).To(Equal(getLOBPlaceholderContent(setupOutputs[5].LobSHAs[1])), "Available file should still be a placeholder")
 
 		// Now do the same again but checkout=true
 		responses = nil
@@ -151,7 +151,7 @@ var _ = Describe("Missing", func() {
 		Expect(r).ToNot(BeNil(), "Should find response for"+setupInputs[2].Files[0])
 		Expect(r.Type).To(BeEquivalentTo(MissingBlamed), "Should be blamed")
 		Expect(r.CommitSummary).ToNot(BeNil(), "Should have commit details")
-		Expect(r.CommitSummary.SHA).To(Equal(setupOutputs[2].commit), "Should blame correct commit")
+		Expect(r.CommitSummary.SHA).To(Equal(setupOutputs[2].Commit), "Should blame correct commit")
 		Expect(r.CommitSummary.CommitterName).To(Equal("Nigel"), "Should blame correct person")
 		Expect(r.CommitSummary.CommitterEmail).To(Equal("nig@foo.com"), "Should blame correct person")
 		// Case 1b
@@ -159,7 +159,7 @@ var _ = Describe("Missing", func() {
 		Expect(r).ToNot(BeNil(), "Should find response for"+setupInputs[3].Files[0])
 		Expect(r.Type).To(BeEquivalentTo(MissingBlamed), "Should be blamed")
 		Expect(r.CommitSummary).ToNot(BeNil(), "Should have commit details")
-		Expect(r.CommitSummary.SHA).To(Equal(setupOutputs[3].commit), "Should blame correct commit")
+		Expect(r.CommitSummary.SHA).To(Equal(setupOutputs[3].Commit), "Should blame correct commit")
 		Expect(r.CommitSummary.CommitterName).To(Equal("Barry"), "Should blame correct person")
 		Expect(r.CommitSummary.CommitterEmail).To(Equal("baz@foo.com"), "Should blame correct person")
 		// Case 2

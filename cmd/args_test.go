@@ -3,6 +3,7 @@ package cmd
 import (
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
+	. "bitbucket.org/sinbad/git-lob/util"
 )
 
 var _ = Describe("Args", func() {
@@ -17,16 +18,16 @@ var _ = Describe("Args", func() {
 		It("fails when command is missing", func() {
 			args = []string{"git-lob"}
 			opts := NewOptions()
-			errors = parseCommandLine(opts, args)
+			errors = ParseCommandLine(opts, args)
 			Expect(errors).ToNot(BeEmpty())
 			// Command required, with other options
 			args = []string{"git-lob", "--verbose", "-q"}
-			errors = parseCommandLine(opts, args)
+			errors = ParseCommandLine(opts, args)
 			Expect(errors).ToNot(BeEmpty())
 		})
 		It("succeeds when command is present", func() {
 			args = []string{"git-lob", "lock"}
-			errors = parseCommandLine(opts, args)
+			errors = ParseCommandLine(opts, args)
 			Expect(errors).To(BeEmpty())
 			Expect(opts.Command).To(Equal("lock"))
 			Expect(opts.Quiet).To(Equal(false))
@@ -43,7 +44,7 @@ var _ = Describe("Args", func() {
 		})
 		It("detects short options", func() {
 			args = []string{"git-lob", "lock", "-q", "-v", "-f", "-n"}
-			errors = parseCommandLine(opts, args)
+			errors = ParseCommandLine(opts, args)
 			Expect(errors).To(BeEmpty())
 			Expect(opts.Command).To(Equal("lock"))
 			Expect(opts.Quiet).To(Equal(true))
@@ -55,7 +56,7 @@ var _ = Describe("Args", func() {
 		})
 		It("detects long options", func() {
 			args = []string{"git-lob", "lock", "--quiet", "--verbose", "--noninteractive"}
-			errors = parseCommandLine(opts, args)
+			errors = ParseCommandLine(opts, args)
 			Expect(errors).To(BeEmpty())
 			Expect(opts.Command).To(Equal("lock"))
 			Expect(opts.Quiet).To(Equal(true))
@@ -67,7 +68,7 @@ var _ = Describe("Args", func() {
 		})
 		It("accepts additional options", func() {
 			args = []string{"git-lob", "lock", "--verbose", "--option1=foo", "--option2=bar"}
-			errors = parseCommandLine(opts, args)
+			errors = ParseCommandLine(opts, args)
 			Expect(errors).To(BeEmpty())
 			Expect(opts.Command).To(Equal("lock"))
 			Expect(opts.Quiet).To(Equal(false))
@@ -79,7 +80,7 @@ var _ = Describe("Args", func() {
 		})
 		It("accepts additional arguments", func() {
 			args = []string{"git-lob", "lock", "--verbose", "--dry-run", "file/one/test.jpg", "file/two/another.png"}
-			errors = parseCommandLine(opts, args)
+			errors = ParseCommandLine(opts, args)
 			Expect(errors).To(BeEmpty())
 			Expect(opts.Command).To(Equal("lock"))
 			Expect(opts.Quiet).To(Equal(false))
@@ -91,21 +92,21 @@ var _ = Describe("Args", func() {
 		})
 		It("accepts custom boolean short options", func() {
 			args = []string{"git-lob", "lock", "-x"}
-			errors = parseCommandLine(opts, args)
+			errors = ParseCommandLine(opts, args)
 			Expect(errors).To(BeEmpty())
 			Expect(opts.Command).To(Equal("lock"))
 			Expect(opts.BoolOpts).To(HaveKey("x"))
 		})
 		It("accepts custom boolean long options", func() {
 			args = []string{"git-lob", "lock", "--customoption"}
-			errors = parseCommandLine(opts, args)
+			errors = ParseCommandLine(opts, args)
 			Expect(errors).To(BeEmpty())
 			Expect(opts.Command).To(Equal("lock"))
 			Expect(opts.BoolOpts).To(HaveKey("customoption"))
 		})
 		It("validates custom options", func() {
 			args = []string{"git-lob", "lock", "--validbool", "--invalidbool", "--validvalue=1", "--invalidvalue=2", "-x", "-b", "-q"}
-			errors = parseCommandLine(opts, args)
+			errors = ParseCommandLine(opts, args)
 			Expect(errors).To(BeEmpty())
 			Expect(opts.Command).To(Equal("lock"))
 			Expect(opts.Args).To(BeEmpty())

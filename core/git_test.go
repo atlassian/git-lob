@@ -453,28 +453,28 @@ var _ = Describe("Git", func() {
 				// There are 6 commits on the master branch, but only 5 reference LOBs
 				Expect(commitlobs).To(HaveLen(5), "Master branch should have 5 commits referencing LOBs")
 				for i, commit := range commitlobs {
-					Expect(commit.lobSHAs).To(Equal(correctSHAs[i]), "Commit %d should have correct SHAs", i)
+					Expect(commit.LobSHAs).To(Equal(correctSHAs[i]), "Commit %d should have correct SHAs", i)
 				}
 				// Just feature branch
 				commitlobs, err = GetGitCommitsReferencingLOBsInRange("tag3", "feature/1", nil, nil)
 				Expect(err).To(BeNil(), "Should not fail calling GetGitCommitsReferencingLOBsInRange")
 				// 2 commits from tag3 to feature/1, excluding tag3 itself
 				Expect(commitlobs).To(HaveLen(2), "Feature branch should have 2 commits referencing LOBs")
-				Expect(commitlobs[0].lobSHAs).To(Equal(correctSHAs[5]), "Commit should have correct SHAs")
-				Expect(commitlobs[1].lobSHAs).To(Equal(correctSHAs[6]), "Commit should have correct SHAs")
+				Expect(commitlobs[0].LobSHAs).To(Equal(correctSHAs[5]), "Commit should have correct SHAs")
+				Expect(commitlobs[1].LobSHAs).To(Equal(correctSHAs[6]), "Commit should have correct SHAs")
 				// Now just 'from' (on master)
 				commitlobs, err = GetGitCommitsReferencingLOBsInRange("tag4", "", nil, nil)
 				Expect(err).To(BeNil(), "Should not fail calling GetGitCommitsReferencingLOBsInRange")
 				// 1 commit from tag4 to master, excluding tag4 itself
 				Expect(commitlobs).To(HaveLen(1), "tag4 onwards is only 1 commit")
-				Expect(commitlobs[0].lobSHAs).To(Equal(correctSHAs[4]), "Commit should have correct SHAs")
+				Expect(commitlobs[0].LobSHAs).To(Equal(correctSHAs[4]), "Commit should have correct SHAs")
 				// Now just 'to' (on master)
 				commitlobs, err = GetGitCommitsReferencingLOBsInRange("", "tag2", nil, nil)
 				Expect(err).To(BeNil(), "Should not fail calling GetGitCommitsReferencingLOBsInRange")
 				// 2 commits up to tag2 to master, excluding tag4 itself
 				Expect(commitlobs).To(HaveLen(2), "tag4 onwards is only 1 commit")
-				Expect(commitlobs[0].lobSHAs).To(Equal(correctSHAs[0]), "Commit should have correct SHAs")
-				Expect(commitlobs[1].lobSHAs).To(Equal(correctSHAs[1]), "Commit should have correct SHAs")
+				Expect(commitlobs[0].LobSHAs).To(Equal(correctSHAs[0]), "Commit should have correct SHAs")
+				Expect(commitlobs[1].LobSHAs).To(Equal(correctSHAs[1]), "Commit should have correct SHAs")
 
 			})
 
@@ -877,7 +877,7 @@ var _ = Describe("Git", func() {
 				// Do a reverse lookup on each LOB SHA mentioned in a commit and make sure it's in the fileIdxs
 				for _, commit := range commits {
 					// Should only be 1 lob in each
-					sha := commit.lobSHAs[0]
+					sha := commit.LobSHAs[0]
 					for shaidx, origSHA := range lobshas {
 						if origSHA == sha {
 							// sha indexes correspond to files except files repeated twice
