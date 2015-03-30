@@ -63,7 +63,7 @@ var _ = Describe("Missing", func() {
 		// Case 1. placeholder for missing data (small file and missing chunk) - blamed
 		// ./file1.bin
 		Expect(ioutil.WriteFile(setupInputs[2].Files[0], []byte(getLOBPlaceholderContent(setupOutputs[2].LobSHAs[0])), 0644)).To(BeNil())
-		Expect(os.Remove(getLocalLOBMetaPath(setupOutputs[2].LobSHAs[0]))).To(BeNil())     // remove meta
+		Expect(os.Remove(GetLocalLOBMetaPath(setupOutputs[2].LobSHAs[0]))).To(BeNil())     // remove meta
 		Expect(os.Remove(GetLocalLOBChunkPath(setupOutputs[2].LobSHAs[0], 0))).To(BeNil()) // remove chunk 1
 		// ./fld/large/large1.bin
 		Expect(ioutil.WriteFile(setupInputs[3].Files[0], []byte(getLOBPlaceholderContent(setupOutputs[3].LobSHAs[0])), 0644)).To(BeNil())
@@ -73,7 +73,7 @@ var _ = Describe("Missing", func() {
 		// for this one we just mess up the metadata
 		// ./fld/file4.bin
 		Expect(ioutil.WriteFile(setupInputs[1].Files[1], []byte(getLOBPlaceholderContent(setupOutputs[1].LobSHAs[1])), 0644)).To(BeNil())
-		Expect(ioutil.WriteFile(getLocalLOBMetaPath(setupOutputs[1].LobSHAs[1]), []byte("{ garbage }"), 0644)).To(BeNil()) // corrupt meta
+		Expect(ioutil.WriteFile(GetLocalLOBMetaPath(setupOutputs[1].LobSHAs[1]), []byte("{ garbage }"), 0644)).To(BeNil()) // corrupt meta
 
 		// Case 3. placeholder locally modified (random SHA)
 		// ./file4.bin

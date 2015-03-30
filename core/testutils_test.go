@@ -16,26 +16,10 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"testing"
 	"time"
 )
 
-func TestAll(t *testing.T) {
-	// Connect Ginkgo to Gomega
-	RegisterFailHandler(Fail)
-
-	// Set manual logging off
-	loggingOff := true
-	//loggingOff = false
-	if loggingOff {
-		LogSuppressAllConsoleOutput()
-	}
-
-	// Run everything
-	RunSpecs(t, "Git Lob Test Suite")
-}
-
-// Utility methods
+// Utility methods for testing only
 func CreateGitRepoForTest(path string) {
 	cmd := exec.Command("git", "init", path)
 	err := cmd.Run()
@@ -119,14 +103,14 @@ func CreateSmallTestLOBDataForRetrieval() (correctInfo *LOBInfo) {
 	// This was calculated with 'shasum' on Mac OS X with this file content
 	correctLOBInfo := &LOBInfo{SHA: "772157c6ef480852edf921f5924b1ca582b0d78f",
 		NumChunks: 1, Size: 128 * 255 * 16}
-	err := storeLOBInfo(correctLOBInfo)
+	err := StoreLOBInfo(correctLOBInfo)
 	Expect(err).To(BeNil(), "Shouldn't be error creating LOB meta file")
 
 	var lobFile string
-	if isUsingSharedStorage() {
-		lobFile = getSharedLOBChunkPath(correctLOBInfo.SHA, 0)
+	if IsUsingSharedStorage() {
+		lobFile = GetSharedLOBChunkPath(correctLOBInfo.SHA, 0)
 	} else {
-		lobFile = getLocalLOBChunkPath(correctLOBInfo.SHA, 0)
+		lobFile = GetLocalLOBChunkPath(correctLOBInfo.SHA, 0)
 	}
 	f, err := os.OpenFile(lobFile, os.O_WRONLY|os.O_CREATE, 0644)
 	Expect(err).To(BeNil(), "Shouldn't be error creating LOB file %v", lobFile)
@@ -138,8 +122,8 @@ func CreateSmallTestLOBDataForRetrieval() (correctInfo *LOBInfo) {
 		}
 	}
 	f.Close()
-	if isUsingSharedStorage() {
-		link := getLocalLOBChunkPath(correctLOBInfo.SHA, 0)
+	if IsUsingSharedStorage() {
+		link := GetLocalLOBChunkPath(correctLOBInfo.SHA, 0)
 		CreateHardLink(lobFile, link)
 	}
 	return correctLOBInfo
@@ -153,7 +137,7 @@ func CreateLargeTestLOBDataForRetrieval() (correctInfo *LOBInfo) {
 	correctLOBInfo := &LOBInfo{SHA: "6dc61e7c7d33e87592da1e534063052a17bf8f3c",
 		NumChunks: correctNumChunks, Size: correctFileSize}
 
-	err := storeLOBInfo(correctLOBInfo)
+	err := StoreLOBInfo(correctLOBInfo)
 	Expect(err).To(BeNil(), "Shouldn't be error creating LOB meta file")
 
 	// Write test data into 4 chunks
@@ -169,16 +153,16 @@ func CreateLargeTestLOBDataForRetrieval() (correctInfo *LOBInfo) {
 				if outf != nil {
 					dest := outf.Name()
 					outf.Close()
-					if isUsingSharedStorage() {
-						link := getLocalLOBChunkPath(correctLOBInfo.SHA, chunkIdx-1)
+					if IsUsingSharedStorage() {
+						link := GetLocalLOBChunkPath(correctLOBInfo.SHA, chunkIdx-1)
 						CreateHardLink(dest, link)
 					}
 				}
 				var lobFile string
-				if isUsingSharedStorage() {
-					lobFile = getSharedLOBChunkPath(correctLOBInfo.SHA, chunkIdx)
+				if IsUsingSharedStorage() {
+					lobFile = GetSharedLOBChunkPath(correctLOBInfo.SHA, chunkIdx)
 				} else {
-					lobFile = getLocalLOBChunkPath(correctLOBInfo.SHA, chunkIdx)
+					lobFile = GetLocalLOBChunkPath(correctLOBInfo.SHA, chunkIdx)
 				}
 				chunkIdx++
 				outf, err = os.OpenFile(lobFile, os.O_WRONLY|os.O_CREATE, 0644)
@@ -193,8 +177,8 @@ func CreateLargeTestLOBDataForRetrieval() (correctInfo *LOBInfo) {
 	if outf != nil {
 		dest := outf.Name()
 		outf.Close()
-		if isUsingSharedStorage() {
-			link := getLocalLOBChunkPath(correctLOBInfo.SHA, chunkIdx-1)
+		if IsUsingSharedStorage() {
+			link := GetLocalLOBChunkPath(correctLOBInfo.SHA, chunkIdx-1)
 			CreateHardLink(dest, link)
 		}
 	}
@@ -424,11 +408,11 @@ func CreateManyCommitsForTest(filespercommit [][]string, commitOffset int, sizeF
 // Checks that a meta file and at least one chunk exists for the given shas
 func CheckLOBsExistForTest(shas []string, rootlobpath string) {
 	for _, sha := range shas {
-		meta := filepath.Join(rootlobpath, getLOBMetaRelativePath(sha))
+		meta := filepath.Join(rootlobpath, GetLOBMetaRelativePath(sha))
 		_, err := os.Stat(meta)
 		Expect(err).To(BeNil(), "Meta file should exist")
 		// Checking only one chunk for this test
-		chunk := filepath.Join(rootlobpath, getLOBChunkRelativePath(sha, 0))
+		chunk := filepath.Join(rootlobpath, GetLOBChunkRelativePath(sha, 0))
 		_, err = os.Stat(chunk)
 		Expect(err).To(BeNil(), "Chunk file should exist")
 	}
@@ -436,9 +420,9 @@ func CheckLOBsExistForTest(shas []string, rootlobpath string) {
 }
 func RemoveLOBsForTest(shas []string, rootlobpath string) {
 	for _, sha := range shas {
-		meta := filepath.Join(rootlobpath, getLOBMetaRelativePath(sha))
+		meta := filepath.Join(rootlobpath, GetLOBMetaRelativePath(sha))
 		os.Remove(meta)
-		chunk := filepath.Join(rootlobpath, getLOBChunkRelativePath(sha, 0))
+		chunk := filepath.Join(rootlobpath, GetLOBChunkRelativePath(sha, 0))
 		os.Remove(chunk)
 	}
 
@@ -514,7 +498,7 @@ func SetupRepoForTest(inputs []*TestCommitSetupInput) []*CommitLOBRef {
 				sz = input.FileSizes[fi]
 			}
 			info := CreateAndStoreLOBFileForTest(sz, filename)
-			output.lobSHAs = append(output.lobSHAs, info.SHA)
+			output.LobSHAs = append(output.LobSHAs, info.SHA)
 			RunGitCommandForTest(true, "add", filename)
 		}
 		// Now commit
@@ -524,8 +508,8 @@ func SetupRepoForTest(inputs []*TestCommitSetupInput) []*CommitLOBRef {
 		if err != nil {
 			Fail("Error determining commit SHA: " + err.Error())
 		}
-		output.commit = commit.SHA
-		output.parents = commit.Parents
+		output.Commit = commit.SHA
+		output.Parents = commit.Parents
 		outputs = append(outputs, output)
 	}
 	return outputs

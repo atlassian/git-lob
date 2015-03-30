@@ -3,6 +3,7 @@ package core
 import (
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
+	. "bitbucket.org/sinbad/git-lob/util"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -117,7 +118,7 @@ var _ = Describe("Prune", func() {
 			// Confirm all files start off existing
 			for _, c := range setupOutputs {
 				for _, l := range c.LobSHAs {
-					Expect(FileExists(getLocalLOBMetaPath(l))).To(BeTrue(), "%v should exist prior to test")
+					Expect(FileExists(GetLocalLOBMetaPath(l))).To(BeTrue(), "%v should exist prior to test")
 					Expect(FileExists(GetLocalLOBChunkPath(l, 0))).To(BeTrue(), "%v should exist prior to test")
 				}
 			}
@@ -172,7 +173,7 @@ var _ = Describe("Prune", func() {
 			lobsretainedbydate = 0
 			lobsdeleted = 0
 			for _, l := range setupOutputs[2].LobSHAs {
-				exists, _ := FileOrDirExists(getLocalLOBMetaPath(l))
+				exists, _ := FileOrDirExists(GetLocalLOBMetaPath(l))
 				Expect(exists).To(Equal(false), "File %v should have been deleted", l)
 			}
 
@@ -233,7 +234,7 @@ var _ = Describe("Prune", func() {
 			Expect(lobsdeleted).To(BeEquivalentTo(len(lobstodelete)), "Correct deletion callbacks should be made")
 			Expect(lobsretainedbydate).To(BeEquivalentTo(len(lobstoretain)), "Should be correct number of file SHAs retained by date")
 			for _, l := range lobstodelete {
-				Expect(FileExists(getLocalLOBMetaPath(l))).To(BeFalse(), "%v should have been deleted")
+				Expect(FileExists(GetLocalLOBMetaPath(l))).To(BeFalse(), "%v should have been deleted")
 				Expect(FileExists(GetLocalLOBChunkPath(l, 0))).To(BeFalse(), "%v should have been deleted")
 			}
 
@@ -292,7 +293,7 @@ var _ = Describe("Prune", func() {
 				lobshas = GetListOfRandomSHAsForTest(20)
 				lobshaset = NewStringSetFromSlice(lobshas)
 				for _, s := range lobshas {
-					metafile := getLocalLOBMetaPath(s)
+					metafile := GetLocalLOBMetaPath(s)
 					ioutil.WriteFile(metafile, []byte("meta something"), 0644)
 					lobfiles = append(lobfiles, metafile)
 					numChunks := rand.Intn(3) + 1
@@ -444,7 +445,7 @@ var _ = Describe("Prune", func() {
 					ioutil.WriteFile(metafile, []byte("meta something"), 0644)
 					lobfiles = append(lobfiles, metafile)
 					// link shared locally
-					metalinkfile := getLocalLOBMetaPath(s)
+					metalinkfile := GetLocalLOBMetaPath(s)
 					CreateHardLink(metafile, metalinkfile)
 					lobfiles = append(lobfiles, metalinkfile)
 					numChunks := rand.Intn(3) + 1

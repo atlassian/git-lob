@@ -280,7 +280,7 @@ func fetchMetadata(lobshas []string, provider SyncProvider, remoteName string, f
 	if IsUsingSharedStorage() {
 		for _, sha := range lobshas {
 			// filenames are relative (for download)
-			localfile := getLocalLOBMetaPath(sha)
+			localfile := GetLocalLOBMetaPath(sha)
 			sharedfile := getSharedLOBMetaPath(sha)
 			if (force || !util.FileExists(localfile)) && util.FileExists(sharedfile) {
 				linkerr := linkSharedLOBFilename(sharedfile)

@@ -3,6 +3,7 @@ package core
 import (
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
+	. "bitbucket.org/sinbad/git-lob/util"
 	"crypto/sha1"
 	"fmt"
 	"io/ioutil"
@@ -780,7 +781,7 @@ var _ = Describe("Storage", func() {
 			// Test for simple corruptions
 			// Remove a meta file
 			var err error
-			metafile := getLocalLOBMetaPath(lobinfos[smallFileIdx[0]].SHA)
+			metafile := GetLocalLOBMetaPath(lobinfos[smallFileIdx[0]].SHA)
 			os.Remove(metafile)
 			err = CheckLOBFilesForSHA(lobinfos[smallFileIdx[0]].SHA, basedir, false)
 			Expect(err).ToNot(BeNil(), "Should detect missing meta file")

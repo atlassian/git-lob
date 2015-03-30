@@ -1,8 +1,9 @@
-package core
+package main
 
 import (
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
+	. "bitbucket.org/sinbad/git-lob/core"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -116,7 +117,7 @@ var _ = Describe("Integration", func() {
 		}
 		moveAsideLOBs := func(shas []string) {
 			for _, sha := range shas {
-				meta := getLocalLOBMetaPath(sha)
+				meta := GetLocalLOBMetaPath(sha)
 				err := os.Rename(meta, meta+"_bak")
 				Expect(err).To(BeNil(), fmt.Sprintf("Rename should succeed for %v", meta))
 				// Assuming only one chunk for this test
@@ -128,7 +129,7 @@ var _ = Describe("Integration", func() {
 		}
 		restoreLOBs := func(shas []string) {
 			for _, sha := range shas {
-				meta := getLocalLOBMetaPath(sha)
+				meta := GetLocalLOBMetaPath(sha)
 				err := os.Rename(meta+"_bak", meta)
 				Expect(err).To(BeNil(), fmt.Sprintf("Rename should succeed for %v", meta))
 				// Assuming only one chunk for this test

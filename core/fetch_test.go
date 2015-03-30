@@ -230,7 +230,7 @@ var _ = Describe("Fetch", func() {
 			// dry run first, with no params so all recents
 			err = Fetch(provider, "origin", []*GitRefSpec{}, true, false, callback)
 			Expect(err).To(BeNil(), "Should be no error fetching")
-			Expect(FileExists(getLocalLOBMetaPath(correctLOBsMaster[0]))).To(BeFalse(), "Should not have downloaded anything")
+			Expect(FileExists(GetLocalLOBMetaPath(correctLOBsMaster[0]))).To(BeFalse(), "Should not have downloaded anything")
 
 			// Now do it
 			err = Fetch(provider, "origin", []*GitRefSpec{}, false, false, callback)

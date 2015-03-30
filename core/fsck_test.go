@@ -3,6 +3,7 @@ package core
 import (
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
+	. "bitbucket.org/sinbad/git-lob/util"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -86,7 +87,7 @@ var _ = Describe("Fsck", func() {
 		var backupFile string
 		var fileToBreak string
 		// Make meta file missing
-		fileToBreak = getLocalLOBMetaPath(smallLOBs[0])
+		fileToBreak = GetLocalLOBMetaPath(smallLOBs[0])
 		backupFile = fileToBreak + "_bak"
 		os.Rename(fileToBreak, backupFile)
 		err = Fsck(false, false, false, nil, callback)
@@ -121,7 +122,7 @@ var _ = Describe("Fsck", func() {
 
 		// Now test corruption of smallLOB[1] metadata
 		// smallLOBs[0] still has missing data
-		fileToBreak = getLocalLOBMetaPath(smallLOBs[1])
+		fileToBreak = GetLocalLOBMetaPath(smallLOBs[1])
 		backupFile = fileToBreak + "_bak"
 		os.Rename(fileToBreak, backupFile)
 		ioutil.WriteFile(fileToBreak, []byte("{ Broken }"), 0644)
@@ -209,18 +210,18 @@ var _ = Describe("Fsck", func() {
 				continue
 			}
 			if i == 2 {
-				Expect(FileExists(getLocalLOBMetaPath(s))).To(BeFalse(), "Corrupt file should be deleted")
+				Expect(FileExists(GetLocalLOBMetaPath(s))).To(BeFalse(), "Corrupt file should be deleted")
 				Expect(FileExists(GetLocalLOBChunkPath(s, 0))).To(BeFalse(), "Corrupt file should be deleted")
 			} else {
-				Expect(FileExists(getLocalLOBMetaPath(s))).To(BeTrue(), fmt.Sprintf("Small meta file %d should still exist", i))
+				Expect(FileExists(GetLocalLOBMetaPath(s))).To(BeTrue(), fmt.Sprintf("Small meta file %d should still exist", i))
 				Expect(FileExists(GetLocalLOBChunkPath(s, 0))).To(BeTrue(), fmt.Sprintf("Small chunk file %d should still exist", i))
 			}
 		}
 		Expect(FileExists(GetLocalLOBChunkPath(largeLOBs[1], 2))).To(BeFalse(), "Wrong size file should be deleted")
-		Expect(FileExists(getLocalLOBMetaPath(largeLOBs[1]))).To(BeTrue(), "Metadata of wrong size chunk file should still exist")
+		Expect(FileExists(GetLocalLOBMetaPath(largeLOBs[1]))).To(BeTrue(), "Metadata of wrong size chunk file should still exist")
 		Expect(FileExists(GetLocalLOBChunkPath(largeLOBs[1], 0))).To(BeTrue(), "Earlier chunks of wrong size file should still exist")
 		Expect(FileExists(GetLocalLOBChunkPath(largeLOBs[1], 1))).To(BeTrue(), "Earlier chunks of wrong size file should still exist")
-		Expect(FileExists(getLocalLOBMetaPath(largeLOBs[0]))).To(BeFalse(), "Corrupt file should be deleted")
+		Expect(FileExists(GetLocalLOBMetaPath(largeLOBs[0]))).To(BeFalse(), "Corrupt file should be deleted")
 		Expect(FileExists(GetLocalLOBChunkPath(largeLOBs[0], 0))).To(BeFalse(), "Corrupt file should be deleted")
 		Expect(FileExists(GetLocalLOBChunkPath(largeLOBs[0], 1))).To(BeFalse(), "Corrupt file should be deleted")
 		missingFiles = nil

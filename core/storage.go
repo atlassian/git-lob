@@ -111,7 +111,7 @@ func getLOBChunkFilename(sha string, chunkIdx int) string {
 }
 
 // Gets the absolute path to the meta file for a LOB in local store
-func getLocalLOBMetaPath(sha string) string {
+func GetLocalLOBMetaPath(sha string) string {
 	fld := GetLocalLOBDir(sha)
 	return filepath.Join(fld, getLOBMetaFilename(sha))
 }
@@ -205,7 +205,7 @@ func recoverLocalLOBFilesFromSharedStore(sha string) bool {
 		return false
 	}
 
-	metalocal := getLocalLOBMetaPath(sha)
+	metalocal := GetLocalLOBMetaPath(sha)
 	if !util.FileExists(metalocal) {
 		metashared := getSharedLOBMetaPath(sha)
 		if util.FileExists(metashared) {
@@ -368,7 +368,7 @@ func StoreLOBInfo(info *LOBInfo) error {
 	if IsUsingSharedStorage() {
 		infoFilename = getSharedLOBMetaPath(info.SHA)
 	} else {
-		infoFilename = getLocalLOBMetaPath(info.SHA)
+		infoFilename = GetLocalLOBMetaPath(info.SHA)
 	}
 	if !util.FileExistsAndIsOfSize(infoFilename, int64(len(infoBytes))) {
 		// Since all the details are derived from the SHA the only variant is chunking or incomplete writes so
