@@ -424,7 +424,6 @@ var _ = Describe("Fetch", func() {
 				}
 				return false
 			}
-
 			// Firstly we'll fetch at commit 0 just for local
 			RunGitCommandForTest(true, "checkout", setupOutputs[0].Commit)
 			err = Fetch(provider, "origin", []*GitRefSpec{}, false, false, callback)
@@ -434,14 +433,18 @@ var _ = Describe("Fetch", func() {
 			// This should have initialised ALL the push state (because no local LOBs) including all other branches, so reset it
 			// then manually set it to [0]. We're trying to replicate the case where more than one fetch has taken place when the
 			// git repo has had new commits pulled
-			ResetPushedBinaryState("origin")
+			err = ResetPushedBinaryState("origin")
+			Expect(err).To(BeNil(), "Should be no error resetting pushed state")
 			MarkBinariesAsPushed("origin", setupOutputs[0].Commit, "")
+			pushed, err := FindLatestAncestorWhereBinariesPushed("origin", "master")
+			Expect(err).To(BeNil(), "Should be no error finding pushed ancestor")
+			Expect(pushed).To(Equal(setupOutputs[0].Commit), "Reset pushed state should work")
 			// now fetch for commit 1, this should update the push state to this SHA
 			RunGitCommandForTest(true, "checkout", setupOutputs[1].Commit)
 			err = Fetch(provider, "origin", []*GitRefSpec{}, false, false, callback)
 			Expect(err).To(BeNil(), "Should be no error fetching")
 			Expect(filesTransferred).To(BeEquivalentTo(len(setupOutputs[1].LobSHAs)*2), "File count check should be right")
-			pushed, err := FindLatestAncestorWhereBinariesPushed("origin", "master")
+			pushed, err = FindLatestAncestorWhereBinariesPushed("origin", "master")
 			Expect(err).To(BeNil(), "Should be no error finding pushed ancestor")
 			Expect(pushed).To(Equal(setupOutputs[1].Commit), "Fetch should have updated pushed state to the latest fetched point")
 			filesTransferred = 0

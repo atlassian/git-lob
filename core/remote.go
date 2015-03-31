@@ -169,6 +169,7 @@ func WritePushedState(remoteName string, shas []string) error {
 	if err != nil {
 		return errors.New(fmt.Sprintf("Unable to write cache file %v: %v", filename, err.Error()))
 	}
+	defer f.Close()
 	for _, sha := range shas {
 		// Have to re-insert the line break
 		f.WriteString(sha + "\n")
