@@ -19,5 +19,5 @@ func TestAll(t *testing.T) {
 	}
 
 	// Run everything
-	RunSpecs(t, "Git Lob Util Test Suite")
+	RunSpecs(t, "Git Lob Providers Test Suite")
 }
