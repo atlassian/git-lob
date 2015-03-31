@@ -1,4 +1,4 @@
-package main
+package core
 
 import (
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
@@ -19,5 +19,5 @@ func TestAll(t *testing.T) {
 	}
 
 	// Run everything
-	RunSpecs(t, "Git Lob Root Test Suite")
+	RunSpecs(t, "Git Lob Core Test Suite")
 }

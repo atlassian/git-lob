@@ -1,9 +1,8 @@
-package main
+package util
 
 import (
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
-	. "bitbucket.org/sinbad/git-lob/util"
 	"testing"
 )
 
@@ -19,5 +18,5 @@ func TestAll(t *testing.T) {
 	}
 
 	// Run everything
-	RunSpecs(t, "Git Lob Root Test Suite")
+	RunSpecs(t, "Git Lob Util Test Suite")
 }
