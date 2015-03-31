@@ -122,6 +122,7 @@ func WalkGitHistory(startSHA string, callback func(currentSHA, parentSHA string)
 			}
 			quit, callbackError = callback(currentSHA, parentSHA)
 			if quit {
+				cmd.Process.Kill()
 				break
 			}
 		}
