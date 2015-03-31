@@ -27,6 +27,7 @@ func Missing() int {
 	}
 
 	anyErrors := false
+	anyMissing := false
 	callback := func(data *core.MissingCallbackData) (quit bool) {
 		// Ensure we clear previous progress
 		util.LogConsolef("\r")
@@ -34,18 +35,24 @@ func Missing() int {
 		case core.MissingAvailable:
 			if !optIgnoreAvailable {
 				util.LogConsolef("%v content is available, use checkout\n", data.Path)
+				anyMissing = true
 			}
+
 		case core.MissingFixed:
 			util.LogConsolef("%v checked out\n", data.Path)
+			anyMissing = true
 		case core.MissingModified:
 			util.LogErrorf("%v is locally modified with no content, delete or reset/checkout to resolve\n", data.Path)
+			anyMissing = true
 		case core.MissingBlamed:
 			util.LogConsolef("%v no content available\n", data.Path)
 			util.LogConsolef("  Blame: %v(%v) [%v] %v\n", data.CommitSummary.CommitterName, data.CommitSummary.CommitterEmail,
 				data.CommitSummary.ShortSHA, data.CommitSummary.Subject)
+			anyMissing = true
 		case core.MissingError:
 			util.LogConsoleErrorf("Error: %v\n", data.Error.Error())
 			anyErrors = true // still continue
+			anyMissing = true
 		case core.MissingWorking:
 			util.LogConsoleDebugf("Checking %v\n", data.Path)
 		}
@@ -59,6 +66,11 @@ func Missing() int {
 	util.LogConsoleSpinnerFinish("Searching: ")
 	if anyErrors {
 		return 12
+	}
+	if anyMissing {
+		util.LogConsole("Missing content exists, see messages above")
+	} else {
+		util.LogConsole("All file content OK")
 	}
 	return 0
 }
