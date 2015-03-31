@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"bitbucket.org/sinbad/git-lob/core"
+	"bitbucket.org/sinbad/git-lob/providers"
 	"bitbucket.org/sinbad/git-lob/util"
 	"fmt"
 	"os"
@@ -33,7 +33,7 @@ func MainImpl() int {
 
 	// Init logging after command line opts
 	util.InitLogging()
-	core.InitCoreProviders()
+	providers.InitCoreProviders()
 	defer util.ShutDownLogging()
 
 	if len(errors) > 0 {

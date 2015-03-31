@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bitbucket.org/sinbad/git-lob/providers"
 	"bitbucket.org/sinbad/git-lob/util"
 	"bufio"
 	"errors"
@@ -349,7 +350,7 @@ func PruneOld(dryRun, safeMode bool, callback PruneCallback) ([]string, error) {
 
 	}
 
-	var provider SyncProvider
+	var provider providers.SyncProvider
 	safeRemote := "origin"
 	if safeMode {
 		if util.GlobalOptions.PruneRemote != "" {
@@ -377,7 +378,7 @@ func PruneOld(dryRun, safeMode bool, callback PruneCallback) ([]string, error) {
 			}
 		}
 		var err error
-		provider, err = GetProviderForRemote(safeRemote)
+		provider, err = providers.GetProviderForRemote(safeRemote)
 		if err != nil {
 			return []string{}, err
 		}

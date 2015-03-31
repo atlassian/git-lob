@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bitbucket.org/sinbad/git-lob/providers"
 	"bitbucket.org/sinbad/git-lob/util"
 	"bufio"
 	"errors"
@@ -330,14 +331,18 @@ func GetCommitLOBsToPushForRef(remoteName string, ref string, recheck bool) ([]*
 
 // Check with a remote provider for the presence of all data required for a given LOB
 // Return nil if all data is there, NotFoundErr if not
-func CheckRemoteLOBFilesForSHA(sha string, provider SyncProvider, remoteName string) error {
+func CheckRemoteLOBFilesForSHA(sha string, provider providers.SyncProvider, remoteName string) error {
 	// We need LOB info to know size / how many chunks it had
 	var info *LOBInfo
 	info, err := GetLOBInfo(sha)
 	meta := GetLOBMetaRelativePath(sha)
 	if err != nil {
 		// We have to actually download meta file in order to figure out what else is needed
-		dlerr := provider.Download(remoteName, []string{meta}, os.TempDir(), false, DummySyncProgressCallback)
+		// A simple helper callback you can use to do nothing
+		dummyCallback := func(fileInProgress string, progressType util.ProgressCallbackType, bytesDone, totalBytes int64) (abort bool) {
+			return false
+		}
+		dlerr := provider.Download(remoteName, []string{meta}, os.TempDir(), false, dummyCallback)
 		if dlerr != nil {
 			return dlerr
 		}

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bitbucket.org/sinbad/git-lob/core"
+	"bitbucket.org/sinbad/git-lob/providers"
 	"bitbucket.org/sinbad/git-lob/util"
 	"regexp"
 	"strings"
@@ -55,7 +56,7 @@ func Fetch() int {
 	}
 
 	// check the remote config to make sure it's valid
-	provider, err := core.GetProviderForRemote(remoteName)
+	provider, err := providers.GetProviderForRemote(remoteName)
 	if err != nil {
 		util.LogConsoleErrorf("git-lob: %v\n", err)
 		return 6
@@ -79,12 +80,12 @@ func Fetch() int {
 	var fetcherr error
 
 	// 100 items in the queue should be good enough, this means that it won't block
-	callbackChan := make(chan *core.ProgressCallbackData, 100)
-	go func(provider core.SyncProvider, remoteName string, refspecs []*core.GitRefSpec, dryRun, force bool,
-		progresschan chan<- *core.ProgressCallbackData) {
+	callbackChan := make(chan *util.ProgressCallbackData, 100)
+	go func(provider providers.SyncProvider, remoteName string, refspecs []*core.GitRefSpec, dryRun, force bool,
+		progresschan chan<- *util.ProgressCallbackData) {
 
 		// Progress callback just passes the result back to the channel
-		progress := func(data *core.ProgressCallbackData) (abort bool) {
+		progress := func(data *util.ProgressCallbackData) (abort bool) {
 			progresschan <- data
 
 			return false
@@ -101,7 +102,7 @@ func Fetch() int {
 	}(provider, remoteName, refspecs, optDryRun, optForce, callbackChan)
 
 	// Report progress on operation every 0.5s
-	fetchCounts := core.ReportProgressToConsole(callbackChan, "Fetch", time.Millisecond*500)
+	fetchCounts := util.ReportProgressToConsole(callbackChan, "Fetch", time.Millisecond*500)
 
 	if fetcherr != nil {
 		util.LogError("git-lob: fetch error(s):\n%v", fetcherr.Error())
@@ -157,7 +158,7 @@ func FetchLob() int {
 	remoteName = util.GlobalOptions.Args[0]
 
 	// check the remote config to make sure it's valid
-	provider, err := core.GetProviderForRemote(remoteName)
+	provider, err := providers.GetProviderForRemote(remoteName)
 	if err != nil {
 		util.LogConsoleError(err.Error())
 		return 6
@@ -188,12 +189,12 @@ func FetchLob() int {
 	var fetcherr error
 
 	// 100 items in the queue should be good enough, this means that it won't block
-	callbackChan := make(chan *core.ProgressCallbackData, 100)
-	go func(provider core.SyncProvider, remoteName string, shas []string, force bool,
-		progresschan chan<- *core.ProgressCallbackData) {
+	callbackChan := make(chan *util.ProgressCallbackData, 100)
+	go func(provider providers.SyncProvider, remoteName string, shas []string, force bool,
+		progresschan chan<- *util.ProgressCallbackData) {
 
 		// Progress callback just passes the result back to the channel
-		progress := func(data *core.ProgressCallbackData) (abort bool) {
+		progress := func(data *util.ProgressCallbackData) (abort bool) {
 			progresschan <- data
 
 			return false
@@ -216,7 +217,7 @@ func FetchLob() int {
 	}(provider, remoteName, shas, optForce, callbackChan)
 
 	// Report progress on operation every 0.5s
-	fetchCounts := core.ReportProgressToConsole(callbackChan, "Fetch", time.Millisecond*500)
+	fetchCounts := util.ReportProgressToConsole(callbackChan, "Fetch", time.Millisecond*500)
 
 	if fetcherr != nil {
 		util.LogError("git-lob: fetch error(s):\n%v", fetcherr.Error())

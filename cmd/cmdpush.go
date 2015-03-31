@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bitbucket.org/sinbad/git-lob/core"
+	"bitbucket.org/sinbad/git-lob/providers"
 	"bitbucket.org/sinbad/git-lob/util"
 	"fmt"
 	"regexp"
@@ -59,7 +60,7 @@ func Push() int {
 	}
 
 	// check the remote config to make sure it's valid
-	provider, err := core.GetProviderForRemote(remoteName)
+	provider, err := providers.GetProviderForRemote(remoteName)
 	if err != nil {
 		util.LogConsoleErrorf("git-lob: %v\n", err)
 		return 6
@@ -122,12 +123,12 @@ func Push() int {
 	var pusherr error
 
 	// 100 items in the queue should be good enough, this means that it won't block
-	callbackChan := make(chan *core.ProgressCallbackData, 100)
-	go func(provider core.SyncProvider, remoteName string, refspecs []*core.GitRefSpec, dryRun, force, recheck bool,
-		progresschan chan<- *core.ProgressCallbackData) {
+	callbackChan := make(chan *util.ProgressCallbackData, 100)
+	go func(provider providers.SyncProvider, remoteName string, refspecs []*core.GitRefSpec, dryRun, force, recheck bool,
+		progresschan chan<- *util.ProgressCallbackData) {
 
 		// Progress callback just passes the result back to the channel
-		progress := func(data *core.ProgressCallbackData) (abort bool) {
+		progress := func(data *util.ProgressCallbackData) (abort bool) {
 			progresschan <- data
 
 			return false
@@ -145,7 +146,7 @@ func Push() int {
 
 	// Update the console once every half second regardless of how many callbacks
 	// (or zero callbacks, so we can reduce xfer rate)
-	pushCounts := core.ReportProgressToConsole(callbackChan, "Push", time.Millisecond*500)
+	pushCounts := util.ReportProgressToConsole(callbackChan, "Push", time.Millisecond*500)
 
 	if pusherr != nil {
 		util.LogErrorf("git-lob: push error(s):\n%v", pusherr.Error())
@@ -191,7 +192,7 @@ func PushLob() int {
 	remoteName := util.GlobalOptions.Args[0]
 
 	// check the remote config to make sure it's valid
-	provider, err := core.GetProviderForRemote(remoteName)
+	provider, err := providers.GetProviderForRemote(remoteName)
 	if err != nil {
 		util.LogConsoleError(err.Error())
 		return 6
@@ -220,12 +221,12 @@ func PushLob() int {
 	var pusherr error
 
 	// 100 items in the queue should be good enough, this means that it won't block
-	callbackChan := make(chan *core.ProgressCallbackData, 100)
-	go func(provider core.SyncProvider, remoteName string, shas []string, force bool,
-		progresschan chan<- *core.ProgressCallbackData) {
+	callbackChan := make(chan *util.ProgressCallbackData, 100)
+	go func(provider providers.SyncProvider, remoteName string, shas []string, force bool,
+		progresschan chan<- *util.ProgressCallbackData) {
 
 		// Progress callback just passes the result back to the channel
-		progress := func(data *core.ProgressCallbackData) (abort bool) {
+		progress := func(data *util.ProgressCallbackData) (abort bool) {
 			progresschan <- data
 
 			return false
@@ -251,7 +252,7 @@ func PushLob() int {
 
 	// Update the console once every half second regardless of how many callbacks
 	// (or zero callbacks, so we can reduce xfer rate)
-	pushCounts := core.ReportProgressToConsole(callbackChan, "Push", time.Millisecond*500)
+	pushCounts := util.ReportProgressToConsole(callbackChan, "Push", time.Millisecond*500)
 
 	if pusherr != nil {
 		util.LogErrorf("git-lob: push error(s):\n%v", pusherr.Error())

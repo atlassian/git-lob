@@ -1,4 +1,4 @@
-package core
+package providers
 
 import (
 	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/mitchellh/goamz/aws"

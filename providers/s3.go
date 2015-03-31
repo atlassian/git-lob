@@ -1,4 +1,4 @@
-package core
+package providers
 
 import (
 	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/mitchellh/goamz/aws"
@@ -66,6 +66,8 @@ Global AWS settings:
   for more details on the configuration process.
 `
 }
+
+const S3BufferSize = 131072
 
 // Configure the profile to use for a given remote. Preferences in order:
 // Git setting remote.REMOTENAME.git-lob-s3-profile
@@ -213,7 +215,7 @@ func (*S3SyncProvider) uploadSingleFile(remoteName, filename, fromDir string, de
 	srcfi, err := os.Stat(srcfilename)
 	if err != nil {
 		if callback != nil {
-			if callback(filename, ProgressNotFound, 0, 0) {
+			if callback(filename, util.ProgressNotFound, 0, 0) {
 				return errorList, true
 			}
 		}
@@ -230,7 +232,7 @@ func (*S3SyncProvider) uploadSingleFile(remoteName, filename, fromDir string, de
 			if key.Size == srcfi.Size() {
 				// File already present and correct size, skip
 				if callback != nil {
-					if callback(filename, ProgressSkip, srcfi.Size(), srcfi.Size()) {
+					if callback(filename, util.ProgressSkip, srcfi.Size(), srcfi.Size()) {
 						return errorList, true
 					}
 				}
@@ -252,7 +254,7 @@ func (*S3SyncProvider) uploadSingleFile(remoteName, filename, fromDir string, de
 
 	// Initial callback
 	if callback != nil {
-		if callback(filename, ProgressTransferBytes, 0, srcfi.Size()) {
+		if callback(filename, util.ProgressTransferBytes, 0, srcfi.Size()) {
 			return errorList, true
 		}
 	}
@@ -311,7 +313,7 @@ func (*S3SyncProvider) downloadSingleFile(remoteName, filename string, bucket *s
 	if err != nil {
 		// File missing on remote
 		if callback != nil {
-			if callback(filename, ProgressNotFound, 0, 0) {
+			if callback(filename, util.ProgressNotFound, 0, 0) {
 				return errorList, true
 			}
 		}
@@ -331,7 +333,7 @@ func (*S3SyncProvider) downloadSingleFile(remoteName, filename string, bucket *s
 			if destfi.Size() == key.Size {
 				// File already present and correct size, skip
 				if callback != nil {
-					if callback(filename, ProgressSkip, destfi.Size(), destfi.Size()) {
+					if callback(filename, util.ProgressSkip, destfi.Size(), destfi.Size()) {
 						return errorList, true
 					}
 				}
@@ -374,17 +376,17 @@ func (*S3SyncProvider) downloadSingleFile(remoteName, filename string, bucket *s
 
 	// Initial callback
 	if callback != nil {
-		if callback(filename, ProgressTransferBytes, 0, key.Size) {
+		if callback(filename, util.ProgressTransferBytes, 0, key.Size) {
 			return errorList, true
 		}
 	}
 	var copysize int64 = 0
 	for {
 		var n int64
-		n, err = io.CopyN(outf, inf, BUFSIZE)
+		n, err = io.CopyN(outf, inf, S3BufferSize)
 		copysize += n
 		if n > 0 && callback != nil && key.Size > 0 {
-			if callback(filename, ProgressTransferBytes, copysize, key.Size) {
+			if callback(filename, util.ProgressTransferBytes, copysize, key.Size) {
 				return errorList, true
 			}
 		}

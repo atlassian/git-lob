@@ -1,7 +1,6 @@
-package core
+package util
 
 import (
-	"bitbucket.org/sinbad/git-lob/util"
 	"bytes"
 	"fmt"
 	"time"
@@ -64,7 +63,7 @@ func ReportProgressToConsole(callbackChan <-chan *ProgressCallbackData, op strin
 	// (or zero callbacks, so we can reduce xfer rate)
 	tickChan := time.Tick(freq)
 	// samples of data transferred over the last 4 ticks (2s average)
-	transferRate := util.NewTransferRateCalculator(4)
+	transferRate := NewTransferRateCalculator(4)
 
 	var lastTotalBytesDone int64
 	var lastTime = time.Now()
@@ -90,28 +89,28 @@ func ReportProgressToConsole(callbackChan <-chan *ProgressCallbackData, op strin
 				switch data.Type {
 				case ProgressCalculate:
 					finalDownloadProgress = nil
-					util.LogConsole(data.Desc)
+					LogConsole(data.Desc)
 				case ProgressSkip:
 					finalDownloadProgress = nil
 					results.SkippedCount++
 					// Only print if verbose
-					util.LogConsoleDebugf("Skipped: %v (Up to date)\n", data.Desc)
+					LogConsoleDebugf("Skipped: %v (Up to date)\n", data.Desc)
 				case ProgressNotFound:
 					finalDownloadProgress = nil
 					results.NotFoundCount++
-					util.LogConsolef("Not found: %v (Continuing)\n", data.Desc)
+					LogConsolef("Not found: %v (Continuing)\n", data.Desc)
 				case ProgressTransferBytes:
 					finalDownloadProgress = data
 					// Print completion in verbose mode
 					if data.ItemBytesDone == data.ItemBytes {
 						results.TransferredCount++
-						if util.GlobalOptions.Verbose {
+						if GlobalOptions.Verbose {
 							msg := fmt.Sprintf("%ved: %v 100%%", op, data.Desc)
-							util.LogConsoleOverwrite(msg, lastConsoleLineLen)
+							LogConsoleOverwrite(msg, lastConsoleLineLen)
 							lastConsoleLineLen = len(msg)
 							// Clear line on completion in verbose mode
 							// Don't do this as \n in string above since we need to clear spaces after
-							util.LogConsole("")
+							LogConsole("")
 							finalDownloadProgress = nil
 							lastProgress = nil
 						}
@@ -145,7 +144,7 @@ func ReportProgressToConsole(callbackChan <-chan *ProgressCallbackData, op strin
 
 			if lastProgress.ItemBytes != 0 || lastProgress.TotalBytes != 0 {
 				buf := bytes.NewBufferString(fmt.Sprintf("%ving: ", op))
-				if lastProgress.ItemBytes > 0 && util.GlobalOptions.Verbose {
+				if lastProgress.ItemBytes > 0 && GlobalOptions.Verbose {
 					itemPercent := int((100 * lastProgress.ItemBytesDone) / lastProgress.ItemBytes)
 					buf.WriteString(fmt.Sprintf("%v %d%%", lastProgress.Desc, itemPercent))
 					if lastProgress.TotalBytes != 0 {
@@ -158,10 +157,10 @@ func ReportProgressToConsole(callbackChan <-chan *ProgressCallbackData, op strin
 					secondsRemaining := bytesRemaining / avgRate
 					timeRemaining := time.Duration(secondsRemaining) * time.Second
 
-					buf.WriteString(fmt.Sprintf("%d%% (%v ETA %v)", overallPercent, util.FormatTransferRate(avgRate), timeRemaining))
+					buf.WriteString(fmt.Sprintf("%d%% (%v ETA %v)", overallPercent, FormatTransferRate(avgRate), timeRemaining))
 				}
 				msg := buf.String()
-				util.LogConsoleOverwrite(msg, lastConsoleLineLen)
+				LogConsoleOverwrite(msg, lastConsoleLineLen)
 				lastConsoleLineLen = len(msg)
 			}
 		}
@@ -171,10 +170,10 @@ func ReportProgressToConsole(callbackChan <-chan *ProgressCallbackData, op strin
 		}
 
 	}
-	if !util.GlobalOptions.Verbose && lastConsoleLineLen > 0 {
+	if !GlobalOptions.Verbose && lastConsoleLineLen > 0 {
 		// Write final line with newline
-		util.LogConsoleOverwrite(fmt.Sprintf("%ving: 100%%", op), lastConsoleLineLen)
-		util.LogConsole("")
+		LogConsoleOverwrite(fmt.Sprintf("%ving: 100%%", op), lastConsoleLineLen)
+		LogConsole("")
 	}
 	return results
 

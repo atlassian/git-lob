@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"bitbucket.org/sinbad/git-lob/core"
+	"bitbucket.org/sinbad/git-lob/providers"
 	"bitbucket.org/sinbad/git-lob/util"
 )
 
@@ -44,7 +44,7 @@ func Help() {
 			return
 		} else {
 			// Also search the providers for anything called that & use their help
-			p, err := core.GetSyncProvider(arg)
+			p, err := providers.GetSyncProvider(arg)
 			if err == nil {
 				util.LogConsole(p.HelpTextDetail())
 				return

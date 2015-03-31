@@ -276,39 +276,6 @@ func GetListOfRandomSHAsForTest(num int) []string {
 	return ret
 }
 
-// generate a list of (relative) file names
-// if depth > 0 then generates 'num' files at each level
-// and 'numdirs' dirs with 'num' files at each depth level
-func GetRandomListOfFilesForTest(num, depth, numdirs int) []string {
-	ret := make([]string, 0, num*depth+1)
-	// Pre-declare required for anonymous recursion
-	var recursefunc func(dir string, depth int)
-	sha := sha1.New()
-
-	recursefunc = func(dir string, d int) {
-		for f := 0; f < num; f++ {
-			// Use SHA to generate unique names
-			randStr := strconv.Itoa(rand.Int())
-			sha.Write([]byte(randStr))
-			shaStr := fmt.Sprintf("%x", string(sha.Sum(nil)))
-			ret = append(ret, filepath.Join(dir, fmt.Sprintf("%v.bin", shaStr)))
-		}
-		if d > 0 {
-			// Dirs
-			for f := 0; f < numdirs; f++ {
-				randStr := strconv.Itoa(rand.Int())
-				sha.Write([]byte(randStr))
-				shaStr := fmt.Sprintf("%x", string(sha.Sum(nil)))
-				subdir := filepath.Join(dir, shaStr[:4])
-				recursefunc(subdir, d-1)
-			}
-		}
-
-	}
-	recursefunc("", depth)
-	return ret
-}
-
 // Create a single initial commit (no LOB references) to give us a base
 func CreateInitialCommitForTest(path string) string {
 	testfile := "test.txt"

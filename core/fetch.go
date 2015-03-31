@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bitbucket.org/sinbad/git-lob/providers"
 	"bitbucket.org/sinbad/git-lob/util"
 	"errors"
 	"fmt"
@@ -9,8 +10,8 @@ import (
 )
 
 // Implementation of fetch
-func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dryRun, force bool,
-	callback ProgressCallback) error {
+func Fetch(provider providers.SyncProvider, remoteName string, refspecs []*GitRefSpec, dryRun, force bool,
+	callback util.ProgressCallback) error {
 	// We need to build a list of commits ranges at which we want to ensure binaries are present locally
 	// We can't build the list of binaries solely from the log, because  not all binaries needed may have been
 	// modified in the range. Therefore we need 'git ls-tree' at the base ancestor in each range, followed by
@@ -24,7 +25,7 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 	if len(refspecs) == 0 {
 		// No refs specified, use 'Recent' fetch algorithm
 		if util.GlobalOptions.Verbose {
-			callback(&ProgressCallbackData{ProgressCalculate, "Calculating recent commits...",
+			callback(&util.ProgressCallbackData{util.ProgressCalculate, "Calculating recent commits...",
 				int64(0), int64(1), 0, 0})
 		}
 		// Get HEAD LOBs first
@@ -34,7 +35,7 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 			return errors.New(fmt.Sprintf("Error determining recent HEAD commits: %v", err.Error()))
 		}
 		if util.GlobalOptions.Verbose {
-			callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf(" * HEAD: %d binary references", len(headlobs)),
+			callback(&util.ProgressCallbackData{util.ProgressCalculate, fmt.Sprintf(" * HEAD: %d binary references", len(headlobs)),
 				0, 0, 0, 0})
 		}
 		lobsNeeded = headlobs
@@ -67,7 +68,7 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 					return errors.New(fmt.Sprintf("Error determining recent commits on %v: %v", ref, err.Error()))
 				}
 				if util.GlobalOptions.Verbose {
-					callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf(" * %v: %d binary references", ref, len(recentreflobs)),
+					callback(&util.ProgressCallbackData{util.ProgressCalculate, fmt.Sprintf(" * %v: %d binary references", ref, len(recentreflobs)),
 						int64(i), int64(len(refspecs)), 0, 0})
 				}
 				lobsNeeded = append(lobsNeeded, recentreflobs...)
@@ -80,7 +81,7 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 		// Get LOBs directly from specified refs/ranges
 		for i, refspec := range refspecs {
 			if util.GlobalOptions.Verbose {
-				callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf("Calculating data to fetch for %v", refspec),
+				callback(&util.ProgressCallbackData{util.ProgressCalculate, fmt.Sprintf("Calculating data to fetch for %v", refspec),
 					int64(i), int64(len(refspecs)), 0, 0})
 			}
 			refshas, err := GetGitAllLOBsToCheckoutInRefSpec(refspec, util.GlobalOptions.FetchIncludePaths, util.GlobalOptions.FetchExcludePaths)
@@ -88,7 +89,7 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 				return errors.New(fmt.Sprintf("Error determining LOBs to fetch for %v: %v", refspec, err.Error()))
 			}
 			if util.GlobalOptions.Verbose {
-				callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf(" * %v: %d binary references", refspec, len(refspecs)),
+				callback(&util.ProgressCallbackData{util.ProgressCalculate, fmt.Sprintf(" * %v: %d binary references", refspec, len(refspecs)),
 					int64(i), int64(len(refspecs)), 0, 0})
 			}
 			lobsNeeded = append(lobsNeeded, refshas...)
@@ -142,7 +143,7 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 	fetchAnyNotFound := false
 
 	if len(lobsNeeded) == 0 {
-		callback(&ProgressCallbackData{ProgressCalculate, "No binaries to download.",
+		callback(&util.ProgressCallbackData{util.ProgressCalculate, "No binaries to download.",
 			int64(len(refspecs)), int64(len(refspecs)), 0, 0})
 	} else {
 
@@ -160,16 +161,16 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 		}
 
 		if len(lobsToDownload) == 0 {
-			callback(&ProgressCallbackData{ProgressCalculate, "No binaries to download.",
+			callback(&util.ProgressCallbackData{util.ProgressCalculate, "No binaries to download.",
 				int64(len(refspecs)), int64(len(refspecs)), 0, 0})
 			return nil
 		} else {
-			callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf("%d binaries to download.", len(lobsToDownload)),
+			callback(&util.ProgressCallbackData{util.ProgressCalculate, fmt.Sprintf("%d binaries to download.", len(lobsToDownload)),
 				int64(len(refspecs)), int64(len(refspecs)), 0, 0})
 		}
 		if !dryRun {
-			fetchCallback := func(data *ProgressCallbackData) (abort bool) {
-				if data.Type == ProgressNotFound {
+			fetchCallback := func(data *util.ProgressCallbackData) (abort bool) {
+				if data.Type == util.ProgressNotFound {
 					fetchAnyNotFound = true
 				}
 				// passthrough to external callback
@@ -204,10 +205,10 @@ func Fetch(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dry
 }
 
 // Internal method for fetching
-func fetchLOBs(lobshas []string, provider SyncProvider, remoteName string, force bool, callback ProgressCallback) error {
+func fetchLOBs(lobshas []string, provider providers.SyncProvider, remoteName string, force bool, callback util.ProgressCallback) error {
 	// Download metafiles first
 	// This will allow us to estimate the time required
-	callback(&ProgressCallbackData{ProgressCalculate, "Downloading metadata",
+	callback(&util.ProgressCallbackData{util.ProgressCalculate, "Downloading metadata",
 		0, 0, 0, 0})
 	err := fetchMetadata(lobshas, provider, remoteName, force, callback)
 	if err != nil {
@@ -217,7 +218,7 @@ func fetchLOBs(lobshas []string, provider SyncProvider, remoteName string, force
 	// So now we have all the metadata available locally, we can know what files to download
 	var filesTotalBytes int64
 	var files []string
-	callback(&ProgressCallbackData{ProgressCalculate, "Calculating content files to download",
+	callback(&util.ProgressCallbackData{util.ProgressCalculate, "Calculating content files to download",
 		0, 0, 0, 0})
 	for _, sha := range lobshas {
 		info, err := GetLOBInfo(sha)
@@ -235,7 +236,7 @@ func fetchLOBs(lobshas []string, provider SyncProvider, remoteName string, force
 			files = append(files, GetLOBChunkRelativePath(sha, i))
 		}
 	}
-	callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf("Metadata done, downloading content (%v)", util.FormatSize(filesTotalBytes)),
+	callback(&util.ProgressCallbackData{util.ProgressCalculate, fmt.Sprintf("Metadata done, downloading content (%v)", util.FormatSize(filesTotalBytes)),
 		0, 0, 0, 0})
 
 	// Download content now
@@ -244,23 +245,23 @@ func fetchLOBs(lobshas []string, provider SyncProvider, remoteName string, force
 }
 
 // Internal method for fetching
-func fetchMetadata(lobshas []string, provider SyncProvider, remoteName string, force bool, callback ProgressCallback) error {
+func fetchMetadata(lobshas []string, provider providers.SyncProvider, remoteName string, force bool, callback util.ProgressCallback) error {
 	// Use average metafile bytes as estimate of download, usually around 100 bytes of JSON
 	averageMetaSize := 100
 	metaTotalBytes := int64(len(lobshas) * averageMetaSize)
 	var metafilesDone int
-	metacallback := func(fileInProgress string, progressType ProgressCallbackType, bytesDone, totalBytes int64) (abort bool) {
+	metacallback := func(fileInProgress string, progressType util.ProgressCallbackType, bytesDone, totalBytes int64) (abort bool) {
 		// Don't bother to track partial completion, only 100 bytes each
-		if progressType == ProgressSkip || progressType == ProgressNotFound {
+		if progressType == util.ProgressSkip || progressType == util.ProgressNotFound {
 			metafilesDone++
-			callback(&ProgressCallbackData{progressType, fileInProgress, totalBytes, totalBytes,
+			callback(&util.ProgressCallbackData{progressType, fileInProgress, totalBytes, totalBytes,
 				int64(metafilesDone * averageMetaSize), metaTotalBytes})
 			// Remote did not have this file
 		} else {
 			if bytesDone == totalBytes {
 				// finished
 				metafilesDone++
-				callback(&ProgressCallbackData{ProgressTransferBytes, fileInProgress, totalBytes, totalBytes,
+				callback(&util.ProgressCallbackData{util.ProgressTransferBytes, fileInProgress, totalBytes, totalBytes,
 					int64(metafilesDone * averageMetaSize), metaTotalBytes})
 			}
 		}
@@ -308,38 +309,38 @@ func getFetchDestination() string {
 	}
 }
 
-func fetchContentFiles(files []string, filesTotalBytes int64, provider SyncProvider,
-	remoteName string, force bool, callback ProgressCallback) error {
+func fetchContentFiles(files []string, filesTotalBytes int64, provider providers.SyncProvider,
+	remoteName string, force bool, callback util.ProgressCallback) error {
 	var lastFilename string
 	var lastFileBytes int64
 	var bytesFromFilesDoneSoFar int64
-	contentcallback := func(fileInProgress string, progressType ProgressCallbackType, bytesDone, totalBytes int64) (abort bool) {
+	contentcallback := func(fileInProgress string, progressType util.ProgressCallbackType, bytesDone, totalBytes int64) (abort bool) {
 
 		var ret bool
 		if lastFilename != fileInProgress && lastFilename != "" {
 			// we obviously never got a 100% call for previous file
 			bytesFromFilesDoneSoFar += lastFileBytes
-			ret = callback(&ProgressCallbackData{ProgressTransferBytes, lastFilename, lastFileBytes, lastFileBytes,
+			ret = callback(&util.ProgressCallbackData{util.ProgressTransferBytes, lastFilename, lastFileBytes, lastFileBytes,
 				bytesFromFilesDoneSoFar, filesTotalBytes})
 			lastFilename = ""
 		}
-		if progressType == ProgressSkip || progressType == ProgressNotFound {
+		if progressType == util.ProgressSkip || progressType == util.ProgressNotFound {
 			bytesFromFilesDoneSoFar += totalBytes
-			ret = callback(&ProgressCallbackData{progressType, fileInProgress, totalBytes, totalBytes,
+			ret = callback(&util.ProgressCallbackData{progressType, fileInProgress, totalBytes, totalBytes,
 				bytesFromFilesDoneSoFar, filesTotalBytes})
 		} else {
 
 			if bytesDone == totalBytes {
 				// finished
 				bytesFromFilesDoneSoFar += totalBytes
-				ret = callback(&ProgressCallbackData{ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
+				ret = callback(&util.ProgressCallbackData{util.ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
 					bytesFromFilesDoneSoFar, filesTotalBytes})
 				lastFilename = ""
 			} else {
 				// partly progressed file
 				lastFilename = fileInProgress
 				lastFileBytes = totalBytes
-				ret = callback(&ProgressCallbackData{ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
+				ret = callback(&util.ProgressCallbackData{util.ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
 					bytesFromFilesDoneSoFar + bytesDone, filesTotalBytes})
 
 			}
@@ -352,7 +353,7 @@ func fetchContentFiles(files []string, filesTotalBytes int64, provider SyncProvi
 	err := provider.Download(remoteName, files, destDir, force, contentcallback)
 	if err == nil && lastFilename != "" {
 		// we obviously never got a 100% progress call for final file
-		callback(&ProgressCallbackData{ProgressTransferBytes, lastFilename, lastFileBytes, lastFileBytes,
+		callback(&util.ProgressCallbackData{util.ProgressTransferBytes, lastFilename, lastFileBytes, lastFileBytes,
 			filesTotalBytes, filesTotalBytes})
 		lastFilename = ""
 	}
@@ -379,7 +380,7 @@ func fetchContentFiles(files []string, filesTotalBytes int64, provider SyncProvi
 }
 
 // Fetch the files required for a single LOB
-func FetchSingle(lobsha string, provider SyncProvider, remoteName string, force bool, callback ProgressCallback) error {
+func FetchSingle(lobsha string, provider providers.SyncProvider, remoteName string, force bool, callback util.ProgressCallback) error {
 
 	var lobToDownload []string
 	if force {
@@ -401,7 +402,7 @@ func AutoFetch(lobsha string, reportProgress bool) error {
 	remoteName := GetGitDefaultRemoteForPull()
 	util.LogDebugf("Trying to auto-fetch %v from %v\n", lobsha, remoteName)
 	// check the remote config to make sure it's valid
-	provider, err := GetProviderForRemote(remoteName)
+	provider, err := providers.GetProviderForRemote(remoteName)
 	if err != nil {
 		return err
 	}
@@ -413,11 +414,11 @@ func AutoFetch(lobsha string, reportProgress bool) error {
 	if reportProgress {
 		// We need to run this in a goroutine to report progress deterministically
 		// 100 items in the queue should be good enough, this means that it won't block
-		callbackChan := make(chan *ProgressCallbackData, 100)
-		go func(lobsha string, provider SyncProvider, remoteName string, progresschan chan<- *ProgressCallbackData) {
+		callbackChan := make(chan *util.ProgressCallbackData, 100)
+		go func(lobsha string, provider providers.SyncProvider, remoteName string, progresschan chan<- *util.ProgressCallbackData) {
 
 			// Progress callback just passes the result back to the channel
-			progress := func(data *ProgressCallbackData) (abort bool) {
+			progress := func(data *util.ProgressCallbackData) (abort bool) {
 				progresschan <- data
 
 				return false
@@ -434,12 +435,12 @@ func AutoFetch(lobsha string, reportProgress bool) error {
 		}(lobsha, provider, remoteName, callbackChan)
 
 		// Report progress on operation every 0.5s
-		ReportProgressToConsole(callbackChan, "Fetch", time.Millisecond*500)
+		util.ReportProgressToConsole(callbackChan, "Fetch", time.Millisecond*500)
 		// Because no final newline from report progress
 		util.LogConsole("")
 	} else {
 		// no progress, just do it
-		fetcherr = FetchSingle(lobsha, provider, remoteName, false, func(data *ProgressCallbackData) (abort bool) { return false })
+		fetcherr = FetchSingle(lobsha, provider, remoteName, false, func(data *util.ProgressCallbackData) (abort bool) { return false })
 	}
 
 	if fetcherr == nil {

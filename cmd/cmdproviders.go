@@ -1,14 +1,14 @@
 package cmd
 
 import (
-	"bitbucket.org/sinbad/git-lob/core"
+	"bitbucket.org/sinbad/git-lob/providers"
 	"bitbucket.org/sinbad/git-lob/util"
 )
 
 func ListProviders() int {
 	util.LogConsole()
 	util.LogConsole("Available remote providers:")
-	for _, p := range core.GetSyncProviders() {
+	for _, p := range providers.GetSyncProviders() {
 		util.LogConsole(" *", p.HelpTextSummary())
 	}
 	util.LogConsole()
@@ -24,7 +24,7 @@ func ProviderDetails() int {
 	// Potentially list many
 	ret := 0
 	for _, arg := range util.GlobalOptions.Args {
-		p, err := core.GetSyncProvider(arg)
+		p, err := providers.GetSyncProvider(arg)
 		if err != nil {
 			util.LogConsole(err)
 			ret++

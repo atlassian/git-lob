@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bitbucket.org/sinbad/git-lob/providers"
 	"bitbucket.org/sinbad/git-lob/util"
 	"fmt"
 )
@@ -14,8 +15,8 @@ type PushCommitContentDetails struct {
 	Incomplete bool     // File list is not complete because of missing local data, we shouldn't mark this commit as pushed
 }
 
-func Push(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dryRun, force, recheck bool,
-	callback ProgressCallback) error {
+func Push(provider providers.SyncProvider, remoteName string, refspecs []*GitRefSpec, dryRun, force, recheck bool,
+	callback util.ProgressCallback) error {
 
 	util.LogDebugf("Pushing to %v via %v\n", remoteName, provider.TypeID())
 
@@ -29,7 +30,7 @@ func Push(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dryR
 		var anyIncomplete bool
 
 		if util.GlobalOptions.Verbose {
-			callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf("Calculating data to push for %v", refspec),
+			callback(&util.ProgressCallbackData{util.ProgressCalculate, fmt.Sprintf("Calculating data to push for %v", refspec),
 				int64(i), int64(len(refspecs)), 0, 0})
 		}
 
@@ -75,7 +76,7 @@ func Push(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dryR
 					commitIncomplete = true
 					anyIncomplete = true
 					util.LogDebug(fmt.Sprintf("Some content for commit %v is missing & not on remote already", commit.Commit[:7]))
-					callback(&ProgressCallbackData{ProgressNotFound, fmt.Sprintf("data for commit %v", commit.Commit[:7]),
+					callback(&util.ProgressCallbackData{util.ProgressNotFound, fmt.Sprintf("data for commit %v", commit.Commit[:7]),
 						int64(i + 1), int64(len(refspecs)), 0, 0})
 				}
 				// If we DID manage to find the missing data on the remote though, we treat this as
@@ -100,7 +101,7 @@ func Push(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dryR
 		}
 
 		if len(refCommitsToPush) == 0 {
-			callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf(" * %v: Nothing to push", refspec),
+			callback(&util.ProgressCallbackData{util.ProgressCalculate, fmt.Sprintf(" * %v: Nothing to push", refspec),
 				int64(i), int64(len(refspecs)), 0, 0})
 			// if nothing to push, then mark this ref as pushed to make querying faster next time
 			// Only for normal ref where we've checked for all ancestors to be pushed, not a manual range
@@ -118,15 +119,15 @@ func Push(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dryR
 
 		} else {
 			if refCommitsSize > 0 {
-				callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf(" * %v: %d commits with %v to push (if not already on remote)",
+				callback(&util.ProgressCallbackData{util.ProgressCalculate, fmt.Sprintf(" * %v: %d commits with %v to push (if not already on remote)",
 					refspec, len(refCommitsToPush), util.FormatSize(refCommitsSize)), int64(i + 1), int64(len(refspecs)), 0, 0})
 			} else {
-				callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf(" * %v: Nothing to push, remote is up to date", refspec),
+				callback(&util.ProgressCallbackData{util.ProgressCalculate, fmt.Sprintf(" * %v: Nothing to push, remote is up to date", refspec),
 					int64(i + 1), int64(len(refspecs)), 0, 0})
 			}
 		}
 		if util.GlobalOptions.Verbose {
-			callback(&ProgressCallbackData{ProgressCalculate, fmt.Sprintf("Finished calculating data to push for %v", refspec),
+			callback(&util.ProgressCallbackData{util.ProgressCalculate, fmt.Sprintf("Finished calculating data to push for %v", refspec),
 				int64(i + 1), int64(len(refspecs)), 0, 0})
 		}
 
@@ -135,7 +136,7 @@ func Push(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dryR
 
 			// Even if size == 0 we still skim through marking them as pushed (must have been that data was on remote)
 			if refCommitsSize > 0 {
-				callback(&ProgressCallbackData{ProgressCalculate,
+				callback(&util.ProgressCallbackData{util.ProgressCalculate,
 					fmt.Sprintf("Uploading up to %v to %v via %v", util.FormatSize(refCommitsSize), remoteName, provider.TypeID()),
 					0, 0, 0, 0})
 			}
@@ -147,26 +148,26 @@ func Push(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dryR
 				// Upload now
 				var lastFilename string
 				var lastFileBytes int64
-				localcallback := func(fileInProgress string, progressType ProgressCallbackType, bytesDone, totalBytes int64) (abort bool) {
+				localcallback := func(fileInProgress string, progressType util.ProgressCallbackType, bytesDone, totalBytes int64) (abort bool) {
 					if lastFilename != fileInProgress {
 						// New file, always callback
 						if lastFilename != "" {
 							// we obviously never got a 100% call for previous file
 							filesdone++
 							bytesFromFilesDoneSoFar += lastFileBytes
-							callback(&ProgressCallbackData{ProgressTransferBytes, lastFilename, lastFileBytes, lastFileBytes,
+							callback(&util.ProgressCallbackData{util.ProgressTransferBytes, lastFilename, lastFileBytes, lastFileBytes,
 								bytesFromFilesDoneSoFar, refCommitsSize})
 							lastFilename = ""
 						}
-						if progressType == ProgressSkip || progressType == ProgressNotFound {
+						if progressType == util.ProgressSkip || progressType == util.ProgressNotFound {
 							// 'not found' will have caused an error earlier anyway so just pass through
 							filesdone++
 							bytesFromFilesDoneSoFar += totalBytes
-							callback(&ProgressCallbackData{progressType, fileInProgress, totalBytes, totalBytes,
+							callback(&util.ProgressCallbackData{progressType, fileInProgress, totalBytes, totalBytes,
 								bytesFromFilesDoneSoFar, refCommitsSize})
 						} else {
 							// Start new file
-							callback(&ProgressCallbackData{ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
+							callback(&util.ProgressCallbackData{util.ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
 								bytesFromFilesDoneSoFar + bytesDone, refCommitsSize})
 							lastFilename = fileInProgress
 							lastFileBytes = totalBytes
@@ -176,12 +177,12 @@ func Push(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dryR
 							// finished
 							filesdone++
 							bytesFromFilesDoneSoFar += totalBytes
-							callback(&ProgressCallbackData{ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
+							callback(&util.ProgressCallbackData{util.ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
 								bytesFromFilesDoneSoFar, refCommitsSize})
 							lastFilename = ""
 						} else {
 							// Otherwise this is a progress callback
-							return callback(&ProgressCallbackData{ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
+							return callback(&util.ProgressCallbackData{util.ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
 								bytesFromFilesDoneSoFar + bytesDone, refCommitsSize})
 						}
 					}
@@ -220,7 +221,7 @@ func Push(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dryR
 				if lastFilename != "" {
 					// We obviously never got a 100% progress update from the last file
 					bytesFromFilesDoneSoFar += lastFileBytes
-					callback(&ProgressCallbackData{ProgressTransferBytes, lastFilename, lastFileBytes, lastFileBytes,
+					callback(&util.ProgressCallbackData{util.ProgressTransferBytes, lastFilename, lastFileBytes, lastFileBytes,
 						bytesFromFilesDoneSoFar, refCommitsSize})
 					lastFilename = ""
 				}
@@ -278,8 +279,8 @@ func Push(provider SyncProvider, remoteName string, refspecs []*GitRefSpec, dryR
 }
 
 // Push a single LOB to a remote
-func PushSingle(sha string, provider SyncProvider, remoteName string, force bool,
-	callback ProgressCallback) error {
+func PushSingle(sha string, provider providers.SyncProvider, remoteName string, force bool,
+	callback util.ProgressCallback) error {
 
 	filenames, basedir, totalSize, err := GetLOBFilenamesWithBaseDir([]string{sha}, true)
 	if err != nil {
@@ -289,24 +290,24 @@ func PushSingle(sha string, provider SyncProvider, remoteName string, force bool
 	var lastFilename string
 	var lastFileBytes int64
 	var bytesFromFilesDoneSoFar int64
-	localcallback := func(fileInProgress string, progressType ProgressCallbackType, bytesDone, totalBytes int64) (abort bool) {
+	localcallback := func(fileInProgress string, progressType util.ProgressCallbackType, bytesDone, totalBytes int64) (abort bool) {
 		if lastFilename != fileInProgress {
 			// New file, always callback
 			if lastFilename != "" {
 				// we obviously never got a 100% call for previous file
 				bytesFromFilesDoneSoFar += lastFileBytes
-				callback(&ProgressCallbackData{ProgressTransferBytes, lastFilename, lastFileBytes, lastFileBytes,
+				callback(&util.ProgressCallbackData{util.ProgressTransferBytes, lastFilename, lastFileBytes, lastFileBytes,
 					bytesFromFilesDoneSoFar, totalSize})
 				lastFilename = ""
 			}
-			if progressType == ProgressSkip || progressType == ProgressNotFound {
+			if progressType == util.ProgressSkip || progressType == util.ProgressNotFound {
 				// 'not found' will have caused an error earlier anyway so just pass through
 				bytesFromFilesDoneSoFar += totalBytes
-				callback(&ProgressCallbackData{progressType, fileInProgress, totalBytes, totalBytes,
+				callback(&util.ProgressCallbackData{progressType, fileInProgress, totalBytes, totalBytes,
 					bytesFromFilesDoneSoFar, totalSize})
 			} else {
 				// Start new file
-				callback(&ProgressCallbackData{ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
+				callback(&util.ProgressCallbackData{util.ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
 					bytesFromFilesDoneSoFar + bytesDone, totalSize})
 				lastFilename = fileInProgress
 				lastFileBytes = totalBytes
@@ -315,12 +316,12 @@ func PushSingle(sha string, provider SyncProvider, remoteName string, force bool
 			if bytesDone == totalBytes {
 				// finished
 				bytesFromFilesDoneSoFar += totalBytes
-				callback(&ProgressCallbackData{ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
+				callback(&util.ProgressCallbackData{util.ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
 					bytesFromFilesDoneSoFar, totalSize})
 				lastFilename = ""
 			} else {
 				// Otherwise this is a progress callback
-				return callback(&ProgressCallbackData{ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
+				return callback(&util.ProgressCallbackData{util.ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
 					bytesFromFilesDoneSoFar + bytesDone, totalSize})
 			}
 		}

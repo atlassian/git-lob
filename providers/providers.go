@@ -1,4 +1,4 @@
-package core
+package providers
 
 import (
 	"bitbucket.org/sinbad/git-lob/util"
@@ -52,7 +52,7 @@ type SyncProvider interface {
 // Callback when progress is made uploading / downloading
 // fileInProgress: relative path of file, isSkipped: whether file was up to date, bytesDone/totalBytes: progress for current file
 // return true to abort the process for this and all other files in the batch
-type SyncProgressCallback func(fileInProgress string, progressType ProgressCallbackType, bytesDone, totalBytes int64) (abort bool)
+type SyncProgressCallback func(fileInProgress string, progressType util.ProgressCallbackType, bytesDone, totalBytes int64) (abort bool)
 
 // Providers implementing this interface provide smart sync capabilities
 // These providers require server-side processing and are free to store data how they like
@@ -66,10 +66,6 @@ type SmartSyncProvider interface {
 
 var (
 	syncProviders map[string]SyncProvider = make(map[string]SyncProvider, 0)
-	// A simple helper callback you can use to do nothing
-	DummySyncProgressCallback = func(fileInProgress string, progressType ProgressCallbackType, bytesDone, totalBytes int64) (abort bool) {
-		return false
-	}
 )
 
 // Registers an instance of a SyncProvider for later use
@@ -138,10 +134,11 @@ type SyncProgressReader struct {
 
 func (self *SyncProgressReader) Read(p []byte) (n int, err error) {
 	// Make sure that we call progress callback on a reasonable frequency
+	const readerBufferSize = 131072
 	pos := 0
 	n = 0
 	for remainder := len(p); remainder > 0; {
-		readlen := BUFSIZE
+		readlen := readerBufferSize
 		if remainder < readlen {
 			readlen = remainder
 		}
@@ -150,7 +147,7 @@ func (self *SyncProgressReader) Read(p []byte) (n int, err error) {
 		n += c
 		self.BytesRead += int64(c)
 		if c > 0 && self.callback != nil && self.totalBytes > 0 {
-			if self.callback(self.filename, ProgressTransferBytes, int64(self.BytesRead), self.totalBytes) {
+			if self.callback(self.filename, util.ProgressTransferBytes, int64(self.BytesRead), self.totalBytes) {
 				// Abort if requested
 				self.Aborted = true
 				return

@@ -10,7 +10,7 @@ import (
 )
 
 // Callback can report skip,transfer (on complete), error
-type CheckoutCallback func(t ProgressCallbackType, filelob *FileLOB, err error)
+type CheckoutCallback func(t util.ProgressCallbackType, filelob *FileLOB, err error)
 
 // Populate local placeholders with real content, if available. Do entire working copy unless limited to pathspecs
 func Checkout(pathspecs []string, dryRun bool, callback CheckoutCallback) error {
@@ -79,27 +79,27 @@ func Checkout(pathspecs []string, dryRun bool, callback CheckoutCallback) error 
 				if err != nil {
 					if IsNotFoundError(err) {
 						// most common issue, log nicely
-						callback(ProgressNotFound, &filelob,
+						callback(util.ProgressNotFound, &filelob,
 							NewNotFoundError(fmt.Sprintf("%v: content not available, placeholder used [%v]", filelob.Filename, filelob.SHA[:7]),
 								filelob.Filename))
 					} else {
 						// Still not fatal but log full detail
-						callback(ProgressError, &filelob,
+						callback(util.ProgressError, &filelob,
 							errors.New(fmt.Sprintf("Can't retrieve content for %v: %v", filelob.Filename, err.Error())))
 					}
 				} else {
 					// Success
-					callback(ProgressTransferBytes, &filelob, nil)
+					callback(util.ProgressTransferBytes, &filelob, nil)
 				}
 				// In all cases, we've changed the content of the file. It's important we note this for later
 				modifiedfiles = append(modifiedfiles, filelob.Filename)
 			} else {
 				// Dry run, still call back as if we did it
-				callback(ProgressTransferBytes, &filelob, nil)
+				callback(util.ProgressTransferBytes, &filelob, nil)
 			}
 
 		} else {
-			callback(ProgressSkip, &filelob, nil)
+			callback(util.ProgressSkip, &filelob, nil)
 		}
 
 	}

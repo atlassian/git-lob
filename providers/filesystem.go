@@ -1,4 +1,4 @@
-package core
+package providers
 
 import (
 	"bitbucket.org/sinbad/git-lob/util"
@@ -45,6 +45,8 @@ in the target file structure and can be safely deleted if older than 24h.
 `
 }
 
+const FileSystemBufferSize = 131072
+
 func (*FileSystemSyncProvider) ValidateConfig(remoteName string) error {
 	pathsetting := fmt.Sprintf("remote.%v.git-lob-path", remoteName)
 	path := util.GlobalOptions.GitConfig[pathsetting]
@@ -69,7 +71,7 @@ func (*FileSystemSyncProvider) uploadSingleFile(remoteName, filename, fromDir, t
 	srcfi, err := os.Stat(srcfilename)
 	if err != nil {
 		if callback != nil {
-			if callback(filename, ProgressNotFound, 0, 0) {
+			if callback(filename, util.ProgressNotFound, 0, 0) {
 				return errorList, true
 			}
 		}
@@ -87,7 +89,7 @@ func (*FileSystemSyncProvider) uploadSingleFile(remoteName, filename, fromDir, t
 			if destfi.Size() == srcfi.Size() {
 				// File already present and correct size, skip
 				if callback != nil {
-					if callback(filename, ProgressSkip, srcfi.Size(), srcfi.Size()) {
+					if callback(filename, util.ProgressSkip, srcfi.Size(), srcfi.Size()) {
 						return errorList, true
 					}
 				}
@@ -130,17 +132,17 @@ func (*FileSystemSyncProvider) uploadSingleFile(remoteName, filename, fromDir, t
 
 	// Initial callback
 	if callback != nil {
-		if callback(filename, ProgressTransferBytes, 0, srcfi.Size()) {
+		if callback(filename, util.ProgressTransferBytes, 0, srcfi.Size()) {
 			return errorList, true
 		}
 	}
 	var copysize int64 = 0
 	for {
 		var n int64
-		n, err = io.CopyN(outf, inf, BUFSIZE)
+		n, err = io.CopyN(outf, inf, FileSystemBufferSize)
 		copysize += n
 		if n > 0 && callback != nil && srcfi.Size() > 0 {
-			if callback(filename, ProgressTransferBytes, copysize, srcfi.Size()) {
+			if callback(filename, util.ProgressTransferBytes, copysize, srcfi.Size()) {
 				return errorList, true
 			}
 		}
@@ -209,7 +211,7 @@ func (*FileSystemSyncProvider) downloadSingleFile(remoteName, filename, fromDir,
 	srcfi, err := os.Stat(srcfilename)
 	if err != nil {
 		if callback != nil {
-			if callback(filename, ProgressNotFound, 0, 0) {
+			if callback(filename, util.ProgressNotFound, 0, 0) {
 				return errorList, true
 			}
 		}
@@ -229,7 +231,7 @@ func (*FileSystemSyncProvider) downloadSingleFile(remoteName, filename, fromDir,
 			if destfi.Size() == srcfi.Size() {
 				// File already present and correct size, skip
 				if callback != nil {
-					if callback(filename, ProgressSkip, srcfi.Size(), srcfi.Size()) {
+					if callback(filename, util.ProgressSkip, srcfi.Size(), srcfi.Size()) {
 						return errorList, true
 					}
 				}
@@ -271,17 +273,17 @@ func (*FileSystemSyncProvider) downloadSingleFile(remoteName, filename, fromDir,
 
 	// Initial callback
 	if callback != nil {
-		if callback(filename, ProgressTransferBytes, 0, srcfi.Size()) {
+		if callback(filename, util.ProgressTransferBytes, 0, srcfi.Size()) {
 			return errorList, true
 		}
 	}
 	var copysize int64 = 0
 	for {
 		var n int64
-		n, err = io.CopyN(outf, inf, BUFSIZE)
+		n, err = io.CopyN(outf, inf, FileSystemBufferSize)
 		copysize += n
 		if n > 0 && callback != nil && srcfi.Size() > 0 {
-			if callback(filename, ProgressTransferBytes, copysize, srcfi.Size()) {
+			if callback(filename, util.ProgressTransferBytes, copysize, srcfi.Size()) {
 				return errorList, true
 			}
 		}
