@@ -494,7 +494,9 @@ func ForceRemoveAll(path string) error {
 		if path != "" && path != "\\" && util.DirExists(path) {
 			// 'del' isn't an executable, it's a builtin of cmd
 			cmd := exec.Command("cmd", "/C", "del", "/S", "/F", "/Q", path)
-			err = cmd.Run()
+			cmd.Run()
+			// cannot trust exit code?
+			return nil
 		}
 	}
 
