@@ -13,10 +13,10 @@ import (
 	"time"
 )
 
-var _ = Describe("Git", func() {
+var _ = Describe("Git tests", func() {
 
 	Describe("Walk history", func() {
-		root := filepath.Join(os.TempDir(), "GitTest")
+		root := filepath.Join(os.TempDir(), "GitTest1")
 		var oldwd string
 		BeforeEach(func() {
 			CreateGitRepoForTest(root)
@@ -25,7 +25,10 @@ var _ = Describe("Git", func() {
 		})
 		AfterEach(func() {
 			os.Chdir(oldwd)
-			os.RemoveAll(root)
+			err := ForceRemoveAll(root)
+			if err != nil {
+				Fail(err.Error())
+			}
 		})
 		// Func var so as not to pollute namespace
 		testWalk := func(count, quitAfter int) {
@@ -155,7 +158,7 @@ var _ = Describe("Git", func() {
 	})
 
 	Describe("GetGitCurrentBranch", func() {
-		root := filepath.Join(os.TempDir(), "GitTest")
+		root := filepath.Join(os.TempDir(), "GitTest2")
 		var oldwd string
 		BeforeEach(func() {
 			CreateGitRepoForTest(root)
@@ -165,7 +168,10 @@ var _ = Describe("Git", func() {
 		})
 		AfterEach(func() {
 			os.Chdir(oldwd)
-			os.RemoveAll(root)
+			err := ForceRemoveAll(root)
+			if err != nil {
+				Fail(err.Error())
+			}
 			cachedCurrentBranch = ""
 		})
 		It("Identifies current branch", func() {
@@ -189,8 +195,8 @@ var _ = Describe("Git", func() {
 		})
 
 	})
-	Describe("GetGitCurrentBranch", func() {
-		root := filepath.Join(os.TempDir(), "GitTest")
+	Describe("GetGitListBranches", func() {
+		root := filepath.Join(os.TempDir(), "GitTest3")
 		var oldwd string
 		BeforeEach(func() {
 			CreateGitRepoForTest(root)
@@ -199,7 +205,10 @@ var _ = Describe("Git", func() {
 		})
 		AfterEach(func() {
 			os.Chdir(oldwd)
-			os.RemoveAll(root)
+			err := ForceRemoveAll(root)
+			if err != nil {
+				Fail(err.Error())
+			}
 		})
 		It("Lists branches", func() {
 			exec.Command("git", "commit", "--allow-empty", "-m", "First commit").Run()
@@ -228,7 +237,7 @@ var _ = Describe("Git", func() {
 
 	})
 	Describe("Remote branches & tracking", func() {
-		root := filepath.Join(os.TempDir(), "GitTest")
+		root := filepath.Join(os.TempDir(), "GitTest4")
 		remotePath := filepath.Join(os.TempDir(), "GitTestRemote")
 		var oldwd string
 		BeforeEach(func() {
@@ -268,8 +277,14 @@ var _ = Describe("Git", func() {
 		})
 		AfterEach(func() {
 			os.Chdir(oldwd)
-			os.RemoveAll(root)
-			os.RemoveAll(remotePath)
+			err := ForceRemoveAll(root)
+			if err != nil {
+				Fail(err.Error())
+			}
+			err = ForceRemoveAll(remotePath)
+			if err != nil {
+				Fail(err.Error())
+			}
 		})
 
 		It("Reports remote branches correctly", func() {
@@ -369,7 +384,7 @@ var _ = Describe("Git", func() {
 
 	Context("Commit LOB references", func() {
 
-		root := filepath.Join(os.TempDir(), "GitTest")
+		root := filepath.Join(os.TempDir(), "GitTest5")
 		var oldwd string
 		lobshas := GetListOfRandomSHAsForTest(10)
 		var correctSHAs [][]string
@@ -442,7 +457,10 @@ var _ = Describe("Git", func() {
 		})
 		AfterEach(func() {
 			os.Chdir(oldwd)
-			os.RemoveAll(root)
+			err := ForceRemoveAll(root)
+			if err != nil {
+				Fail(err.Error())
+			}
 		})
 
 		Describe("Query commit LOB references", func() {
@@ -511,7 +529,7 @@ var _ = Describe("Git", func() {
 	})
 	Describe("Git commit summary", func() {
 
-		root := filepath.Join(os.TempDir(), "GitTest")
+		root := filepath.Join(os.TempDir(), "GitTest6")
 		var oldwd string
 
 		BeforeEach(func() {
@@ -521,7 +539,11 @@ var _ = Describe("Git", func() {
 		})
 		AfterEach(func() {
 			os.Chdir(oldwd)
-			os.RemoveAll(root)
+			err := ForceRemoveAll(root)
+			if err != nil {
+				Fail(err.Error())
+			}
+
 		})
 
 		It("Correctly queries commit summaries", func() {
@@ -579,7 +601,7 @@ var _ = Describe("Git", func() {
 
 		// set GIT_COMMITTER_DATE environment var e.g. "Fri Jun 21 20:26:41 2013 +0900"
 
-		root := filepath.Join(os.TempDir(), "GitTest")
+		root := filepath.Join(os.TempDir(), "GitTest7")
 		var oldwd string
 		lobshas := GetListOfRandomSHAsForTest(16)
 		var correctRefsNoRemotes []*GitRef
@@ -776,7 +798,10 @@ var _ = Describe("Git", func() {
 		})
 		AfterEach(func() {
 			os.Chdir(oldwd)
-			os.RemoveAll(root)
+			err := ForceRemoveAll(root)
+			if err != nil {
+				Fail(err.Error())
+			}
 			GlobalOptions = NewOptions()
 		})
 		It("Retrieves recent git refs & LOBs", func() {
@@ -812,7 +837,7 @@ var _ = Describe("Git", func() {
 	})
 
 	Describe("Git include / exclude in LOB references", func() {
-		root := filepath.Join(os.TempDir(), "GitTest")
+		root := filepath.Join(os.TempDir(), "GitTest8")
 		var oldwd string
 		filenames := []string{
 			filepath.Join("folder1", "test.dat"),
@@ -859,7 +884,10 @@ var _ = Describe("Git", func() {
 		})
 		AfterEach(func() {
 			os.Chdir(oldwd)
-			os.RemoveAll(root)
+			err := ForceRemoveAll(root)
+			if err != nil {
+				Fail(err.Error())
+			}
 		})
 		It("Correctly filters based on include/exclude paths", func() {
 			// utility

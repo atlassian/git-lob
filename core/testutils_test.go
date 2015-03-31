@@ -3,6 +3,7 @@ package core
 import (
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
+	"bitbucket.org/sinbad/git-lob/util"
 	"bufio"
 	"bytes"
 	cryptorand "crypto/rand"
@@ -14,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -480,4 +482,21 @@ func SetupRepoForTest(inputs []*TestCommitSetupInput) []*CommitLOBRef {
 		outputs = append(outputs, output)
 	}
 	return outputs
+}
+
+// Delete a directory & all contents, overriding read-only flags
+// BE VERY CAREFUL WITH THIS
+func ForceRemoveAll(path string) error {
+	// os.RemoveAll doesn't always work. Git marks some files within its structure as read-only
+	// and some OS's then don't delete these files & return an error (e.g. Windows)
+	err := os.RemoveAll(path)
+	if err != nil && runtime.GOOS == "windows" {
+		if path != "" && path != "\\" && util.DirExists(path) {
+			// 'del' isn't an executable, it's a builtin of cmd
+			cmd := exec.Command("cmd", "/C", "del", "/S", "/F", "/Q", path)
+			err = cmd.Run()
+		}
+	}
+
+	return err
 }
