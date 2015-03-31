@@ -113,11 +113,26 @@ var _ = Describe("Push", func() {
 	})
 	AfterEach(func() {
 		os.Chdir(oldwd)
-		os.RemoveAll(root)
-		os.RemoveAll(originRoot)
-		os.RemoveAll(forkRoot)
-		os.RemoveAll(originBinStore)
-		os.RemoveAll(forkBinStore)
+		err := ForceRemoveAll(root)
+		if err != nil {
+			Fail(err.Error())
+		}
+		err = ForceRemoveAll(originRoot)
+		if err != nil {
+			Fail(err.Error())
+		}
+		err = ForceRemoveAll(forkRoot)
+		if err != nil {
+			Fail(err.Error())
+		}
+		err = ForceRemoveAll(originBinStore)
+		if err != nil {
+			Fail(err.Error())
+		}
+		err = ForceRemoveAll(forkBinStore)
+		if err != nil {
+			Fail(err.Error())
+		}
 		// Reset any option changes
 		GlobalOptions = NewOptions()
 	})

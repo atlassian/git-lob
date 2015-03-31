@@ -105,7 +105,10 @@ var _ = Describe("Prune", func() {
 		})
 		AfterEach(func() {
 			os.Chdir(oldwd)
-			os.RemoveAll(root)
+			err := ForceRemoveAll(root)
+			if err != nil {
+				Fail(err.Error())
+			}
 			GlobalOptions = NewOptions()
 		})
 
@@ -258,7 +261,10 @@ var _ = Describe("Prune", func() {
 		})
 		AfterEach(func() {
 			os.Chdir(oldwd)
-			os.RemoveAll(root)
+			err := ForceRemoveAll(root)
+			if err != nil {
+				Fail(err.Error())
+			}
 		})
 
 		Context("No files", func() {
@@ -465,7 +471,10 @@ var _ = Describe("Prune", func() {
 				for _, l := range lobfiles {
 					os.Remove(l)
 				}
-				os.RemoveAll(sharedStore)
+				err := ForceRemoveAll(sharedStore)
+				if err != nil {
+					Fail(err.Error())
+				}
 				GlobalOptions.SharedStore = ""
 			})
 			Context("prunes all files when no references", func() {
@@ -594,7 +603,10 @@ var _ = Describe("Prune", func() {
 
 			})
 			AfterEach(func() {
-				os.RemoveAll(sharedStore)
+				err := ForceRemoveAll(sharedStore)
+				if err != nil {
+					Fail(err.Error())
+				}
 				GlobalOptions.SharedStore = ""
 			})
 			Context("prunes all files when no references", func() {

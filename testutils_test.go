@@ -2,6 +2,7 @@ package main
 
 import (
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
+	"bitbucket.org/sinbad/git-lob/util"
 	"bufio"
 	cryptorand "crypto/rand"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -50,4 +52,21 @@ func CreateRandomFileForTest(sz int64, filename string) {
 		Fail(fmt.Sprintf("Can't write random data to test file %v: %v", filename, err))
 	}
 
+}
+
+// Delete a directory & all contents, overriding read-only flags
+// BE VERY CAREFUL WITH THIS
+func ForceRemoveAll(path string) error {
+	// os.RemoveAll doesn't always work. Git marks some files within its structure as read-only
+	// and some OS's then don't delete these files & return an error (e.g. Windows)
+	err := os.RemoveAll(path)
+	if err != nil && runtime.GOOS == "windows" {
+		if path != "" && path != "\\" && util.DirExists(path) {
+			// 'del' isn't an executable, it's a builtin of cmd
+			cmd := exec.Command("cmd", "/C", "del", "/S", "/F", "/Q", path)
+			err = cmd.Run()
+		}
+	}
+
+	return err
 }

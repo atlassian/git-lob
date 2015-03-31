@@ -147,7 +147,10 @@ var _ = Describe("Integration", func() {
 		})
 		AfterEach(func() {
 			os.Chdir(oldwd)
-			os.RemoveAll(root)
+			err := ForceRemoveAll(root)
+			if err != nil {
+				Fail(err.Error())
+			}
 		})
 
 		It("Git filters work", func() {

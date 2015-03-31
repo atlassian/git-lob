@@ -24,7 +24,10 @@ var _ = Describe("Filter", func() {
 	AfterEach(func() {
 		os.Chdir(oldwd)
 		// Delete repo
-		os.RemoveAll(root)
+		err := ForceRemoveAll(root)
+		if err != nil {
+			Fail(err.Error())
+		}
 	})
 
 	Describe("Smudge filter", func() {

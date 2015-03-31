@@ -49,8 +49,14 @@ var _ = Describe("Fsck", func() {
 	})
 	AfterEach(func() {
 		os.Chdir(oldwd)
-		os.RemoveAll(root)
-		os.RemoveAll(shared)
+		err := ForceRemoveAll(root)
+		if err != nil {
+			Fail(err.Error())
+		}
+		err = ForceRemoveAll(shared)
+		if err != nil {
+			Fail(err.Error())
+		}
 		GlobalOptions = NewOptions()
 	})
 

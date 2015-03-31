@@ -197,9 +197,18 @@ var _ = Describe("Fetch", func() {
 		})
 		AfterEach(func() {
 			os.Chdir(oldwd)
-			os.RemoveAll(root)
-			os.RemoveAll(originRoot)
-			os.RemoveAll(originBinStore)
+			err := ForceRemoveAll(root)
+			if err != nil {
+				Fail(err.Error())
+			}
+			err = ForceRemoveAll(originRoot)
+			if err != nil {
+				Fail(err.Error())
+			}
+			err = ForceRemoveAll(originBinStore)
+			if err != nil {
+				Fail(err.Error())
+			}
 			// Reset any option changes
 			GlobalOptions = NewOptions()
 		})
@@ -273,7 +282,7 @@ var _ = Describe("Fetch", func() {
 			Expect(filesNotFound).To(BeEquivalentTo(0), "Should be no files not found")
 
 			// Delete again & do single ref
-			os.RemoveAll(GetLocalLOBRoot())
+			ForceRemoveAll(GetLocalLOBRoot())
 			filesTransferred = 0
 			err = Fetch(provider, "origin", []*GitRefSpec{&GitRefSpec{Ref1: "master"}}, false, false, callback)
 			Expect(err).To(BeNil(), "Should be no error fetching")
@@ -284,7 +293,7 @@ var _ = Describe("Fetch", func() {
 			Expect(filesNotFound).To(BeEquivalentTo(0), "Should be no files not found")
 
 			// Test missing on remote, should error but still continue
-			os.RemoveAll(GetLocalLOBRoot())
+			ForceRemoveAll(GetLocalLOBRoot())
 			RemoveLOBsForTest(correctLOBsFeature1, originBinStore)
 			filesTransferred = 0
 			err = Fetch(provider, "origin", []*GitRefSpec{}, false, false, callback)
@@ -395,9 +404,18 @@ var _ = Describe("Fetch", func() {
 		})
 		AfterEach(func() {
 			os.Chdir(oldwd)
-			os.RemoveAll(root)
-			os.RemoveAll(originRoot)
-			os.RemoveAll(originBinStore)
+			err := ForceRemoveAll(root)
+			if err != nil {
+				Fail(err.Error())
+			}
+			err = ForceRemoveAll(originRoot)
+			if err != nil {
+				Fail(err.Error())
+			}
+			err = ForceRemoveAll(originBinStore)
+			if err != nil {
+				Fail(err.Error())
+			}
 			// Reset any option changes
 			GlobalOptions = NewOptions()
 		})

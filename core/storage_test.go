@@ -45,7 +45,10 @@ var _ = Describe("Storage", func() {
 
 			AfterEach(func() {
 				// Delete repo
-				os.RemoveAll(root)
+				err := ForceRemoveAll(root)
+				if err != nil {
+					Fail(err.Error())
+				}
 				os.Chdir(oldwd)
 			})
 
@@ -107,7 +110,10 @@ var _ = Describe("Storage", func() {
 			AfterEach(func() {
 				os.Chdir(oldwd)
 				// Delete repo
-				os.RemoveAll(root)
+				err := ForceRemoveAll(root)
+				if err != nil {
+					Fail(err.Error())
+				}
 			})
 
 			It("finds git dir", func() {
@@ -148,7 +154,10 @@ var _ = Describe("Storage", func() {
 			AfterEach(func() {
 				os.Chdir(oldwd)
 				// Delete repo
-				os.RemoveAll(root)
+				err := ForceRemoveAll(root)
+				if err != nil {
+					Fail(err.Error())
+				}
 			})
 
 			It("finds git dir", func() {
@@ -191,7 +200,10 @@ var _ = Describe("Storage", func() {
 		AfterEach(func() {
 			os.Chdir(oldwd)
 			// Delete repo
-			os.RemoveAll(root)
+			err := ForceRemoveAll(root)
+			if err != nil {
+				Fail(err.Error())
+			}
 		})
 
 		Context("Store small single chunk LOB", func() {
@@ -384,7 +396,10 @@ var _ = Describe("Storage", func() {
 		AfterEach(func() {
 			os.Chdir(oldwd)
 			// Delete repo
-			os.RemoveAll(root)
+			err := ForceRemoveAll(root)
+			if err != nil {
+				Fail(err.Error())
+			}
 		})
 
 		Context("Retrieve small single chunk LOB", func() {
@@ -507,8 +522,14 @@ var _ = Describe("Storage", func() {
 		AfterEach(func() {
 			os.Chdir(oldwd)
 			// Delete repo
-			os.RemoveAll(root)
-			os.RemoveAll(sharedStore)
+			err := ForceRemoveAll(root)
+			if err != nil {
+				Fail(err.Error())
+			}
+			err = ForceRemoveAll(sharedStore)
+			if err != nil {
+				Fail(err.Error())
+			}
 			GlobalOptions.SharedStore = ""
 		})
 
@@ -645,8 +666,14 @@ var _ = Describe("Storage", func() {
 		AfterEach(func() {
 			os.Chdir(oldwd)
 			// Delete repo
-			os.RemoveAll(root)
-			os.RemoveAll(sharedStore)
+			err := ForceRemoveAll(root)
+			if err != nil {
+				Fail(err.Error())
+			}
+			err = ForceRemoveAll(sharedStore)
+			if err != nil {
+				Fail(err.Error())
+			}
 			GlobalOptions.SharedStore = ""
 		})
 
@@ -763,7 +790,10 @@ var _ = Describe("Storage", func() {
 		AfterEach(func() {
 			os.Chdir(origDir)
 			// Delete repo
-			os.RemoveAll(root)
+			err := ForceRemoveAll(root)
+			if err != nil {
+				Fail(err.Error())
+			}
 
 			ChunkSize = savedChunkSize
 		})
