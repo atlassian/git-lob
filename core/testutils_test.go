@@ -506,20 +506,33 @@ func ForceRemoveAll(path string) error {
 // Delete a file, overriding read-only flags
 // BE VERY CAREFUL WITH THIS
 func ForceRemove(path string) error {
-	// os.Remove doesn't always work. Git marks some files within its structure as read-only
-	// and some OS's then don't delete these files & return an error (e.g. Windows)
-	// Also Windows is dumb & keeps locks on files sometimes for a half second or so
 	err := os.Remove(path)
-	if err != nil {
-		// retry after delay first
-		time.Sleep(time.Second)
-		err = os.Remove(path)
-	}
 	if err != nil && runtime.GOOS == "windows" {
-		if path != "" && path != "\\" && util.FileExists(path) {
-			// 'del' isn't an executable, it's a builtin of cmd
-			cmd := exec.Command("cmd", "/C", "del", "/F", "/Q", path)
-			err = cmd.Run()
+		// Windows totally sucks. Sometimes it decides that another process has locked a file, even though it hasn't
+		// Tests will randomly flip between working and not working because of this
+		// A delay & retry often works.
+		retryCount := 0
+		for err != nil && retryCount < 3 {
+			time.Sleep(time.Second)
+			err = os.Remove(path)
+			retryCount++
+		}
+		if err != nil {
+			// Last attempt, try a force delete
+			if util.FileExists(path) {
+				// 'del' isn't an executable, it's a builtin of cmd
+				cmd := exec.Command("cmd", "/C", "del", "/F", "/Q", path)
+				var out []byte
+				out, err = cmd.CombinedOutput()
+				// del return code is not reliable, check for output
+				txtOut := strings.TrimSpace(string(out))
+				if txtOut != "" {
+					// Must warn tests that Windows is being a dick
+					// This seems to happen *sometimes* when files are copied from temp to final LOB store location
+					// you can't delete them immediately for some reason (ForceRemoveAll seems to work later)
+					return fmt.Errorf("Can't delete file %v. This will break the test, but Windows does it randomly. You can probably ignore this, re-test with -focus", path)
+				}
+			}
 		}
 	}
 
