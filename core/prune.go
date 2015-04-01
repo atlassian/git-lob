@@ -68,6 +68,7 @@ func getAllLOBSHAsInDir(lobroot string) (util.StringSet, error) {
 	if err != nil {
 		return ret, errors.New(fmt.Sprintf("Unable to open LOB root: %v\n", err))
 	}
+	defer rootf.Close()
 	dir1, err := rootf.Readdir(0)
 	if err != nil {
 		return ret, errors.New(fmt.Sprintf("Unable to read first level LOB dir: %v\n", err))
@@ -79,6 +80,7 @@ func getAllLOBSHAsInDir(lobroot string) (util.StringSet, error) {
 			if err != nil {
 				return ret, errors.New(fmt.Sprintf("Unable to open LOB dir: %v\n", err))
 			}
+			defer dir1f.Close()
 			dir2, err := dir1f.Readdir(0)
 			if err != nil {
 				return ret, errors.New(fmt.Sprintf("Unable to read second level LOB dir: %v\n", err))
@@ -90,6 +92,7 @@ func getAllLOBSHAsInDir(lobroot string) (util.StringSet, error) {
 					if err != nil {
 						return ret, errors.New(fmt.Sprintf("Unable to open LOB dir: %v\n", err))
 					}
+					defer dir2f.Close()
 					lobnames, err := dir2f.Readdirnames(0)
 					if err != nil {
 						return ret, errors.New(fmt.Sprintf("Unable to read innermost LOB dir: %v\n", err))

@@ -19,6 +19,8 @@ import (
 // and still use _test.go to avoid polluting the non-testing namespace. Minimal duplication is a lesser evil than putting these utility functions
 // in the non-test build
 func CreateGitRepoForTest(path string) {
+	// in case not previously deleted cleanly
+	ForceRemoveAll(path)
 	cmd := exec.Command("git", "init", path)
 	err := cmd.Run()
 	if err != nil {

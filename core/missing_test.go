@@ -64,11 +64,11 @@ var _ = Describe("Missing", func() {
 		// Case 1. placeholder for missing data (small file and missing chunk) - blamed
 		// ./file1.bin
 		Expect(ioutil.WriteFile(setupInputs[2].Files[0], []byte(getLOBPlaceholderContent(setupOutputs[2].LobSHAs[0])), 0644)).To(BeNil())
-		Expect(os.Remove(GetLocalLOBMetaPath(setupOutputs[2].LobSHAs[0]))).To(BeNil())     // remove meta
-		Expect(os.Remove(GetLocalLOBChunkPath(setupOutputs[2].LobSHAs[0], 0))).To(BeNil()) // remove chunk 1
+		Expect(ForceRemove(GetLocalLOBMetaPath(setupOutputs[2].LobSHAs[0]))).To(BeNil())     // remove meta
+		Expect(ForceRemove(GetLocalLOBChunkPath(setupOutputs[2].LobSHAs[0], 0))).To(BeNil()) // remove chunk 1
 		// ./fld/large/large1.bin
 		Expect(ioutil.WriteFile(setupInputs[3].Files[0], []byte(getLOBPlaceholderContent(setupOutputs[3].LobSHAs[0])), 0644)).To(BeNil())
-		Expect(os.Remove(GetLocalLOBChunkPath(setupOutputs[3].LobSHAs[0], 1))).To(BeNil()) // remove chunk 2 (partial)
+		Expect(ForceRemove(GetLocalLOBChunkPath(setupOutputs[3].LobSHAs[0], 1))).To(BeNil()) // remove chunk 2 (partial)
 
 		// Case 2. placeholder for corrupt data
 		// for this one we just mess up the metadata

@@ -502,3 +502,27 @@ func ForceRemoveAll(path string) error {
 
 	return err
 }
+
+// Delete a file, overriding read-only flags
+// BE VERY CAREFUL WITH THIS
+func ForceRemove(path string) error {
+	// os.Remove doesn't always work. Git marks some files within its structure as read-only
+	// and some OS's then don't delete these files & return an error (e.g. Windows)
+	// Also Windows is dumb & keeps locks on files sometimes for a half second or so
+	err := os.Remove(path)
+	if err != nil {
+		// retry after delay first
+		time.Sleep(time.Second)
+		err = os.Remove(path)
+	}
+	if err != nil && runtime.GOOS == "windows" {
+		if path != "" && path != "\\" && util.FileExists(path) {
+			// 'del' isn't an executable, it's a builtin of cmd
+			cmd := exec.Command("cmd", "/C", "del", "/F", "/Q", path)
+			err = cmd.Run()
+		}
+	}
+
+	return err
+
+}
