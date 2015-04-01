@@ -515,6 +515,10 @@ func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
 			break
 		}
 	}
+	if outf != nil {
+		// Close any dangling chunk
+		outf.Close()
+	}
 	defer func() {
 		// Clean up any temporaries on error or not used
 		for _, f := range chunkFilenames {
