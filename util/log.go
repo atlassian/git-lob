@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"strings"
 )
@@ -214,6 +215,12 @@ func LogConsoleSpinner(prefix string) {
 
 // Finish a spinner progress with a check mark and a newline
 func LogConsoleSpinnerFinish(prefix string) {
-	LogConsoleOverwrite(fmt.Sprintf("%v%c\n", prefix, '\u2714'), len(prefix)+1)
-	spinnerCycle = (spinnerCycle + 1) % len(spinnerChars)
+	if runtime.GOOS == "windows" {
+		// Windows console sucks, can't do nice check mark except in ConEmu (not cmd or git bash)
+		// So play it safe & boring
+		LogConsoleOverwrite(fmt.Sprintf("%v%v\n", prefix, "Done"), len(prefix)+1)
+	} else {
+		LogConsoleOverwrite(fmt.Sprintf("%v%c\n", prefix, '\u2714'), len(prefix)+1)
+	}
+	spinnerCycle = 0
 }
