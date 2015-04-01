@@ -14,9 +14,9 @@ import (
 
 var _ = Describe("Storage", func() {
 
-	root := path.Join(os.TempDir(), "StorageTest")
-	separateGitDir := path.Join(os.TempDir(), "StorageTestGitDir")
-	sharedStore := path.Join(os.TempDir(), "StorageTest_SharedStore")
+	root := filepath.Join(os.TempDir(), "StorageTest")
+	separateGitDir := filepath.Join(os.TempDir(), "StorageTestGitDir")
+	sharedStore := filepath.Join(os.TempDir(), "StorageTest_SharedStore")
 	folders := []string{
 		filepath.Join(root, "folder1"),
 		filepath.Join(root, "folder2"),
