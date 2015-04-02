@@ -54,16 +54,6 @@ type SyncProvider interface {
 // return true to abort the process for this and all other files in the batch
 type SyncProgressCallback func(fileInProgress string, progressType util.ProgressCallbackType, bytesDone, totalBytes int64) (abort bool)
 
-// Providers implementing this interface provide smart sync capabilities
-// These providers require server-side processing and are free to store data how they like
-// so long as they can fulfil the interface. Provides support for binary deltas to
-// speed up data transfers in both directions
-type SmartSyncProvider interface {
-	SyncProvider
-	// Just to make this different
-	PlaceholderTODO()
-}
-
 var (
 	syncProviders map[string]SyncProvider = make(map[string]SyncProvider, 0)
 )
