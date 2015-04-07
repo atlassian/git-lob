@@ -44,3 +44,9 @@ func GetConnectionFactory(u *url.URL) ConnectionFactory {
 	}
 	return nil
 }
+
+// Install the core providers
+func InitCoreConnectionFactories() {
+	// Only SSH for now
+	RegisterSshConnectionFactory()
+}
