@@ -3,7 +3,6 @@ package providers
 import (
 	"bitbucket.org/sinbad/git-lob/util"
 	"fmt"
-	"io"
 	"net/url"
 )
 
@@ -18,10 +17,8 @@ type SmartSyncProvider struct {
 	remoteName string
 	// The parsed url we're using
 	serverUrl *url.URL
-	// Reader which we use to pull bytes from the server
-	reader io.ReadCloser
-	// Writer which we use to send bytes to the server
-	writer io.WriteCloser
+	// The connection which is providing read/write/close functions
+	conn Connection
 	// capabilities which the server has indicated it supports
 	serverCaps []string
 	// capabilities which are enabled
@@ -88,7 +85,7 @@ func (self *SmartSyncProvider) retrieveUrl(remoteName string) error {
 // Internal method to make sure we've established a connection
 // we re-use connections where possible (TODO disconnection issues?)
 func (self *SmartSyncProvider) connect(remoteName string) error {
-	if remoteName != self.remoteName || self.reader == nil || self.writer == nil {
+	if remoteName != self.remoteName || self.conn == nil {
 		if self.serverUrl == nil {
 			err := self.retrieveUrl(remoteName)
 			if err != nil {
@@ -96,6 +93,8 @@ func (self *SmartSyncProvider) connect(remoteName string) error {
 			}
 		}
 		// TODO, use serverURL to establish connection via connection factory
+
+		self.remoteName = remoteName
 
 		err := self.determineCaps()
 		if err != nil {
