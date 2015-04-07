@@ -1,23 +1,21 @@
-Dependencies
-------------
+# Dependencies #
 
-Runtime:
+## Runtime: ##
 
-github.com/mitchellh/goamz & fork github.com/sinbad/goamz
-   AWS library for Go. LGPLv3 with static/dynamic linking exception
-github.com/vaughan0/go-ini 
-   Dependency of goamz. MIT license
+* [Goamz (forked)](https://github.com/sinbad/goamz) (Original: https://github.com/mitchellh/goamz)
+  AWS library for Go. LGPLv3 with static/dynamic linking exception
+* [Go-ini](https://github.com/vaughan0/go-ini)
+  Dependency of goamz. MIT license
 
-Build / test:
+## Build / test: ##
 
-github.com/onsi/ginkgo
+* [Ginkgo](https://github.com/onsi/ginkgo)
   Testing library. MIT license
-github.com/onsi/gomega
+* [Gomega](https://github.com/onsi/gomega)
   Matcher library for Ginkgo. MIT license
 
 
-A note about godep
-------------------
+## A note about godep ##
 
 In order to simplify setup, all 3rd-party dependencies are captured inside
 this repo using 'godep save -r'. See https://github.com/tools/godep
@@ -37,37 +35,44 @@ alternative which is to add _workspace to your GOPATH, or to prefix all
 go commands with godep e.g. 'godep go build'. Rewriting the imports just
 means everything works as if nothing happened. 
 
-Referencing dependencies
-------------------------
+## Referencing dependencies ##
 
 Remember to reference *existing* dependencies using their local workspace
 path, i.e.
-  import "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/foo/bar"
+```
+import "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/foo/bar"
+```
 and not
-  import "foo/bar"
+```
+import "foo/bar"
+```
 
 *New* dependencies are different though, see below.
 
-Adding a new dependency
------------------------
+## Adding a new dependency ##
 
 To add a new dependency foo/bar:
-  go get foo/bar
-  [reference foo/bar in our source code]
-  godep save -r
+```
+go get foo/bar
+```
+[reference foo/bar in our source code]
+```
+godep save -r
+```
 
 Note that while adding the dependency you use the external package name foo/bar
 but that after 'godep save -r' this is re-written to "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/foo/bar", which you should use from then on.
 
 Referencing it as its original package name is required pre-godep save.
 
-Updating an existing dependency
--------------------------------
+## Updating an existing dependency ##
 
 To update the existing packages
-  go get -u foo/bar (or customise & commit the package yourself)
-  godep update foo/bar/...
-  godep save -r
+```
+go get -u foo/bar (or customise & commit the package yourself)
+godep update foo/bar/...
+godep save -r
+```
 
 Note the use of the '...' wildcard in the 'godep update' call, this is required
 for nested packages & is generally a good idea to be sure. 

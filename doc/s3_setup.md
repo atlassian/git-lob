@@ -1,5 +1,4 @@
-S3 Recommended Setup
---------------------
+# S3 Recommended Setup # 
 
 By default all resources in S3 are private to the account. While you can assign
 ACLs explicitly to allow other people access, you have to do this with each
@@ -12,15 +11,13 @@ objects they create are automatically owned by the root account. This means
 you always have control over the objects created by the team from this root
 account.
 
-https://docs.aws.amazon.com/AmazonS3/latest/dev/access-control-overview.html
+[Amazon's documentation on access control](https://docs.aws.amazon.com/AmazonS3/latest/dev/access-control-overview.html)
 
-Create a bucket
----------------
+## Create a bucket ##
 
 First, just create a bucket in your root S3 account the usual way. 
 
-Create a group
---------------
+## Create a group ##
 
 1. Open the AWS console as the root account
 2. Click Identity and Access Management
@@ -33,8 +30,7 @@ Create a group
    any boxes, just click Next
 7. Proceed to confirm the group
 
-Give specific bucket permissions to the group
----------------------------------------------
+## Give specific bucket permissions to the group ##
 
 If you didn't grant access to every bucket in step 6 above, you need to add an
 Inline Policy in the group details (at the bottom of the group details) to allow
@@ -45,19 +41,18 @@ this group to have permissions to your git-lob bucket.
 3. Effect: Allow
    AWS Service: Amazon S3
    Actions: All Actions
-   Amazon Resource Name (ARN): arn:aws:s3:::<bucketname>
+   Amazon Resource Name (ARN): arn:aws:s3:::*[bucket_name]*
 4. Click Add Statement then Next
 5. Give it a meaningful name e.g. 'Readwrite_git-lob' then Apply Policy 
 
-Create read-only permissions if you want
-----------------------------------------
+##Create read-only permissions if you want ##
 
 If you want to, you can either open permissions read-only to the bucket to 
 everyone, or you can repeat the steps above to give read-only access to 
 another group that you create. 
 
-Create users
-------------
+## Create users ##
+
 You want to create a user underneath this root account for everyone who will
 be granted access - including you. You should use your user credentials
 rather than your root credentials in all normal usage.
@@ -70,8 +65,7 @@ rather than your root credentials in all normal usage.
    read/write group you created earlier (or the read-only group if you added 
    one)
 
-Choosing what credentials to use at runtime
--------------------------------------------
+## Choosing what credentials to use at runtime ##
 
 There's a good chance that at least one of your users will end up having more
 than one S3 account so will need to choose which one to use. To manage this, 
@@ -82,9 +76,9 @@ different profiles, the default settings being under [default]
 You can choose which profile to use at any given time multiple ways:
 
 1. Set it per remote in .git/config:
-   git config remote.<remote>.git-lob-s3-profile <profile>
+   git config remote.*[remote_name]*.git-lob-s3-profile *[profile_name]*
 2. Set it per repo or globally for git only
-   git config git-lob.s3-profile <profile>
+   git config git-lob.s3-profile *[profile_name]*
 3. Set AWS_PROFILE in your environment
 
 So you could put the new credentials for this user into a new section of your
