@@ -29,9 +29,8 @@ var (
 // Registers an instance of a ConnectionFactory for creating connections
 // Must only be called from the main thread, not thread safe
 // Later factories registered will take precedence over earlier ones (including core)
-func RegisterConnectionFactory(f ConnectionFactory) error {
+func RegisterConnectionFactory(f ConnectionFactory) {
 	connectionFactories = append(connectionFactories, f)
-	return nil
 }
 
 // Retrieve the best ConnectionFactory for a given URL (or nil)
