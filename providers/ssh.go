@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -21,6 +22,7 @@ type SshConnection struct {
 type SshConnectionFactory struct {
 }
 
+// Standardise bare URLs of the form user@host.com:path/to/repo
 func (*SshConnectionFactory) cleanupBareUrl(u *url.URL) *url.URL {
 	// Support ssh://user@host.com/path/to/repo and user@host.com:path/to/repo
 	// The latter is entirely stored in the 'Path' field of url.URL though, so prefix
@@ -41,6 +43,23 @@ func (*SshConnectionFactory) cleanupBareUrl(u *url.URL) *url.URL {
 		}
 	}
 	return u
+}
+
+// Pull out the host & port for use on the command line from an already cleaned URL
+func (*SshConnectionFactory) getHostAndPort(cleanedUrl *url.URL) (host, port string) {
+	// Host includes host & port when custom ports are used
+	// Note, not trying to validate host here, simple approach (this simple regex supports non-FQ and IP addresses as a bonus)
+	// this would allow non-RFC compliant domain names but we don't care
+	regex := regexp.MustCompile(`^([^\:]+)(?:\:(\d+))?$`)
+	host = ""
+	port = ""
+	if match := regex.FindStringSubmatch(cleanedUrl.Host); match != nil {
+		host = match[1]
+		if len(match) > 2 {
+			port = match[2]
+		}
+	}
+	return
 }
 
 func (self *SshConnectionFactory) WillHandleUrl(u *url.URL) bool {
