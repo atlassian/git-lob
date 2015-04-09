@@ -1,4 +1,4 @@
-package providers
+package smart
 
 import (
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
@@ -10,7 +10,7 @@ var _ = Describe("SSH", func() {
 
 	Context("Low level URL tests", func() {
 
-		factory := &SshConnectionFactory{}
+		factory := &SshTransportFactory{}
 		It("Correctly parses bare URLs", func() {
 			// Make sure we can handle all forms of SSH URL
 			// Bare url with no port and relative path

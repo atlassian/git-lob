@@ -1,4 +1,4 @@
-package providers
+package smart
 
 import (
 	"bitbucket.org/sinbad/git-lob/util"
@@ -8,17 +8,18 @@ import (
 
 // The smart sync provider implements everything the standard SyncProvider does, but in addition
 // provides methods to exchange binary deltas rather than entire files (as chunks).
-// It performs all of its work over I/O streams, and requires a corresponding server implementation
-// at the other end (reference implementation in package 'git-lob-server').
-// This implementation doesn't handle how that connection is established & authenticated, it just
-// deals with the underlying communication once the connection is established.
+// It can operate in 2 modes; 'persistent' mode where a connection is re-used for many requests
+// (only possible with options like SSH), or 'transient' mode where all requests & responses are
+// separate round-trips (e.g. REST). The Transport interface provides the abstraction required
+// for that.
 type SmartSyncProvider struct {
-	// The remote we're working with right now
+	// The remote we're working with right now (for cached info)
 	remoteName string
 	// The parsed url we're using
 	serverUrl *url.URL
-	// The connection which is providing read/write/close functions
-	conn Connection
+
+	// The transport which is providing the underlying operations
+	transport Transport
 	// capabilities which the server has indicated it supports
 	serverCaps []string
 	// capabilities which are enabled
@@ -36,8 +37,8 @@ func (*SmartSyncProvider) HelpTextSummary() string {
 }
 
 func (*SmartSyncProvider) HelpTextDetail() string {
-	return `The "smart" provider transfers files solely by talking to service hosted on
-the remote binary store which can communicate using the git-lob protocol. Many
+	return `The "smart" provider transfers files by talking to service hosted on
+the remote binary store which can communicate using a git-lob protocol. Many
 transports are supportable so long as client and server can establish comms. 
 The reference implementation git-lob-server supports communicating over SSH.
 
@@ -85,14 +86,20 @@ func (self *SmartSyncProvider) retrieveUrl(remoteName string) error {
 // Internal method to make sure we've established a connection
 // we re-use connections where possible (TODO disconnection issues?)
 func (self *SmartSyncProvider) connect(remoteName string) error {
-	if remoteName != self.remoteName || self.conn == nil {
+	if remoteName != self.remoteName || self.transport == nil {
+		if self.transport != nil {
+			self.transport.Release()
+			self.transport = nil
+		}
+		self.serverCaps = nil
+		self.enabledCaps = nil
 		if self.serverUrl == nil {
 			err := self.retrieveUrl(remoteName)
 			if err != nil {
 				return err
 			}
 		}
-		// TODO, use serverURL to establish connection via connection factory
+		// TODO, use serverURL to establish transport
 
 		self.remoteName = remoteName
 
@@ -111,7 +118,7 @@ func (self *SmartSyncProvider) determineCaps() error {
 }
 
 func (self *SmartSyncProvider) Upload(remoteName string, filenames []string, fromDir string,
-	force bool, callback SyncProgressCallback) error {
+	force bool, callback TransportProgressCallback) error {
 
 	err := self.connect(remoteName)
 	if err != nil {
@@ -123,7 +130,7 @@ func (self *SmartSyncProvider) Upload(remoteName string, filenames []string, fro
 }
 
 func (self *SmartSyncProvider) Download(remoteName string, filenames []string, toDir string,
-	force bool, callback SyncProgressCallback) error {
+	force bool, callback TransportProgressCallback) error {
 
 	err := self.connect(remoteName)
 	if err != nil {
@@ -150,4 +157,10 @@ func (self *SmartSyncProvider) FileExistsAndIsOfSize(remoteName, filename string
 	}
 	// TODO
 	return false
+}
+
+// Init core smart providers
+func InitCoreProviders() {
+	// SSH transport
+	RegisterSshTransportFactory()
 }

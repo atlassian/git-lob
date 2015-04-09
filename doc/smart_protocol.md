@@ -2,20 +2,31 @@
 Smart Protocol definition
 =========================
 
-The smart protocol is a wire protocol that assumes a connection has been established between the client and a smart server application, and that there are reader and writer streams to go between them. Authentication and connection are handled elsewhere.
+The smart protocol is a system by which the git-lob client and server exchange data, including potentially binary deltas, in order to fulfil what the 'dumb' sync protocol does just using file operations, more efficiently.
 
 The exchange in principle
 -------------------------
 
-The protocol supports a series of exchanges so that the same communication pipe can be used for multiple operations. 
+The protocol supports a series of request/response pairs. The protocol does not assume whether or not those requests are issued over a single connection (e.g. a persistent ssh connection to a server side tool), or whether each one is issued as a separate request/response (or even broken into multiple requests/responses internally). Similarly the transport format is not predefined. Each implementor of the smart protocol can use a low-level transport format of its choosing. 
 
-All exchanges of human-readable information, including base requests and responses, are in [JSON-RPC 2.0 format](http://www.jsonrpc.org/specification).
+As such the providers.smart.Transport class abstracts to the level of individual requests, and each implementation of Transport can fulfil these as it sees fit. This generally boils down to 2 broad categories: persistent transports and transient transports.
 
-However when binary content needs to be exchanged, rather than embed the data in a JSON-RPC structure which would require costly conversion to/from base64 or similar, raw binary content will be sent 'in between' JSON-RPC messages, following on from requests or acknowledgements. This is not strictly standard but it works much better both in terms of processing overhead and use of bandwidth. So a server response for a proposed upload from the client would be a kind of 'go ahead' signal, after which the client should transfer the number of bytes advertised in the request in a raw stream. The server will then respond with another confirmation once all the bytes are received. 
+Persistent transport
+--------------------
+Persistent transports establish a connection once (barring any errors or timeouts) and perform a series of operations over that same connection, avoiding the need to incur the overhead of negotiating afresh on each request. The most common example of this is using an SSH connection with a server-side executable and using it for multiple exchanges of data. 
 
-This is possible because:
-1. We assume each connection has dedicated & persistent in/out streams
-2. We assume the server component can handle raw data transfers (we are not limited by architectural constraints / higher level protocol wrappers)
+We provide a single PersistentTransport implementation which has pluggable I/O streams; initially just SSH but any connection which provides an io.ReadWriteCloser can serve as a connection.
+
+The persistent transport sends descriptive data in [JSON-RPC 2.0 format](http://www.jsonrpc.org/specification).
+
+However when binary content needs to be exchanged, rather than embed the data in a JSON-RPC structure which would require costly conversion to/from base64 or similar, raw binary content will be downloaded as a response to a JSON-RPC request, or uploaded directly following a confirmation response from the server. This is not strictly standard but it works much better both in terms of processing overhead and use of bandwidth. So a server response for a proposed upload from the client would be a kind of 'go ahead' signal, after which the client should transfer the number of bytes advertised in the request in a raw stream. The server will then respond with another confirmation once all the bytes are received. 
+
+Wrapping in JSON or even in lower level wrappers like protocol buffers would make binary streaming much less efficient, since these systems tend to require all the data to be present to decode a record. By streaming the binary directly we free the server and client from that, so they can stream binary content to files directly if they want.
+
+Transient transport
+-------------------
+Transient transports don't maintain a connection between requests, meaning each one goes through the full stack. This is a requirement for REST and similar back-ends (not yet implemented). In this case, the protocol will be wrapped as appropriate for that transport (e.g. REST may translate the method to an endpoint and request arguments to URL params).
+Because each transient transport will package this differently, the protocol is not predefined as is it with the persistent transports.
 
 File exchanges
 --------------
@@ -73,15 +84,18 @@ Protocol methods
 
 |||
 |-----------|-------------|
-|**Method**     | __download_file__|
-|**Purpose**    | Download a single file (metadata or chunk). This does not deal with binary deltas, only with the simple chunked upload of big files. However the server is free to store these however it likes.|
+|**Method**     | __download_file_prepare__|
+|**Purpose**    | Prepare to download a single file (metadata or chunk). This does not deal with binary deltas, only with the simple chunked download of big files. However the server is free to store these however it likes.|
 |**Params**     | lobSHA (string) - the SHA of the binary file in question|
 |               | type (string) - "meta" or "chunk"|
 |               | chunk_idx (Number) - only applicable to chunks, the chunk number (16MB)|
-|               | size (Number) - size in bytes|
-|**Result**     | "OK" if server has the data to send.|
-|**POST**       | Immediately after Result:"OK", a BINARY STREAM of bytes will be sent by the server to the client of length 'size' above. The client must read all the bytes.|
-|**POST Result**| No post result is required to be sent from client to server on receipt of all the bytes (server doesn't care). After all bytes have been read the server is ready for a new command.|
+|**Result**     | "OK" and byte size if server has the data to send. Client should follow up with __download_file_confirm__|
+
+|||
+|-----------|-------------|
+|**Method**     | __download_file_confirm__|
+|**Purpose**    | Download a single file (metadata or chunk). This does not deal with binary deltas, only with the simple chunked download of big files. However the server is free to store these however it likes.|
+|**POST**       | A BINARY STREAM of bytes will be sent by the server to the client of length 'size' as reported from __download_file_prepare__. The client must read all the bytes.|
 
 |||
 |-----------|-------------|
@@ -104,20 +118,18 @@ Protocol methods
 
 |||
 |-----------|-------------|
-|**Method**     | __generate_lob_delta__|
+|**Method**     | __download_lob_delta_prepare__|
 |**Purpose**    | Ask the server to generate a binary patch between 2 lobs which we know it has (or re-use an existing delta).|
 |**Params**     | baseLobSHA (string) - the SHA of the binary file content to use as a base|
 |               | targetLobSHA (string) - the SHA of the binary file content we want to reconstruct from base + delta|
 |**Result**     | size (Number) - size in bytes of delta if server has generated it ready to to send. Server should keep this calculated delta for a while, at least 1 day (maybe longer to re-use for multiple clients). 0 if there was a problem (error identifies). The client should subsequently request the calculated delta if it wants it (may choose not to if borderline)|
+|               | metadata (embedded JSON metadata struct) - the content of the meta file embedded in result which the client can save, to go with the content which will be downloaded from __download_lob_delta_confirm__|
 
 |||
 |-----------|-------------|
-|**Method**     | __download_lob_delta__|
-|**Purpose**    | Ask to download a binary patch between 2 lobs which has already been calculated with __generate_lob_delta__. This method is separate from __generate_lob_delta__ so client explicitly chooses whether to use the delta or not once it knows how big it is; whether we bother depends on size & client transfer speed (deltas are not resumable)|
+|**Method**     | __download_lob_delta_confirm__|
+|**Purpose**    | Ask to download a binary patch between 2 lobs which has already been calculated with __download_lob_delta_prepare__. This method is separate so client explicitly chooses whether to use the delta or not once it knows how big it is; whether we bother depends on size & client transfer speed (deltas are not resumable). Also because we need to keep JSON and binary data separate|
 |**Params**     | baseLobSHA (string) - the SHA of the binary file content to use as a base|
 |               | targetLobSHA (string) - the SHA of the binary file content we want to reconstruct from base + delta|
-|**Result**     | size (Number) - size in bytes of the delta that's going to be sent|  
-|               | metadata (embedded JSON metadata struct) - the content of the _meta file embedded in result which the client can save, to go with the content which will be coming next.|
-|**POST**       | Immediately after a non-error result, a BINARY STREAM of bytes will be sent by the server to the client of length 'size' as indicated above. The client must read all the bytes.|
-|**POST Result**| No post result is required to be sent from client to server on receipt of all the bytes (server doesn't care). After all bytes have been read the server is ready for a new command. The client must generate the revised target LOB from the delta, check the SHA is correct then split it into chunks|
+|**POST**       | A BINARY STREAM of bytes will be sent by the server to the client of length 'size' as indicated by __download_lob_delta_prepare__. The client must read all the bytes.|
 

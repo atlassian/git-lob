@@ -1,4 +1,4 @@
-package providers
+package smart
 
 import (
 	"fmt"
@@ -10,28 +10,14 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"time"
 )
 
-// SSH connection to smart server
-// Works by invoking ssh/plink/tortoise_plink and connecting stdout/stdin
-type SshConnection struct {
-	// The command which is running ssh
-	cmd *exec.Cmd
-	// Streams for communicating
-	stdin  io.WriteCloser
-	stdout io.ReadCloser
-	stderr io.ReadCloser
-	// The timeout period for operations (not automatic when communicating with Cmd)
-	timeout time.Duration
-}
-
 // factory for creating SSH connections
-type SshConnectionFactory struct {
+type SshTransportFactory struct {
 }
 
 // Standardise bare URLs of the form user@host.com:path/to/repo
-func (*SshConnectionFactory) cleanupBareUrl(u *url.URL) *url.URL {
+func (*SshTransportFactory) cleanupBareUrl(u *url.URL) *url.URL {
 	// Support ssh://user@host.com/path/to/repo and user@host.com:path/to/repo
 	// The latter is entirely stored in the 'Path' field of url.URL though, so prefix
 	if u.Scheme == "" && u.Path != "" {
@@ -54,7 +40,7 @@ func (*SshConnectionFactory) cleanupBareUrl(u *url.URL) *url.URL {
 }
 
 // Pull out the host & port for use on the command line from an already cleaned URL
-func (*SshConnectionFactory) getHostAndPort(cleanedUrl *url.URL) (host, port string) {
+func (*SshTransportFactory) getHostAndPort(cleanedUrl *url.URL) (host, port string) {
 	// Host includes host & port when custom ports are used
 	// Note, not trying to validate host here, simple approach (this simple regex supports non-FQ and IP addresses as a bonus)
 	// this would allow non-RFC compliant domain names but we don't care
@@ -70,7 +56,7 @@ func (*SshConnectionFactory) getHostAndPort(cleanedUrl *url.URL) (host, port str
 	return
 }
 
-func (self *SshConnectionFactory) WillHandleUrl(u *url.URL) bool {
+func (self *SshTransportFactory) WillHandleUrl(u *url.URL) bool {
 	if u.Scheme == "ssh" {
 		return true
 	}
@@ -79,7 +65,7 @@ func (self *SshConnectionFactory) WillHandleUrl(u *url.URL) bool {
 	newu := self.cleanupBareUrl(u)
 	return newu.Scheme == "ssh"
 }
-func (self *SshConnectionFactory) Connect(u *url.URL) (Connection, error) {
+func (self *SshTransportFactory) Connect(u *url.URL) (Transport, error) {
 	ssh := os.Getenv("GIT_SSH")
 	isPlink := strings.EqualFold(filepath.Base(ssh), "plink")
 	isTortoise := strings.EqualFold(filepath.Base(ssh), "tortoiseplink")
@@ -132,18 +118,32 @@ func (self *SshConnectionFactory) Connect(u *url.URL) (Connection, error) {
 		return nil, fmt.Errorf("Unable to start ssh command: %v", err.Error())
 	}
 
-	return &SshConnection{
-		cmd:     cmd,
-		stdin:   inp,
-		stdout:  outp,
-		stderr:  errp,
-		timeout: time.Second * 30,
+	conn := &SshConnection{
+		cmd:    cmd,
+		stdin:  inp,
+		stdout: outp,
+		stderr: errp,
+	}
+
+	return &PersistentTransport{
+		Connection: conn,
 	}, nil
 
 }
 
-func RegisterSshConnectionFactory() {
-	RegisterConnectionFactory(&SshConnectionFactory{})
+func RegisterSshTransportFactory() {
+	RegisterTransportFactory(&SshTransportFactory{})
+}
+
+// Underlying SSH connection to smart server, for use with PersistentTransport
+// Works by invoking ssh/plink/tortoise_plink and connecting stdout/stdin
+type SshConnection struct {
+	// The command which is running ssh
+	cmd *exec.Cmd
+	// Streams for communicating
+	stdin  io.WriteCloser
+	stdout io.ReadCloser
+	stderr io.ReadCloser
 }
 
 // SSH Connection implementation
