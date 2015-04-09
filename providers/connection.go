@@ -3,15 +3,12 @@ package providers
 import (
 	"io"
 	"net/url"
-	"time"
 )
 
 // Our definition of the interface we need to communicate with a smart server
 type Connection interface {
 	// Import methods from ReadWriteCloser
 	io.ReadWriteCloser
-	// But add timeout (same signature as net.Conn so direct connections can be used if wanted)
-	SetDeadline(t time.Time) error
 }
 
 // Interface for a factory which creates connections for a type of service
