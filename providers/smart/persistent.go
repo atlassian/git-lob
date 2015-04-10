@@ -27,19 +27,26 @@ type JsonRequest struct {
 	// Go's JSON support only uses public fields but JSON-RPC requires lower case
 	Id     int
 	Method string
+	Params interface{}
 }
 type JsonResponse struct {
-	Id    int
-	Error interface{}
+	Id     int
+	Error  interface{}
+	Result json.RawMessage // can be many types so delay parsing
 }
 
 var (
 	latestRequestId int = 1
 )
 
-func InitJsonRequest(req *JsonRequest) {
-	req.Id = latestRequestId
+func NewJsonRequest(method string, params interface{}) *JsonRequest {
+	ret := &JsonRequest{
+		Id:     latestRequestId,
+		Method: method,
+		Params: params,
+	}
 	latestRequestId++
+	return ret
 }
 
 // Create a new persistent transport & connect
@@ -60,8 +67,9 @@ func (self *PersistentTransport) Release() {
 }
 
 // Perform a full JSON-RPC call with JSON request and response
-func (self *PersistentTransport) doFullJSONRequestResponse(req interface{}, response interface{}) error {
+func (self *PersistentTransport) doFullJSONRequestResponse(method string, params interface{}, result interface{}) error {
 
+	req := NewJsonRequest(method, params)
 	err := self.sendJSONRequest(req)
 	if err != nil {
 		return err
@@ -71,11 +79,23 @@ func (self *PersistentTransport) doFullJSONRequestResponse(req interface{}, resp
 	if err != nil {
 		return fmt.Errorf("Unable to read response from server: %v", err.Error())
 	}
-	err = json.Unmarshal(jsonbytes, response)
+	response := JsonResponse{}
+	err = json.Unmarshal(jsonbytes, &response)
 	if err != nil {
 		return fmt.Errorf("Unable to decode JSON response from server: %v\n%v", string(jsonbytes), err.Error())
 	}
 	// response is populated now
+	err = self.checkJSONResponse(req, &response)
+	if err != nil {
+		return err
+	}
+	// response.Result is left as raw since it depends on the type of the expected result
+	// so now unmarshal the nested part
+	err = json.Unmarshal(response.Result, &result)
+	if err != nil {
+		return fmt.Errorf("Unable to decode type-specific Result from server: %v\n%v", string(response.Result), err.Error())
+	}
+	// result is now populated
 	return nil
 
 }
@@ -83,8 +103,9 @@ func (self *PersistentTransport) doFullJSONRequestResponse(req interface{}, resp
 // Perform a JSON request which just retrieves a raw fixed-length response, a precursor to reading a raw stream of bytes
 // We don't use a JSON response becaue the length is undetermined and parsing it out of a stream which will contain raw
 // bytes afterwards is unreliable
-func (self *PersistentTransport) doJSONRequestRawResponse(req interface{}, responseLength int) ([]byte, error) {
+func (self *PersistentTransport) doJSONRequestRawResponse(method string, params interface{}, responseLength int) ([]byte, error) {
 
+	req := NewJsonRequest(method, params)
 	err := self.sendJSONRequest(req)
 	if err != nil {
 		return nil, err
@@ -134,25 +155,17 @@ func (self *PersistentTransport) checkJSONResponse(req *JsonRequest, resp *JsonR
 type ConnectionError error
 
 type QueryCapsRequest struct {
-	JsonRequest
 }
 
 type QueryCapsResponse struct {
-	JsonResponse
 	Caps []string
 }
 
 // Ask the server for a list of capabilities
 func (self *PersistentTransport) QueryCaps() ([]string, error) {
-	req := &QueryCapsRequest{}
-	InitJsonRequest(&req.JsonRequest)
-	req.Method = "QueryCaps"
+	params := QueryCapsRequest{}
 	resp := QueryCapsResponse{}
-	err := self.doFullJSONRequestResponse(req, &resp)
-	if err != nil {
-		return nil, err
-	}
-	err = self.checkJSONResponse(&req.JsonRequest, &resp.JsonResponse)
+	err := self.doFullJSONRequestResponse("QueryCaps", &params, &resp)
 	if err != nil {
 		return nil, err
 	}

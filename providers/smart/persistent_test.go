@@ -13,31 +13,30 @@ var _ = Describe("Persistent Transport", func() {
 
 	Context("Test JSON marshalling", func() {
 		type TestStruct struct {
-			JsonRequest
 			Name      string
 			Something int
 		}
 		It("Encodes JSON requests correctly", func() {
 
-			req := &TestStruct{Name: "Steve", Something: 99}
-			InitJsonRequest(&req.JsonRequest)
+			params := &TestStruct{Name: "Steve", Something: 99}
+			req := NewJsonRequest("TestMethod", params)
 
 			reqbytes, err := json.Marshal(req)
 			Expect(err).To(BeNil(), "Should marshal without error")
-			Expect(string(reqbytes)).To(Equal(`{"Id":1,"Method":"","Name":"Steve","Something":99}`), "Encoded JSON should be correct")
+			Expect(string(reqbytes)).To(Equal(`{"Id":1,"Method":"TestMethod","Params":{"Name":"Steve","Something":99}}`), "Encoded JSON should be correct")
 
 		})
 		It("Decodes JSON requests correctly", func() {
-			t := &TestStruct{}
-			var i interface{}
-			i = t
 
-			b := []byte(`{"Id":1,"Method":"","Name":"Steve","Something":99}`)
-			err := json.Unmarshal(b, i)
+			resp := JsonResponse{}
+			s := TestStruct{}
+			b := []byte(`{"Id":1,"Result":{"Name":"Steve","Something":99}}`)
+			err := json.Unmarshal(b, &resp)
 			Expect(err).To(BeNil(), "Should unmarshal without error")
-			req := &TestStruct{Name: "Steve", Something: 99}
-			req.Id = 1
-			Expect(i).To(Equal(req), "Unmarshalled should match")
+			// Now unmarshal nested result
+			err = json.Unmarshal(resp.Result, &s)
+			orig := TestStruct{Name: "Steve", Something: 99}
+			Expect(s).To(Equal(orig), "Unmarshalled nested struct should match")
 		})
 
 	})
