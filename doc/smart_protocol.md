@@ -23,6 +23,8 @@ However when binary content needs to be exchanged, rather than embed the data in
 
 Wrapping in JSON or even in lower level wrappers like protocol buffers would make binary streaming much less efficient, since these systems tend to require all the data to be present to decode a record. By streaming the binary directly we free the server and client from that, so they can stream binary content to files directly if they want.
 
+All JSON request and response structures must be terminated with a binary 0 in the stream to indicate termination of the JSON, this allows efficient reading of variable-length data within a persistent re-usable stream.
+
 Transient transport
 -------------------
 Transient transports don't maintain a connection between requests, meaning each one goes through the full stack. This is a requirement for REST and similar back-ends (not yet implemented). In this case, the protocol will be wrapped as appropriate for that transport (e.g. REST may translate the method to an endpoint and request arguments to URL params).

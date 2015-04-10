@@ -1,6 +1,7 @@
 package smart
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +15,8 @@ import (
 type PersistentTransport struct {
 	// The persistent connection we're using (implemented by another class)
 	Connection io.ReadWriteCloser
+	// Buffered reader we use to scan for ends of JSON
+	BufferedReader *bufio.Reader
 }
 
 // Note *not* using net/rpc and net/rpc/jsonrpc because we want more control
@@ -25,7 +28,7 @@ type JsonRequest struct {
 	Id     int
 	Method string
 }
-type JsonRpcResponse struct {
+type JsonResponse struct {
 	Id    int
 	Error interface{}
 }
@@ -42,12 +45,14 @@ func InitJsonRequest(req *JsonRequest) {
 // Create a new persistent transport & connect
 func NewPersistentTransport(conn io.ReadWriteCloser) *PersistentTransport {
 	return &PersistentTransport{
-		Connection: conn,
+		Connection:     conn,
+		BufferedReader: bufio.NewReader(conn),
 	}
 }
 
 // Release any resources associated with this transport (including any persostent connections)
 func (self *PersistentTransport) Release() {
+	self.BufferedReader = nil
 	if self.Connection != nil {
 		self.Connection.Close()
 		self.Connection = nil
@@ -55,15 +60,23 @@ func (self *PersistentTransport) Release() {
 }
 
 // Perform a full JSON-RPC call with JSON request and response
-func (self *PersistentTransport) doFullJSONRequestResponse(req interface{}, response interface{}) (interface{}, error) {
+func (self *PersistentTransport) doFullJSONRequestResponse(req interface{}, response interface{}) error {
 
 	err := self.sendJSONRequest(req)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	// read response (buffered up to 200 bytes)
-	// TODO
-	return nil, nil
+	// read response (buffered) up to binary 0 which terminates JSON
+	jsonbytes, err := self.BufferedReader.ReadBytes(byte(0))
+	if err != nil {
+		return fmt.Errorf("Unable to read response from server: %v", err.Error())
+	}
+	err = json.Unmarshal(jsonbytes, response)
+	if err != nil {
+		return fmt.Errorf("Unable to decode JSON response from server: %v\n%v", string(jsonbytes), err.Error())
+	}
+	// response is populated now
+	return nil
 
 }
 
@@ -77,13 +90,19 @@ func (self *PersistentTransport) doJSONRequestRawResponse(req interface{}, respo
 		return nil, err
 	}
 	// read response (exactly responseLengthBytes)
-	// TODO
-	return nil, nil
+	resp := make([]byte, responseLength)
+	n, err := self.BufferedReader.Read(resp)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to read raw response: %v", err.Error())
+	} else if n != responseLength {
+		return nil, fmt.Errorf("Raw response was unexpeced length, actual: %d expected: %d", n, responseLength)
+	}
+	return resp, nil
 }
 
 // Send a JSON request but don't read any response
 func (self *PersistentTransport) sendJSONRequest(req interface{}) error {
-	if self.Connection == nil {
+	if self.Connection == nil || self.BufferedReader == nil {
 		return errors.New("Not connected")
 	}
 
@@ -91,9 +110,22 @@ func (self *PersistentTransport) sendJSONRequest(req interface{}) error {
 	if err != nil {
 		return fmt.Errorf("Error encoding %v to JSON: %v", err.Error())
 	}
+	// Append the binary 0 delimiter that server uses to read up to
+	reqbytes = append(reqbytes, byte(0))
 	_, err = self.Connection.Write(reqbytes)
 	if err != nil {
 		return fmt.Errorf("Error writing request bytes to connection: %v", err.Error())
+	}
+
+	return nil
+}
+
+func (self *PersistentTransport) checkJSONResponse(req *JsonRequest, resp *JsonResponse) error {
+	if resp.Error != nil {
+		return fmt.Errorf("Error response from server: %v", resp.Error)
+	}
+	if req.Id != resp.Id {
+		return fmt.Errorf("Response from server has wrong Id, request: %d response: %d", req.Id, resp.Id)
 	}
 	return nil
 }
@@ -106,7 +138,7 @@ type QueryCapsRequest struct {
 }
 
 type QueryCapsResponse struct {
-	JsonRpcResponse
+	JsonResponse
 	Caps []string
 }
 
@@ -116,18 +148,23 @@ func (self *PersistentTransport) QueryCaps() ([]string, error) {
 	InitJsonRequest(&req.JsonRequest)
 	req.Method = "QueryCaps"
 	resp := QueryCapsResponse{}
-	result, err := self.doFullJSONRequestResponse(req, &resp)
-
-	_ = result
-	_ = err
-	//capsResult := QueryCapsResponse(result)
-
-	// TODO
-	return nil, nil
+	err := self.doFullJSONRequestResponse(req, &resp)
+	if err != nil {
+		return nil, err
+	}
+	err = self.checkJSONResponse(&req.JsonRequest, &resp.JsonResponse)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Caps, nil
 }
 
 type SetEnabledCapsRequest struct {
+	JsonRequest
 	EnableCaps []string
+}
+type SetEnabledCapsResponse struct {
+	JsonResponse
 }
 
 // Request that the server enable capabilities for this exchange (note, non-persistent transports can store & send this with every request)

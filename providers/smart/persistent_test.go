@@ -3,7 +3,10 @@ package smart
 import (
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
+	"bufio"
 	"encoding/json"
+	"fmt"
+	"net"
 )
 
 var _ = Describe("Persistent Transport", func() {
@@ -37,6 +40,46 @@ var _ = Describe("Persistent Transport", func() {
 			Expect(i).To(Equal(req), "Unmarshalled should match")
 		})
 
+	})
+
+	Context("Test individual server requests", func() {
+		serve := func(conn net.Conn) {
+			defer conn.Close()
+			// Run in a goroutine, be the server you seek
+			// Read a request
+			rdr := bufio.NewReader(conn)
+			jsonbytes, err := rdr.ReadBytes(byte(0))
+			if err != nil {
+				Fail(fmt.Sprintf("Test persistent server: unable to read from client: %v", err.Error()))
+			}
+			// On the server we just work in JSON
+			_ = jsonbytes
+		}
+		It("Queries capabilities (client)", func() {
+			cli, srv := net.Pipe()
+			go serve(srv)
+			defer cli.Close()
+
+			trans := NewPersistentTransport(cli)
+			caps, err := trans.QueryCaps()
+			Expect(err).To(BeNil(), "Should be no error")
+			Expect(caps).To(ConsistOf([]string{"Feature1", "Feature2", "OMGSOAWESOME"}), "Capabilities should match server")
+
+		})
+		It("Detects errors", func() {
+			// TODO
+		})
+		It("Deals with disconnection", func() {
+			// ??
+		})
+		It("Deals with timeouts", func() {
+			// ??
+		})
+
+	})
+
+	Context("Test chained server requests over one connection", func() {
+		// TODO
 	})
 
 })
