@@ -1,6 +1,9 @@
 package smart
 
 import (
+	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 )
 
@@ -13,6 +16,36 @@ type PersistentTransport struct {
 	Connection io.ReadWriteCloser
 }
 
+// Note *not* using net/rpc and net/rpc/jsonrpc because we want more control
+// golang's rpc requires a certain method format (Object.Method) and also doesn't easily
+// support interleaving with raw byte streams like we need to.
+// as per http://www.jsonrpc.org/specification
+type JsonRequest struct {
+	// Go's JSON support only uses public fields but JSON-RPC requires lower case
+	Id     int
+	Method string
+}
+type JsonRpcResponse struct {
+	Id    int
+	Error interface{}
+}
+
+var (
+	latestRequestId int = 1
+)
+
+func InitJsonRequest(req *JsonRequest) {
+	req.Id = latestRequestId
+	latestRequestId++
+}
+
+// Create a new persistent transport & connect
+func NewPersistentTransport(conn io.ReadWriteCloser) *PersistentTransport {
+	return &PersistentTransport{
+		Connection: conn,
+	}
+}
+
 // Release any resources associated with this transport (including any persostent connections)
 func (self *PersistentTransport) Release() {
 	if self.Connection != nil {
@@ -21,10 +54,80 @@ func (self *PersistentTransport) Release() {
 	}
 }
 
+// Perform a full JSON-RPC call with JSON request and response
+func (self *PersistentTransport) doFullJSONRequestResponse(req interface{}, response interface{}) (interface{}, error) {
+
+	err := self.sendJSONRequest(req)
+	if err != nil {
+		return nil, err
+	}
+	// read response (buffered up to 200 bytes)
+	// TODO
+	return nil, nil
+
+}
+
+// Perform a JSON request which just retrieves a raw fixed-length response, a precursor to reading a raw stream of bytes
+// We don't use a JSON response becaue the length is undetermined and parsing it out of a stream which will contain raw
+// bytes afterwards is unreliable
+func (self *PersistentTransport) doJSONRequestRawResponse(req interface{}, responseLength int) ([]byte, error) {
+
+	err := self.sendJSONRequest(req)
+	if err != nil {
+		return nil, err
+	}
+	// read response (exactly responseLengthBytes)
+	// TODO
+	return nil, nil
+}
+
+// Send a JSON request but don't read any response
+func (self *PersistentTransport) sendJSONRequest(req interface{}) error {
+	if self.Connection == nil {
+		return errors.New("Not connected")
+	}
+
+	reqbytes, err := json.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("Error encoding %v to JSON: %v", err.Error())
+	}
+	_, err = self.Connection.Write(reqbytes)
+	if err != nil {
+		return fmt.Errorf("Error writing request bytes to connection: %v", err.Error())
+	}
+	return nil
+}
+
+// Just a specially identified persistent connection error so we can re-try
+type ConnectionError error
+
+type QueryCapsRequest struct {
+	JsonRequest
+}
+
+type QueryCapsResponse struct {
+	JsonRpcResponse
+	Caps []string
+}
+
 // Ask the server for a list of capabilities
 func (self *PersistentTransport) QueryCaps() ([]string, error) {
+	req := &QueryCapsRequest{}
+	InitJsonRequest(&req.JsonRequest)
+	req.Method = "QueryCaps"
+	resp := QueryCapsResponse{}
+	result, err := self.doFullJSONRequestResponse(req, &resp)
+
+	_ = result
+	_ = err
+	//capsResult := QueryCapsResponse(result)
+
 	// TODO
-	return []string{}, nil
+	return nil, nil
+}
+
+type SetEnabledCapsRequest struct {
+	EnableCaps []string
 }
 
 // Request that the server enable capabilities for this exchange (note, non-persistent transports can store & send this with every request)

@@ -125,9 +125,7 @@ func (self *SshTransportFactory) Connect(u *url.URL) (Transport, error) {
 		stderr: errp,
 	}
 
-	return &PersistentTransport{
-		Connection: conn,
-	}, nil
+	return NewPersistentTransport(conn), nil
 
 }
 
