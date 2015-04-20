@@ -67,6 +67,30 @@ var _ = Describe("Persistent Transport", func() {
 				if err != nil {
 					Fail(fmt.Sprintf("Test persistent server: unable to create response: %v", err.Error()))
 				}
+			case "SetEnabledCaps":
+				capsreq := SetEnabledCapsRequest{}
+				extractStructFromJsonRawMessage(req.Params, &capsreq)
+				result := SetEnabledCapsResponse{}
+				resp, err = NewJsonResponse(req.Id, result)
+				if err != nil {
+					Fail(fmt.Sprintf("Test persistent server: unable to create response: %v", err.Error()))
+				}
+				// test for error condition
+				for _, c := range capsreq.EnableCaps {
+					ok := false
+					for _, s := range allowedCaps {
+						if c == s {
+							ok = true
+							break
+						}
+					}
+					if !ok {
+						resp.Error = fmt.Sprintf("Unsupported capability: %v", c)
+						break
+					}
+
+				}
+
 			default:
 				resp.Error = fmt.Sprintf("Unknown method %v", req.Method)
 
@@ -90,6 +114,17 @@ var _ = Describe("Persistent Transport", func() {
 			Expect(caps).To(ConsistOf([]string{"Feature1", "Feature2", "OMGSOAWESOME"}), "Capabilities should match server")
 
 		})
+		It("Sets capabilities (client)", func() {
+			cli, srv := net.Pipe()
+			go serve(srv)
+			defer cli.Close()
+
+			trans := NewPersistentTransport(cli)
+			err := trans.SetEnabledCaps([]string{"OMGSOAWESOME", "Feature1"})
+			Expect(err).To(BeNil(), "Should be no error")
+
+		})
+
 		It("Detects errors", func() {
 			// TODO
 		})

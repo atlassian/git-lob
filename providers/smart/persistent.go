@@ -232,16 +232,19 @@ func (self *PersistentTransport) QueryCaps() ([]string, error) {
 }
 
 type SetEnabledCapsRequest struct {
-	JsonRequest
 	EnableCaps []string
 }
 type SetEnabledCapsResponse struct {
-	JsonResponse
 }
 
 // Request that the server enable capabilities for this exchange (note, non-persistent transports can store & send this with every request)
 func (self *PersistentTransport) SetEnabledCaps(caps []string) error {
-	// TODO
+	params := SetEnabledCapsRequest{EnableCaps: caps}
+	resp := SetEnabledCapsResponse{}
+	err := self.doFullJSONRequestResponse("SetEnabledCaps", &params, &resp)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
