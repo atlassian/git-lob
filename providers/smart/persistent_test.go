@@ -19,25 +19,23 @@ var _ = Describe("Persistent Transport", func() {
 		It("Encodes JSON requests correctly", func() {
 
 			params := &TestStruct{Name: "Steve", Something: 99}
-			req := NewJsonRequest("TestMethod", params)
-
+			req, err := NewJsonRequest("TestMethod", params)
+			Expect(err).To(BeNil(), "Should create request without error")
 			reqbytes, err := json.Marshal(req)
 			Expect(err).To(BeNil(), "Should marshal without error")
 			Expect(string(reqbytes)).To(Equal(`{"Id":1,"Method":"TestMethod","Params":{"Name":"Steve","Something":99}}`), "Encoded JSON should be correct")
 
 		})
 		It("Decodes JSON requests correctly", func() {
-			resp := JsonResponse{}
-			s := TestStruct{}
-			b := []byte(`{"Id":1,"Result":{"Name":"Steve","Something":99}}`)
-			err := json.Unmarshal(b, &resp)
-			Expect(err).To(BeNil(), "Should unmarshal without error")
+			inputstruct := TestStruct{Name: "Steve", Something: 99}
+			resp, err := NewJsonResponse(1, inputstruct)
+			Expect(err).To(BeNil(), "Should create response without error")
+			outputstruct := TestStruct{}
 			// Now unmarshal nested result; need to extract json first
 			innerbytes, err := resp.Result.MarshalJSON()
 			Expect(err).To(BeNil(), "Extracting JSON from RawMessage should succeed")
-			err = json.Unmarshal(innerbytes, &s)
-			orig := TestStruct{Name: "Steve", Something: 99}
-			Expect(s).To(Equal(orig), "Unmarshalled nested struct should match")
+			err = json.Unmarshal(innerbytes, &outputstruct)
+			Expect(outputstruct).To(Equal(inputstruct), "Unmarshalled nested struct should match")
 		})
 
 	})
@@ -65,7 +63,10 @@ var _ = Describe("Persistent Transport", func() {
 			switch req.Method {
 			case "QueryCaps":
 				result := QueryCapsResponse{Caps: allowedCaps}
-				resp = NewJsonResponse(req.Id, result)
+				resp, err = NewJsonResponse(req.Id, result)
+				if err != nil {
+					Fail(fmt.Sprintf("Test persistent server: unable to create response: %v", err.Error()))
+				}
 			default:
 				resp.Error = fmt.Sprintf("Unknown method %v", req.Method)
 

@@ -47,32 +47,44 @@ var (
 	latestRequestId int = 1
 )
 
-func NewJsonRequest(method string, params interface{}) *JsonRequest {
+func NewJsonRequest(method string, params interface{}) (*JsonRequest, error) {
 	ret := &JsonRequest{
 		Id:     latestRequestId,
 		Method: method,
-		Params: &json.RawMessage{},
 	}
+	var err error
+	ret.Params, err = embedStructInJsonRawMessage(params)
+	latestRequestId++
+	return ret, err
+}
+
+func NewJsonResponse(id int, result interface{}) (*JsonResponse, error) {
+	ret := &JsonResponse{
+		Id: id,
+	}
+	var err error
+	ret.Result, err = embedStructInJsonRawMessage(result)
+	return ret, err
+}
+
+func embedStructInJsonRawMessage(in interface{}) (*json.RawMessage, error) {
 	// Encode nested struct ready for transmission so that it can be late unmarshalled at the other end
 	// Need to do this & declare as RawMessage rather than interface{} in struct otherwise unmarshalling
 	// at other end will turn it into a simple array/map
 	// Doesn't affect the wire bytes; they're still nested JSON in the same way as if you marshalled the whole struct
 	// this is just a golang method to defer resolving on unmarshal
-	innerbytes, _ := json.Marshal(params)
-	ret.Params.UnmarshalJSON(innerbytes)
-	latestRequestId++
-	return ret
-}
-
-func NewJsonResponse(id int, result interface{}) *JsonResponse {
-	ret := &JsonResponse{
-		Id:     id,
-		Result: &json.RawMessage{},
+	ret := &json.RawMessage{}
+	innerbytes, err := json.Marshal(in)
+	if err != nil {
+		return ret, fmt.Errorf("Unable to marshal struct to JSON: %v %v", in, err.Error())
 	}
-	// As NewJsonRequest, 2-level encoding for nested result to allow late resolution of custom types
-	innerbytes, _ := json.Marshal(result)
-	ret.Result.UnmarshalJSON(innerbytes)
-	return ret
+	err = ret.UnmarshalJSON(innerbytes)
+	if err != nil {
+		return ret, fmt.Errorf("Unable to convert JSON to RawMessage: %v %v", string(innerbytes), err.Error())
+	}
+
+	return ret, nil
+
 }
 
 // Create a new persistent transport & connect
@@ -95,8 +107,11 @@ func (self *PersistentTransport) Release() {
 // Perform a full JSON-RPC call with JSON request and response
 func (self *PersistentTransport) doFullJSONRequestResponse(method string, params interface{}, result interface{}) error {
 
-	req := NewJsonRequest(method, params)
-	err := self.sendJSONRequest(req)
+	req, err := NewJsonRequest(method, params)
+	if err != nil {
+		return err
+	}
+	err = self.sendJSONRequest(req)
 	if err != nil {
 		return err
 	}
@@ -119,15 +134,24 @@ func (self *PersistentTransport) doFullJSONRequestResponse(method string, params
 	}
 	// response.Result is left as raw since it depends on the type of the expected result
 	// so now unmarshal the nested part
-	nestedbytes, err := response.Result.MarshalJSON()
+	err = extractStructFromJsonRawMessage(response.Result, &result)
 	if err != nil {
-		return fmt.Errorf("Unable to extract type-specific JSON from server: %v\n%v", string(*response.Result), err.Error())
+		return err
 	}
-	err = json.Unmarshal(nestedbytes, &result)
+	// result is now populated
+	return nil
+
+}
+
+func extractStructFromJsonRawMessage(raw *json.RawMessage, out interface{}) error {
+	nestedbytes, err := raw.MarshalJSON()
+	if err != nil {
+		return fmt.Errorf("Unable to extract type-specific JSON from server: %v\n%v", string(*raw), err.Error())
+	}
+	err = json.Unmarshal(nestedbytes, &out)
 	if err != nil {
 		return fmt.Errorf("Unable to decode type-specific Result from server: %v\n%v", string(nestedbytes), err.Error())
 	}
-	// result is now populated
 	return nil
 
 }
@@ -137,8 +161,11 @@ func (self *PersistentTransport) doFullJSONRequestResponse(method string, params
 // bytes afterwards is unreliable
 func (self *PersistentTransport) doJSONRequestRawResponse(method string, params interface{}, responseLength int) ([]byte, error) {
 
-	req := NewJsonRequest(method, params)
-	err := self.sendJSONRequest(req)
+	req, err := NewJsonRequest(method, params)
+	if err != nil {
+		return nil, err
+	}
+	err = self.sendJSONRequest(req)
 	if err != nil {
 		return nil, err
 	}
