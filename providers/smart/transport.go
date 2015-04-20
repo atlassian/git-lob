@@ -27,7 +27,7 @@ type Transport interface {
 	ChunkExistsAndIsOfSize(lobsha string, chunk int, sz int64) (bool, error)
 
 	// Upload metadata for a LOB (from a stream); no progress callback as very small
-	UploadMetadata(lobsha string, data io.Reader) error
+	UploadMetadata(lobsha string, sz int64, data io.Reader) error
 	// Upload chunk content for a LOB (from a stream); must call back progress
 	UploadChunk(lobsha string, chunk int, sz int64, data io.Reader, callback TransportProgressCallback) error
 	// Download metadata for a LOB (to a stream); no progress callback as very small

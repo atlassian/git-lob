@@ -122,26 +122,7 @@ func (self *PersistentTransport) doFullJSONRequestResponse(method string, params
 	if err != nil {
 		return err
 	}
-	// read response (buffered) up to binary 0 which terminates JSON
-	jsonbytes, err := self.BufferedReader.ReadBytes(byte(0))
-	if err != nil {
-		return fmt.Errorf("Unable to read response from server: %v", err.Error())
-	}
-	// remove terminator before unmarshalling
-	jsonbytes = jsonbytes[:len(jsonbytes)-1]
-	response := JsonResponse{}
-	err = json.Unmarshal(jsonbytes, &response)
-	if err != nil {
-		return fmt.Errorf("Unable to decode JSON response from server: %v\n%v", string(jsonbytes), err.Error())
-	}
-	// response is populated now
-	err = self.checkJSONResponse(req, &response)
-	if err != nil {
-		return err
-	}
-	// response.Result is left as raw since it depends on the type of the expected result
-	// so now unmarshal the nested part
-	err = extractStructFromJsonRawMessage(response.Result, &result)
+	err = self.readFullJSONResponse(req, result)
 	if err != nil {
 		return err
 	}
@@ -161,30 +142,6 @@ func extractStructFromJsonRawMessage(raw *json.RawMessage, out interface{}) erro
 	}
 	return nil
 
-}
-
-// Perform a JSON request which just retrieves a raw fixed-length response, a precursor to reading a raw stream of bytes
-// We don't use a JSON response becaue the length is undetermined and parsing it out of a stream which will contain raw
-// bytes afterwards is unreliable
-func (self *PersistentTransport) doJSONRequestRawResponse(method string, params interface{}, responseLength int) ([]byte, error) {
-
-	req, err := NewJsonRequest(method, params)
-	if err != nil {
-		return nil, err
-	}
-	err = self.sendJSONRequest(req)
-	if err != nil {
-		return nil, err
-	}
-	// read response (exactly responseLengthBytes)
-	resp := make([]byte, responseLength)
-	n, err := self.BufferedReader.Read(resp)
-	if err != nil {
-		return nil, fmt.Errorf("Unable to read raw response: %v", err.Error())
-	} else if n != responseLength {
-		return nil, fmt.Errorf("Raw response was unexpeced length, actual: %d expected: %d", n, responseLength)
-	}
-	return resp, nil
 }
 
 // Send a JSON request but don't read any response
@@ -207,13 +164,84 @@ func (self *PersistentTransport) sendJSONRequest(req interface{}) error {
 	return nil
 }
 
+func (self *PersistentTransport) readJSONResponse() (*JsonResponse, error) {
+	jsonbytes, err := self.BufferedReader.ReadBytes(byte(0))
+	if err != nil {
+		return nil, fmt.Errorf("Unable to read response from server: %v", err.Error())
+	}
+	// remove terminator before unmarshalling
+	jsonbytes = jsonbytes[:len(jsonbytes)-1]
+	response := &JsonResponse{}
+	err = json.Unmarshal(jsonbytes, response)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to decode JSON response from server: %v\n%v", string(jsonbytes), err.Error())
+	}
+	return response, nil
+}
+
+// Check a response object; req can be nil, if so doesn't check that Ids match
 func (self *PersistentTransport) checkJSONResponse(req *JsonRequest, resp *JsonResponse) error {
 	if resp.Error != nil {
 		return fmt.Errorf("Error response from server: %v", resp.Error)
 	}
-	if req.Id != resp.Id {
+	if req != nil && req.Id != resp.Id {
 		return fmt.Errorf("Response from server has wrong Id, request: %d response: %d", req.Id, resp.Id)
 	}
+	return nil
+}
+
+// Read a JSON response, check it, and pull out the nested method-specific & write to result
+// originalReq is optional and can be left nil but if supplied Ids will be checked for matching
+func (self *PersistentTransport) readFullJSONResponse(originalReq *JsonRequest, result interface{}) error {
+	// read response (buffered) up to binary 0 which terminates JSON
+	response, err := self.readJSONResponse()
+	if err != nil {
+		return err
+	}
+	// early validation
+	err = self.checkJSONResponse(originalReq, response)
+	if err != nil {
+		return err
+	}
+	// response.Result is left as raw since it depends on the type of the expected result
+	// so now unmarshal the nested part
+	err = extractStructFromJsonRawMessage(response.Result, &result)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+const PersistentTransportBufferSize = int64(131072)
+
+func (self *PersistentTransport) sendRawData(sz int64, source io.Reader, callback TransportProgressCallback) error {
+
+	if sz == 0 {
+		return nil
+	}
+
+	var copysize int64 = 0
+	for {
+		c := PersistentTransportBufferSize
+		if (sz - copysize) < c {
+			c = sz - copysize
+		}
+		if c <= 0 {
+			break
+		}
+		n, err := io.CopyN(self.Connection, source, c)
+		copysize += n
+		if n > 0 && callback != nil && sz > 0 {
+			callback(copysize, sz)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	if copysize != sz {
+		return fmt.Errorf("Transferred bytes did not match expected size; transferred %d, expected %d", copysize, sz)
+	}
+
 	return nil
 }
 
@@ -316,9 +344,47 @@ func (self *PersistentTransport) ChunkExistsAndIsOfSize(lobsha string, chunk int
 	return resp.Result, nil
 }
 
+type UploadFileRequest struct {
+	LobSHA   string
+	Type     string
+	ChunkIdx int
+	Size     int64
+}
+type UploadFileStartResponse struct {
+	OKToSend bool
+}
+type UploadFileCompleteResponse struct {
+	ReceivedOK bool
+}
+
 // Upload metadata for a LOB (from a stream); no progress callback as very small
-func (self *PersistentTransport) UploadMetadata(lobsha string, data io.Reader) error {
-	// TODO
+func (self *PersistentTransport) UploadMetadata(lobsha string, sz int64, data io.Reader) error {
+	params := UploadFileRequest{
+		LobSHA: lobsha,
+		Type:   "meta",
+		Size:   sz,
+	}
+	resp := UploadFileStartResponse{}
+	err := self.doFullJSONRequestResponse("UploadFile", &params, &resp)
+	if err != nil {
+		return fmt.Errorf("Error while uploading metadata for %v (while sending UploadFile JSON request): %v", lobsha, err.Error())
+	}
+	if resp.OKToSend {
+		// Send that data (all at once, metafiles aren't big)
+		err = self.sendRawData(sz, data, nil)
+		if err != nil {
+			return fmt.Errorf("Error while uploading metadata for %v (while sending raw content): %v", lobsha, err.Error())
+		}
+		// Now read response to sent data
+		received := UploadFileCompleteResponse{}
+		err = self.readFullJSONResponse(nil, &received)
+		if err != nil {
+			return fmt.Errorf("Error while uploading metadata for %v (response to raw content): %v", lobsha, err.Error())
+		}
+
+	} else {
+		return fmt.Errorf("Server rejected request to upload metadata for %v (no other error)")
+	}
 	return nil
 }
 
