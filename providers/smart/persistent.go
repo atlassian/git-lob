@@ -27,7 +27,11 @@ type JsonRequest struct {
 	// Go's JSON support only uses public fields but JSON-RPC requires lower case
 	Id     int
 	Method string
-	Params interface{}
+	// RawMessage allows us to store late-resolved, message-specific nested types
+	// requires an extra couple of steps though; even though RawMessage is a []byte, it's not
+	// JSON itself. You need to convert JSON to/from RawMessage as well as JSON to/from the structure
+	// - see RawMessage's own UnmarshalJSON/MarshalJSON for this extra step
+	Params *json.RawMessage
 }
 type JsonResponse struct {
 	Id    int
@@ -47,9 +51,27 @@ func NewJsonRequest(method string, params interface{}) *JsonRequest {
 	ret := &JsonRequest{
 		Id:     latestRequestId,
 		Method: method,
-		Params: params,
+		Params: &json.RawMessage{},
 	}
+	// Encode nested struct ready for transmission so that it can be late unmarshalled at the other end
+	// Need to do this & declare as RawMessage rather than interface{} in struct otherwise unmarshalling
+	// at other end will turn it into a simple array/map
+	// Doesn't affect the wire bytes; they're still nested JSON in the same way as if you marshalled the whole struct
+	// this is just a golang method to defer resolving on unmarshal
+	innerbytes, _ := json.Marshal(params)
+	ret.Params.UnmarshalJSON(innerbytes)
 	latestRequestId++
+	return ret
+}
+
+func NewJsonResponse(id int, result interface{}) *JsonResponse {
+	ret := &JsonResponse{
+		Id:     id,
+		Result: &json.RawMessage{},
+	}
+	// As NewJsonRequest, 2-level encoding for nested result to allow late resolution of custom types
+	innerbytes, _ := json.Marshal(result)
+	ret.Result.UnmarshalJSON(innerbytes)
 	return ret
 }
 

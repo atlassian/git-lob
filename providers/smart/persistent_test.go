@@ -60,17 +60,12 @@ var _ = Describe("Persistent Transport", func() {
 			if err != nil {
 				Fail(fmt.Sprintf("Test persistent server: unable to unmarshal json request from client:%v %v", string(jsonbytes), err.Error()))
 			}
-			var resp JsonResponse
-			resp.Id = req.Id
+			var resp *JsonResponse
+			allowedCaps := []string{"Feature1", "Feature2", "OMGSOAWESOME"}
 			switch req.Method {
 			case "QueryCaps":
-				inner := QueryCapsResponse{Caps: []string{"Feature1", "Feature2", "OMGSOAWESOME"}}
-				innerbytes, _ := json.Marshal(inner)
-				resp.Result = &json.RawMessage{}
-				err = resp.Result.UnmarshalJSON(innerbytes)
-				if err != nil {
-					Fail(fmt.Sprintf("Test persistent server: unable to marshal QueryCaps response: %v", err.Error()))
-				}
+				result := QueryCapsResponse{Caps: allowedCaps}
+				resp = NewJsonResponse(req.Id, result)
 			default:
 				resp.Error = fmt.Sprintf("Unknown method %v", req.Method)
 
