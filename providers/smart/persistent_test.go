@@ -102,6 +102,7 @@ var _ = Describe("Persistent Transport", func() {
 			// null terminate response
 			responseBytes = append(responseBytes, byte(0))
 			conn.Write(responseBytes)
+			conn.Close()
 		}
 		It("Queries capabilities (client)", func() {
 			cli, srv := net.Pipe()
@@ -126,7 +127,14 @@ var _ = Describe("Persistent Transport", func() {
 		})
 
 		It("Detects errors", func() {
-			// TODO
+			// Request an invalid capability (as defined by this server)
+			cli, srv := net.Pipe()
+			go serve(srv)
+			defer cli.Close()
+
+			trans := NewPersistentTransport(cli)
+			err := trans.SetEnabledCaps([]string{"Feature1", "THISISWRONG"})
+			Expect(err).ToNot(BeNil(), "Should be an error")
 		})
 		It("Deals with disconnection", func() {
 			// ??
