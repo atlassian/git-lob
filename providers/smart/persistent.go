@@ -66,6 +66,13 @@ func NewJsonResponse(id int, result interface{}) (*JsonResponse, error) {
 	ret.Result, err = embedStructInJsonRawMessage(result)
 	return ret, err
 }
+func NewJsonErrorResponse(id int, err interface{}) *JsonResponse {
+	ret := &JsonResponse{
+		Id:    id,
+		Error: err,
+	}
+	return ret
+}
 
 func embedStructInJsonRawMessage(in interface{}) (*json.RawMessage, error) {
 	// Encode nested struct ready for transmission so that it can be late unmarshalled at the other end
@@ -248,16 +255,44 @@ func (self *PersistentTransport) SetEnabledCaps(caps []string) error {
 	return nil
 }
 
+type FileExistsRequest struct {
+	LobSHA   string
+	Type     string
+	ChunkIdx int
+}
+type FileExistsResponse struct {
+	Result bool
+}
+
 // Return whether LOB metadata exists on the server
-func (self *PersistentTransport) MetadataExists(lobsha string) bool {
-	// TODO
-	return false
+func (self *PersistentTransport) MetadataExists(lobsha string) (bool, error) {
+	params := FileExistsRequest{
+		LobSHA: lobsha,
+		Type:   "meta",
+	}
+	resp := FileExistsResponse{}
+	err := self.doFullJSONRequestResponse("FileExists", &params, &resp)
+	if err != nil {
+		return false, err
+	}
+	return resp.Result, nil
 }
 
 // Return whether LOB chunk content exists on the server
-func (self *PersistentTransport) ChunkExists(lobsha string, chunk int) bool {
-	// TODO
-	return false
+func (self *PersistentTransport) ChunkExists(lobsha string, chunk int) (bool, error) {
+	params := FileExistsRequest{
+		LobSHA:   lobsha,
+		Type:     "chunk",
+		ChunkIdx: chunk,
+	}
+	resp := FileExistsResponse{}
+	err := self.doFullJSONRequestResponse("FileExists", &params, &resp)
+	if err != nil {
+		return false, err
+	}
+	return resp.Result, nil
+}
+
 }
 
 // Return whether LOB chunk content exists on the server, and is of a specific size
@@ -298,9 +333,9 @@ func (self *PersistentTransport) DownloadChunk(lobsha string, chunk int, out io.
 // Server must test in the order provided & return the earliest one which is complete on the server
 // Server doesn't have to test full integrity of LOB, just completeness (check size against meta)
 // Return a blank string if none are available
-func (self *PersistentTransport) GetFirstCompleteLOBFromList(candidateSHAs []string) string {
+func (self *PersistentTransport) GetFirstCompleteLOBFromList(candidateSHAs []string) (string, error) {
 	// TODO
-	return ""
+	return "", nil
 
 }
 

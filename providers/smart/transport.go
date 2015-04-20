@@ -20,11 +20,11 @@ type Transport interface {
 	SetEnabledCaps(caps []string) error
 
 	// Return whether LOB metadata exists on the server
-	MetadataExists(lobsha string) bool
+	MetadataExists(lobsha string) (bool, error)
 	// Return whether LOB chunk content exists on the server
-	ChunkExists(lobsha string, chunk int) bool
+	ChunkExists(lobsha string, chunk int) (bool, error)
 	// Return whether LOB chunk content exists on the server, and is of a specific size
-	ChunkExistsAndIsOfSize(lobsha string, chunk int, sz int64) bool
+	ChunkExistsAndIsOfSize(lobsha string, chunk int, sz int64) (bool, error)
 
 	// Upload metadata for a LOB (from a stream); must call back progress
 	UploadMetadata(lobsha string, data io.Reader, callback TransportProgressCallback) error
@@ -40,7 +40,7 @@ type Transport interface {
 	// Server must test in the order provided & return the earliest one which is complete on the server
 	// Server doesn't have to test full integrity of LOB, just completeness (check size against meta)
 	// Return a blank string if none are available
-	GetFirstCompleteLOBFromList(candidateSHAs []string) string
+	GetFirstCompleteLOBFromList(candidateSHAs []string) (string, error)
 	// Upload a binary delta to apply against a LOB the server already has, to generate a new LOB
 	// Deltas apply to whole LOB content and are not per-chunk
 	// Returns a boolean to determine whether the upload was accepted or not (server may prefer not to accept, not an error)
