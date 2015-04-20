@@ -30,9 +30,13 @@ type JsonRequest struct {
 	Params interface{}
 }
 type JsonResponse struct {
-	Id     int
-	Error  interface{}
-	Result json.RawMessage // can be many types so delay parsing
+	Id    int
+	Error interface{}
+	// RawMessage allows us to store late-resolved, message-specific nested types
+	// requires an extra couple of steps though; even though RawMessage is a []byte, it's not
+	// JSON itself. You need to convert JSON to/from RawMessage as well as JSON to/from the structure
+	// - see RawMessage's own UnmarshalJSON/MarshalJSON for this extra step
+	Result *json.RawMessage
 }
 
 var (
@@ -79,6 +83,8 @@ func (self *PersistentTransport) doFullJSONRequestResponse(method string, params
 	if err != nil {
 		return fmt.Errorf("Unable to read response from server: %v", err.Error())
 	}
+	// remove terminator before unmarshalling
+	jsonbytes = jsonbytes[:len(jsonbytes)-1]
 	response := JsonResponse{}
 	err = json.Unmarshal(jsonbytes, &response)
 	if err != nil {
@@ -91,9 +97,13 @@ func (self *PersistentTransport) doFullJSONRequestResponse(method string, params
 	}
 	// response.Result is left as raw since it depends on the type of the expected result
 	// so now unmarshal the nested part
-	err = json.Unmarshal(response.Result, &result)
+	nestedbytes, err := response.Result.MarshalJSON()
 	if err != nil {
-		return fmt.Errorf("Unable to decode type-specific Result from server: %v\n%v", string(response.Result), err.Error())
+		return fmt.Errorf("Unable to extract type-specific JSON from server: %v\n%v", string(*response.Result), err.Error())
+	}
+	err = json.Unmarshal(nestedbytes, &result)
+	if err != nil {
+		return fmt.Errorf("Unable to decode type-specific Result from server: %v\n%v", string(nestedbytes), err.Error())
 	}
 	// result is now populated
 	return nil

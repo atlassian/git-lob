@@ -27,14 +27,15 @@ var _ = Describe("Persistent Transport", func() {
 
 		})
 		It("Decodes JSON requests correctly", func() {
-
 			resp := JsonResponse{}
 			s := TestStruct{}
 			b := []byte(`{"Id":1,"Result":{"Name":"Steve","Something":99}}`)
 			err := json.Unmarshal(b, &resp)
 			Expect(err).To(BeNil(), "Should unmarshal without error")
-			// Now unmarshal nested result
-			err = json.Unmarshal(resp.Result, &s)
+			// Now unmarshal nested result; need to extract json first
+			innerbytes, err := resp.Result.MarshalJSON()
+			Expect(err).To(BeNil(), "Extracting JSON from RawMessage should succeed")
+			err = json.Unmarshal(innerbytes, &s)
 			orig := TestStruct{Name: "Steve", Something: 99}
 			Expect(s).To(Equal(orig), "Unmarshalled nested struct should match")
 		})
@@ -43,6 +44,7 @@ var _ = Describe("Persistent Transport", func() {
 
 	Context("Test individual server requests", func() {
 		serve := func(conn net.Conn) {
+			defer GinkgoRecover()
 			defer conn.Close()
 			// Run in a goroutine, be the server you seek
 			// Read a request
@@ -51,8 +53,35 @@ var _ = Describe("Persistent Transport", func() {
 			if err != nil {
 				Fail(fmt.Sprintf("Test persistent server: unable to read from client: %v", err.Error()))
 			}
-			// On the server we just work in JSON
-			_ = jsonbytes
+			// slice off the terminator
+			jsonbytes = jsonbytes[:len(jsonbytes)-1]
+			var req JsonRequest
+			err = json.Unmarshal(jsonbytes, &req)
+			if err != nil {
+				Fail(fmt.Sprintf("Test persistent server: unable to unmarshal json request from client:%v %v", string(jsonbytes), err.Error()))
+			}
+			var resp JsonResponse
+			resp.Id = req.Id
+			switch req.Method {
+			case "QueryCaps":
+				inner := QueryCapsResponse{Caps: []string{"Feature1", "Feature2", "OMGSOAWESOME"}}
+				innerbytes, _ := json.Marshal(inner)
+				resp.Result = &json.RawMessage{}
+				err = resp.Result.UnmarshalJSON(innerbytes)
+				if err != nil {
+					Fail(fmt.Sprintf("Test persistent server: unable to marshal QueryCaps response: %v", err.Error()))
+				}
+			default:
+				resp.Error = fmt.Sprintf("Unknown method %v", req.Method)
+
+			}
+			responseBytes, err := json.Marshal(resp)
+			if err != nil {
+				Fail(fmt.Sprintf("Test persistent server: unable to marshal response:%v %v", resp, err.Error()))
+			}
+			// null terminate response
+			responseBytes = append(responseBytes, byte(0))
+			conn.Write(responseBytes)
 		}
 		It("Queries capabilities (client)", func() {
 			cli, srv := net.Pipe()
