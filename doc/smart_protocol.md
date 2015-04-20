@@ -50,48 +50,48 @@ Protocol methods
 |-----------|-------------|
 |**Method** | __SetEnabledCaps__ |
 |**Purpose**| Tells the server that the client wants to enable a list of capabilities. All omitted caps are assumed to be disabled|
-|**Params**|  Array of strings identifying caps to enable, must have been present in query_caps response.|
-|**Result**|  "OK" on success (error should also be populated on error)|
+|**Params**|  EnableCaps: Array of strings identifying caps to enable, must have been present in query_caps response.|
+|**Result**|  Error is empty on success (error should also be populated on error)|
 
 |||
 |-----------|-------------|
 |**Method**  | __FileExists__ |
 |**Purpose** |Find out whether a given file (metadata or chunk) exists on the server already|
-|**Params**  |lobSHA (string) - the SHA of the binary file in question|
-|            |type (string) - "meta" or "chunk"|
-|            |chunk_idx (Number) - only applicable to chunks, the chunk number (16MB)|
-|**Result**  |True or False|
+|**Params**  |LobSHA (string): the SHA of the binary file in question|
+|            |Type (string): "meta" or "chunk"|
+|            |ChunkIdx (Number): only applicable to chunks, the chunk number (16MB)|
+|**Result**  |Result: True or False|
 
 |||
 |-----------|-------------|
 |**Method**  | __FileExistsOfSize__ |
 |**Purpose** |Find out whether a given file (metadata or chunk) exists on the server already and is of the size specified|
-|**Params**  |lobSHA (string) - the SHA of the binary file in question|
-|            |type (string) - "meta" or "chunk"|
-|            |chunk_idx (Number) - only applicable to chunks, the chunk number (16MB)|
-|            |size (Number) - size in bytes|
-|**Result**  |True or False|
+|**Params**  |LobSHA (string): the SHA of the binary file in question|
+|            |Type (string): "meta" or "chunk"|
+|            |ChunkIdx (Number): only applicable to chunks, the chunk number (16MB)|
+|            |Size (Number): size in bytes|
+|**Result**  |Result: True or False|
 
 |||
 |-----------|-------------|
 | **Method**      |__UploadFile__|
 | **Purpose**     |Upload a single file (metadata or chunk). This does not deal with binary deltas, only with the simple chunked upload of big files. However the server is free to store these however it likes.|
-| **Params**      |lobSHA (string) - the SHA of the binary file in question|
-|                 |type (string) - "meta" or "chunk"|
-|                 |chunk_idx (Number) - only applicable to chunks, the chunk number (16MB)|
-|                 |size (Number) - size in bytes|
-| **Result**      |OK if clear to send. Note server must accept upload if client requests it even if it has the file already (--force). Client will use file_exists_of_size to make it's own decision on whether to upload or not.|
-| **POST**        |Immediately after Result:"OK", a BINARY STREAM of bytes will be sent by the client to the server of length 'size' above.|
+| **Params**      |LobSHA (string): the SHA of the binary file in question|
+|                 |Type (string): "meta" or "chunk"|
+|                 |ChunkIdx (Number): only applicable to chunks, the chunk number (16MB)|
+|                 |Size (Number): size in bytes|
+| **Result**      |Result: True if clear to send. Note server must accept upload if client requests it even if it has the file already (--force). Client will use file_exists_of_size to make it's own decision on whether to upload or not.|
+| **POST**        |Immediately after Result:True, a BINARY STREAM of bytes will be sent by the client to the server of length 'size' above.|
 | **POST Result** |Raw bytes (not JSON) "RECEIVED" if server received all the bytes and stored the file successfully. On failure, return "ERROR-01" (note same byte length as "RECEIVED").|
 
 |||
 |-----------|-------------|
 |**Method**     | __DownloadFile__|
 |**Purpose**    | Prepare to download a single file (metadata or chunk). This does not deal with binary deltas, only with the simple chunked download of big files. However the server is free to store these however it likes.|
-|**Params**     | lobSHA (string) - the SHA of the binary file in question|
-|               | type (string) - "meta" or "chunk"|
-|               | chunk_idx (Number) - only applicable to chunks, the chunk number (16MB)|
-|**Result**     | "OK" and byte size if server has the data to send.|
+|**Params**     | LobSHA (string): the SHA of the binary file in question|
+|               | Type (string): "meta" or "chunk"|
+|               | ChunkIdx (Number): only applicable to chunks, the chunk number (16MB)|
+|**Result**     | Result: True and byte size if server has the data to send.|
 |               |  Client should follow up with the raw bytes "START" (not JSON) to trigger the binary data send|
 |**POST**       | A BINARY STREAM of bytes will be sent by the server to the client of length 'size' as reported above. The client must read all the bytes.|
 
@@ -100,28 +100,28 @@ Protocol methods
 |-----------|-------------|
 |**Method**  |__PickCompleteLOB__|
 |**Purpose** |Out of a list of LOB SHAs in order of preference, return which one (if any) the server has a complete copy of already. This is used to probe for previous versions of a file to exchange a binary delta of. Note that in all cases (upload and download) the client is responsible for creating the list of possible ancestor candidates, whether sending or receiving. This means the server doesn't have to have the git repo available, and the client always has the git commits when downloading anyway (that's how it decides what to download)|
-|**Params**  |lobshas - array of strings identifying LOBs in order of preference (usually ancestors of a file)|
-|**Result**  |sha - first sha in the list that server has a complete file copy of. The server should confirm that all data is present but does not need to check the sha integrity (done post delta application)|
+|**Params**  |LobSHAs: array of strings identifying LOBs in order of preference (usually ancestors of a file)|
+|**Result**  |SHA: first sha in the list that server has a complete file copy of. The server should confirm that all data is present but does not need to check the sha integrity (done post delta application)|
 
 |||
 |-----------|-------------|
 |**Method**     | __UploadLOBDelta__|
 |**Purpose**    | Ask to upload a binary patch between 2 lobs which the client has calculated so the server can apply it to its own store, without uploading the entire file content.|
-|**Params**     | baseLobSHA (string) - the SHA of the binary file content to use as a base. Client should have already identified that server has this via __pick_complete_lob__|
-|               | targetLobSHA (string) - the SHA of the binary file content we want to reconstruct from base + delta|
-|               | size (Number) - size in bytes of the binary delta|
-|               | metadata (embedded JSON metadata struct) - the content of the _meta file to go with targetLobSHA|
-|**Result**     | "OK" if server is ready to receive delta on this basis|
-|**POST**       | Immediately after Result:"OK", a BINARY STREAM of bytes will be sent by the client to the server of length 'size' above. The server must read all the bytes and then generate the final file from the delta + base (must check SHA integrity) and store it.|
+|**Params**     | BaseLobSHA (string): the SHA of the binary file content to use as a base. Client should have already identified that server has this via __pick_complete_lob__|
+|               | TargetLobSHA (string): the SHA of the binary file content we want to reconstruct from base + delta|
+|               | Size (Number): size in bytes of the binary delta|
+|               | Metadata (embedded JSON metadata struct): the content of the _meta file to go with targetLobSHA|
+|**Result**     | Result: True if server is ready to receive delta on this basis|
+|**POST**       | Immediately after Result:True, a BINARY STREAM of bytes will be sent by the client to the server of length 'size' above. The server must read all the bytes and then generate the final file from the delta + base (must check SHA integrity) and store it.|
 | **POST Result** |Raw bytes "RECEIVED" (not JSON) if server received all the delta bytes, generated the final file, checked the SHA against the patched content and stored it successfully. On failure, return "ERROR-NN" where NN is an error code (note same byte length as "RECEIVED"). 01=interrupted, 02=patch failed, 03=integrity check failed|
 
 |||
 |-----------|-------------|
 |**Method**     | __DownloadLOBDelta__|
 |**Purpose**    | Ask the server to generate a binary patch between 2 lobs which we know it has (or re-use an existing delta).|
-|**Params**     | baseLobSHA (string) - the SHA of the binary file content to use as a base|
-|               | targetLobSHA (string) - the SHA of the binary file content we want to reconstruct from base + delta|
-|**Result**     | size (Number) - size in bytes of delta if server has generated it ready to to send. Server should keep this calculated delta for a while, at least 1 day (maybe longer to re-use for multiple clients). 0 if there was a problem (error identifies). The client should subsequently request the calculated delta if it wants it (may choose not to if borderline)|
-|               | metadata (embedded JSON metadata struct) - the content of the meta file embedded in result which the client can save, to go with the content.|
+|**Params**     | BaseLobSHA (string): the SHA of the binary file content to use as a base|
+|               | TargetLobSHA (string): the SHA of the binary file content we want to reconstruct from base + delta|
+|**Result**     | Size (Number): size in bytes of delta if server has generated it ready to to send. Server should keep this calculated delta for a while, at least 1 day (maybe longer to re-use for multiple clients). 0 if there was a problem (error identifies). The client should subsequently request the calculated delta if it wants it (may choose not to if borderline)|
+|               | Metadata (embedded JSON metadata struct): the content of the meta file embedded in result which the client can save, to go with the content.|
 |               | Client should follow up with the raw bytes "START" (not JSON) to trigger the binary data send|
 |**POST**       | On receipt of "START" signal a BINARY STREAM of bytes will be sent by the server to the client of length 'size' as indicated above. The client must read all the bytes.|
