@@ -293,12 +293,27 @@ func (self *PersistentTransport) ChunkExists(lobsha string, chunk int) (bool, er
 	return resp.Result, nil
 }
 
+type FileExistsOfSizeRequest struct {
+	LobSHA   string
+	Type     string
+	ChunkIdx int
+	Size     int64
 }
 
 // Return whether LOB chunk content exists on the server, and is of a specific size
-func (self *PersistentTransport) ChunkExistsAndIsOfSize(lobsha string, chunk int, sz int64) bool {
-	// TODO
-	return false
+func (self *PersistentTransport) ChunkExistsAndIsOfSize(lobsha string, chunk int, sz int64) (bool, error) {
+	params := FileExistsOfSizeRequest{
+		LobSHA:   lobsha,
+		Type:     "chunk",
+		ChunkIdx: chunk,
+		Size:     sz,
+	}
+	resp := FileExistsResponse{}
+	err := self.doFullJSONRequestResponse("FileExistsOfSize", &params, &resp)
+	if err != nil {
+		return false, err
+	}
+	return resp.Result, nil
 }
 
 // Upload metadata for a LOB (from a stream); must call back progress

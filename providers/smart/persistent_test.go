@@ -54,6 +54,10 @@ var _ = Describe("Persistent Transport", func() {
 			[]int{0, 1},
 			[]int{0, 1, 3, 4, 5, 7},
 		}
+		chunkSizes := [][]int64{ // only for first couple of chunks, testing only
+			[]int64{16777216, 150},
+			[]int64{16777216, 3210},
+		}
 
 		serve := func(conn net.Conn) {
 			defer GinkgoRecover()
@@ -148,6 +152,25 @@ var _ = Describe("Persistent Transport", func() {
 						}
 					}
 
+				case "FileExistsOfSize":
+					fereq := FileExistsOfSizeRequest{}
+					extractStructFromJsonRawMessage(req.Params, &fereq)
+					result := FileExistsResponse{}
+					for i, chunk := range chunksThatExist {
+						if fereq.LobSHA == chunk {
+							for chunkidx, sz := range chunkSizes[i] {
+								if fereq.ChunkIdx == chunkidx {
+									result.Result = (fereq.Size == sz)
+									break
+								}
+							}
+							break
+						}
+					}
+					resp, err = NewJsonResponse(req.Id, result)
+					if err != nil {
+						Fail(fmt.Sprintf("Test persistent server: unable to create response: %v", err.Error()))
+					}
 				default:
 					resp = NewJsonErrorResponse(req.Id, fmt.Sprintf("Unknown method %v", req.Method))
 				}
@@ -210,6 +233,34 @@ var _ = Describe("Persistent Transport", func() {
 			Expect(err).To(BeNil(), "Should be no error")
 			Expect(exists).To(BeFalse(), "Chunk should not exist")
 			exists, err = trans.ChunkExists(chunksThatExist[0], 99)
+			Expect(err).To(BeNil(), "Should be no error")
+			Expect(exists).To(BeFalse(), "Chunk should not exist")
+
+		})
+
+		It("Queries file sizes (client)", func() {
+			// This also tests multiple requests in sequence (JSON only)
+			cli, srv := net.Pipe()
+			go serve(srv)
+			defer cli.Close()
+
+			trans := NewPersistentTransport(cli)
+			for i, chunksz := range chunkSizes {
+				for chunkidx, sz := range chunksz {
+					sha := chunksThatExist[i]
+					exists, err := trans.ChunkExistsAndIsOfSize(sha, chunkidx, sz)
+					Expect(err).To(BeNil(), "Should be no error")
+					Expect(exists).To(BeTrue(), "Chunk should exist at this size")
+
+					// Try a failure
+					exists, err = trans.ChunkExistsAndIsOfSize(sha, chunkidx, sz+16)
+					Expect(err).To(BeNil(), "Should be no error")
+					Expect(exists).To(BeFalse(), "Chunk size shouldn't match")
+
+				}
+			}
+			// Also test just a case of not being there at all
+			exists, err := trans.ChunkExistsAndIsOfSize("9999999999999999999999999999999999999999", 0, 150)
 			Expect(err).To(BeNil(), "Should be no error")
 			Expect(exists).To(BeFalse(), "Chunk should not exist")
 
