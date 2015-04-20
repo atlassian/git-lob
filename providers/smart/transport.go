@@ -26,12 +26,12 @@ type Transport interface {
 	// Return whether LOB chunk content exists on the server, and is of a specific size
 	ChunkExistsAndIsOfSize(lobsha string, chunk int, sz int64) (bool, error)
 
-	// Upload metadata for a LOB (from a stream); must call back progress
-	UploadMetadata(lobsha string, data io.Reader, callback TransportProgressCallback) error
+	// Upload metadata for a LOB (from a stream); no progress callback as very small
+	UploadMetadata(lobsha string, data io.Reader) error
 	// Upload chunk content for a LOB (from a stream); must call back progress
 	UploadChunk(lobsha string, chunk int, sz int64, data io.Reader, callback TransportProgressCallback) error
-	// Download metadata for a LOB (to a stream); must call back progress
-	DownloadMetadata(lobsha string, out io.Writer, callback TransportProgressCallback) error
+	// Download metadata for a LOB (to a stream); no progress callback as very small
+	DownloadMetadata(lobsha string, out io.Writer) error
 	// Download chunk content for a LOB (from a stream); must call back progress
 	// This is a non-delta download operation, just provide entire chunk content
 	DownloadChunk(lobsha string, chunk int, out io.Writer, callback TransportProgressCallback) error

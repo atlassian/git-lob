@@ -316,8 +316,8 @@ func (self *PersistentTransport) ChunkExistsAndIsOfSize(lobsha string, chunk int
 	return resp.Result, nil
 }
 
-// Upload metadata for a LOB (from a stream); must call back progress
-func (self *PersistentTransport) UploadMetadata(lobsha string, data io.Reader, callback TransportProgressCallback) error {
+// Upload metadata for a LOB (from a stream); no progress callback as very small
+func (self *PersistentTransport) UploadMetadata(lobsha string, data io.Reader) error {
 	// TODO
 	return nil
 }
@@ -329,8 +329,8 @@ func (self *PersistentTransport) UploadChunk(lobsha string, chunk int, sz int64,
 
 }
 
-// Download metadata for a LOB (to a stream); must call back progress
-func (self *PersistentTransport) DownloadMetadata(lobsha string, out io.Writer, callback TransportProgressCallback) error {
+// Download metadata for a LOB (to a stream); no progress callback as very small
+func (self *PersistentTransport) DownloadMetadata(lobsha string, out io.Writer) error {
 	// TODO
 	return nil
 
