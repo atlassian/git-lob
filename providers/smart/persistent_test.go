@@ -68,6 +68,7 @@ var _ = Describe("Persistent Transport", func() {
 		testchunkdatasz := PersistentTransportBufferSize*3 + 157
 		testchunkidx := 3
 		var testchunkdata []byte
+		pickloblist := []string{"1234567890abcdef1234567890abcdef12345678", testsha, "0000000000000000000011111111112222222222"}
 
 		BeforeEach(func() {
 			testchunkdata = make([]byte, testchunkdatasz)
@@ -291,6 +292,15 @@ var _ = Describe("Persistent Transport", func() {
 						bytesLeft -= int64(n)
 						Expect(err).To(BeNil(), "Test persistent server: unable to read data")
 					}
+				case "PickCompleteLOB":
+					params := GetFirstCompleteLOBFromListRequest{}
+					extractStructFromJsonRawMessage(req.Params, &params)
+					// check it's the list we expected
+					Expect(params.LobSHAs).To(ConsistOf(pickloblist), "Server should receive correct params")
+					result := GetFirstCompleteLOBFromListResponse{}
+					result.FirstSHA = testsha
+					resp, err = NewJsonResponse(req.Id, result)
+					Expect(err).To(BeNil(), "Test persistent server: unable to create response")
 
 				default:
 					resp = NewJsonErrorResponse(req.Id, fmt.Sprintf("Unknown method %v", req.Method))
@@ -476,6 +486,16 @@ var _ = Describe("Persistent Transport", func() {
 			Expect(totalBytesDone).To(BeEquivalentTo(testchunkdatasz), "Callback should have reported all bytes done")
 			Expect(totalBytesReported).To(BeEquivalentTo(testchunkdatasz), "Callback should have reported totalBytes correctly")
 			Expect(numCallbacks).To(BeEquivalentTo(4), "Should have been 4 callbacks in total")
+		})
+
+		It("Picks complete LOB from list", func() {
+			cli, srv := net.Pipe()
+			go serve(srv)
+			defer cli.Close()
+			trans := NewPersistentTransport(cli)
+			sha, err := trans.GetFirstCompleteLOBFromList(pickloblist)
+			Expect(err).To(BeNil(), "Should not be an error picking LOB")
+			Expect(sha).To(Equal(testsha), "Should pick the correct sha")
 		})
 
 		It("Deals with disconnection", func() {

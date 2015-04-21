@@ -110,7 +110,7 @@ Protocol methods
 |**Method**  |__PickCompleteLOB__|
 |**Purpose** |Out of a list of LOB SHAs in order of preference, return which one (if any) the server has a complete copy of already. This is used to probe for previous versions of a file to exchange a binary delta of. Note that in all cases (upload and download) the client is responsible for creating the list of possible ancestor candidates, whether sending or receiving. This means the server doesn't have to have the git repo available, and the client always has the git commits when downloading anyway (that's how it decides what to download)|
 |**Params**  |LobSHAs: array of strings identifying LOBs in order of preference (usually ancestors of a file)|
-|**Result**  |SHA: first sha in the list that server has a complete file copy of. The server should confirm that all data is present but does not need to check the sha integrity (done post delta application)|
+|**Result**  |FirstSHA: first sha in the list that server has a complete file copy of, or blank string if none are present. The server should confirm that all data is present but does not need to check the sha integrity (done post delta application)|
 
 |||
 |-----------|-------------|

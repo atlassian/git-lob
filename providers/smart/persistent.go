@@ -550,14 +550,25 @@ func (self *PersistentTransport) DownloadChunk(lobsha string, chunk int, out io.
 
 }
 
+type GetFirstCompleteLOBFromListRequest struct {
+	LobSHAs []string
+}
+type GetFirstCompleteLOBFromListResponse struct {
+	FirstSHA string
+}
+
 // Return the LOB which the server has a complete copy of, from a list of candidates
 // Server must test in the order provided & return the earliest one which is complete on the server
 // Server doesn't have to test full integrity of LOB, just completeness (check size against meta)
 // Return a blank string if none are available
 func (self *PersistentTransport) GetFirstCompleteLOBFromList(candidateSHAs []string) (string, error) {
-	// TODO
-	return "", nil
-
+	params := GetFirstCompleteLOBFromListRequest{candidateSHAs}
+	resp := GetFirstCompleteLOBFromListResponse{}
+	err := self.doFullJSONRequestResponse("PickCompleteLOB", &params, &resp)
+	if err != nil {
+		return "", fmt.Errorf("Error asking server for first LOB from list %v: %v", candidateSHAs, err.Error())
+	}
+	return resp.FirstSHA, nil
 }
 
 // Upload a binary delta to apply against a LOB the server already has, to generate a new LOB
