@@ -81,6 +81,7 @@ var _ = Describe("Persistent Transport", func() {
 
 		})
 
+		// Test server function here, just called over a pipe to test
 		serve := func(conn net.Conn) {
 			defer GinkgoRecover()
 			defer conn.Close()
@@ -99,26 +100,20 @@ var _ = Describe("Persistent Transport", func() {
 				jsonbytes = jsonbytes[:len(jsonbytes)-1]
 				var req JsonRequest
 				err = json.Unmarshal(jsonbytes, &req)
-				if err != nil {
-					Fail(fmt.Sprintf("Test persistent server: unable to unmarshal json request from client:%v %v", string(jsonbytes), err.Error()))
-				}
+				Expect(err).To(BeNil(), fmt.Sprintf("Test persistent server: unable to unmarshal json request from client:%v", string(jsonbytes)))
 				var resp *JsonResponse
 				allowedCaps := []string{"Feature1", "Feature2", "OMGSOAWESOME"}
 				switch req.Method {
 				case "QueryCaps":
 					result := QueryCapsResponse{Caps: allowedCaps}
 					resp, err = NewJsonResponse(req.Id, result)
-					if err != nil {
-						Fail(fmt.Sprintf("Test persistent server: unable to create response: %v", err.Error()))
-					}
+					Expect(err).To(BeNil(), "Test persistent server: unable to create response")
 				case "SetEnabledCaps":
 					capsreq := SetEnabledCapsRequest{}
 					extractStructFromJsonRawMessage(req.Params, &capsreq)
 					result := SetEnabledCapsResponse{}
 					resp, err = NewJsonResponse(req.Id, result)
-					if err != nil {
-						Fail(fmt.Sprintf("Test persistent server: unable to create response: %v", err.Error()))
-					}
+					Expect(err).To(BeNil(), "Test persistent server: unable to create response")
 					// test for error condition
 					for _, c := range capsreq.EnableCaps {
 						ok := false
@@ -169,9 +164,7 @@ var _ = Describe("Persistent Transport", func() {
 						resp = NewJsonErrorResponse(req.Id, strerr)
 					} else {
 						resp, err = NewJsonResponse(req.Id, result)
-						if err != nil {
-							Fail(fmt.Sprintf("Test persistent server: unable to create response: %v", err.Error()))
-						}
+						Expect(err).To(BeNil(), "Test persistent server: unable to create response")
 					}
 
 				case "FileExistsOfSize":
@@ -190,29 +183,21 @@ var _ = Describe("Persistent Transport", func() {
 						}
 					}
 					resp, err = NewJsonResponse(req.Id, result)
-					if err != nil {
-						Fail(fmt.Sprintf("Test persistent server: unable to create response: %v", err.Error()))
-					}
+					Expect(err).To(BeNil(), "Test persistent server: unable to create response")
 				case "UploadFile":
 					upreq := UploadFileRequest{}
 					extractStructFromJsonRawMessage(req.Params, &upreq)
-					if upreq.LobSHA != testsha {
-						Fail("Test persistent server: SHA incorrect")
-					}
-					if upreq.Type == "chunk" && upreq.ChunkIdx != testchunkidx {
-						Fail("Test persistent server: Chunk index incorrect")
+					Expect(upreq.LobSHA).To(Equal(testsha), "Test persistent server: SHA incorrect")
+					if upreq.Type == "chunk" {
+						Expect(upreq.ChunkIdx).To(BeEquivalentTo(testchunkidx), "Test persistent server: Chunk index incorrect")
 					}
 					startresult := UploadFileStartResponse{}
 					startresult.OKToSend = true
 					// Send start response immediately
 					resp, err = NewJsonResponse(req.Id, startresult)
-					if err != nil {
-						Fail(fmt.Sprintf("Test persistent server: unable to create response: %v", err.Error()))
-					}
+					Expect(err).To(BeNil(), "Test persistent server: unable to create response")
 					responseBytes, err := json.Marshal(resp)
-					if err != nil {
-						Fail(fmt.Sprintf("Test persistent server: unable to marshal response:%v %v", resp, err.Error()))
-					}
+					Expect(err).To(BeNil(), "Test persistent server: unable to marshal response")
 					// null terminate response
 					responseBytes = append(responseBytes, byte(0))
 					conn.Write(responseBytes)
@@ -267,11 +252,9 @@ var _ = Describe("Persistent Transport", func() {
 				case "DownloadFilePrepare":
 					downreq := DownloadFilePrepareRequest{}
 					extractStructFromJsonRawMessage(req.Params, &downreq)
-					if downreq.LobSHA != testsha {
-						Fail("Test persistent server: SHA incorrect")
-					}
-					if downreq.Type == "chunk" && downreq.ChunkIdx != testchunkidx {
-						Fail("Test persistent server: Chunk index incorrect")
+					Expect(downreq.LobSHA).To(Equal(testsha), "Test persistent server: SHA incorrect")
+					if downreq.Type == "chunk" {
+						Expect(downreq.ChunkIdx).To(BeEquivalentTo(testchunkidx), "Test persistent server: Chunk index incorrect")
 					}
 					result := DownloadFilePrepareResponse{}
 					if downreq.Type == "meta" {
@@ -280,9 +263,7 @@ var _ = Describe("Persistent Transport", func() {
 						result.Size = int64(len(testchunkdata))
 					}
 					resp, err = NewJsonResponse(req.Id, result)
-					if err != nil {
-						Fail(fmt.Sprintf("Test persistent server: unable to create response: %v", err.Error()))
-					}
+					Expect(err).To(BeNil(), "Test persistent server: unable to create response")
 				case "DownloadFileStart":
 					// Can't return any error responses here (byte stream response only), have to just fail
 					downreq := DownloadFileStartRequest{}
@@ -297,10 +278,8 @@ var _ = Describe("Persistent Transport", func() {
 						sz = int64(len(testchunkdata))
 						datasrc = bytes.NewReader(testchunkdata)
 					}
-					// confirm size
-					if sz != downreq.Size {
-						Fail("Test persistent server: download size incorrect")
-					}
+					// confirm size for testing
+					Expect(sz).To(BeEquivalentTo(downreq.Size), "Test persistent server: download size incorrect")
 
 					bytesLeft := sz
 					for bytesLeft > 0 {
@@ -310,9 +289,7 @@ var _ = Describe("Persistent Transport", func() {
 						}
 						n, err := io.CopyN(conn, datasrc, c)
 						bytesLeft -= int64(n)
-						if err != nil {
-							Fail(fmt.Sprintf("Test persistent server: unable to read data: %v", err.Error()))
-						}
+						Expect(err).To(BeNil(), "Test persistent server: unable to read data")
 					}
 
 				default:
@@ -320,9 +297,7 @@ var _ = Describe("Persistent Transport", func() {
 				}
 				if resp != nil {
 					responseBytes, err := json.Marshal(resp)
-					if err != nil {
-						Fail(fmt.Sprintf("Test persistent server: unable to marshal response:%v %v", resp, err.Error()))
-					}
+					Expect(err).To(BeNil(), "Test persistent server: unable to marshal response")
 					// null terminate response
 					responseBytes = append(responseBytes, byte(0))
 					conn.Write(responseBytes)
