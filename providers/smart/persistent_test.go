@@ -462,6 +462,19 @@ var _ = Describe("Persistent Transport", func() {
 
 		})
 
+		It("Downloads metadata", func() {
+			var buf bytes.Buffer
+
+			cli, srv := net.Pipe()
+			go serve(srv)
+			defer cli.Close()
+
+			trans := NewPersistentTransport(cli)
+			err := trans.DownloadMetadata(testsha, &buf)
+			Expect(err).To(BeNil(), "Should not be an error in DownloadFile")
+			Expect(string(buf.Bytes())).To(Equal(metacontent), "Should download expected metadata content")
+		})
+
 		It("Deals with disconnection", func() {
 			// ??
 		})

@@ -111,7 +111,7 @@ func (self *PersistentTransport) Release() {
 	}
 }
 
-// Perform a full JSON-RPC call with JSON request and response
+// Perform a full JSON-RPC style call with JSON request and response
 func (self *PersistentTransport) doFullJSONRequestResponse(method string, params interface{}, result interface{}) error {
 
 	req, err := NewJsonRequest(method, params)
@@ -127,6 +127,27 @@ func (self *PersistentTransport) doFullJSONRequestResponse(method string, params
 		return err
 	}
 	// result is now populated
+	return nil
+
+}
+
+// Perform a JSON request that results in a byte stream as a response & download to out (with callbacks if required)
+func (self *PersistentTransport) doJSONRequestDownload(method string, params interface{},
+	sz int64, out io.Writer, callback TransportProgressCallback) error {
+
+	req, err := NewJsonRequest(method, params)
+	if err != nil {
+		return err
+	}
+	err = self.sendJSONRequest(req)
+	if err != nil {
+		return err
+	}
+	err = self.receiveRawData(sz, out, nil)
+	if err != nil {
+		return err
+	}
+
 	return nil
 
 }
@@ -230,6 +251,38 @@ func (self *PersistentTransport) sendRawData(sz int64, source io.Reader, callbac
 			break
 		}
 		n, err := io.CopyN(self.Connection, source, c)
+		copysize += n
+		if n > 0 && callback != nil && sz > 0 {
+			callback(copysize, sz)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	if copysize != sz {
+		return fmt.Errorf("Transferred bytes did not match expected size; transferred %d, expected %d", copysize, sz)
+	}
+
+	return nil
+}
+
+func (self *PersistentTransport) receiveRawData(sz int64, out io.Writer, callback TransportProgressCallback) error {
+
+	if sz == 0 {
+		return nil
+	}
+
+	var copysize int64 = 0
+	for {
+		c := PersistentTransportBufferSize
+		if (sz - copysize) < c {
+			c = sz - copysize
+		}
+		if c <= 0 {
+			break
+		}
+		// Must read from buffered reader consistently
+		n, err := io.CopyN(out, self.BufferedReader, c)
 		copysize += n
 		if n > 0 && callback != nil && sz > 0 {
 			callback(copysize, sz)
@@ -426,11 +479,45 @@ func (self *PersistentTransport) UploadChunk(lobsha string, chunk int, sz int64,
 	return nil
 }
 
+type DownloadFilePrepareRequest struct {
+	LobSHA   string
+	Type     string
+	ChunkIdx int
+}
+type DownloadFilePrepareResponse struct {
+	Size int64
+}
+type DownloadFileStartRequest struct {
+	LobSHA   string
+	Type     string
+	ChunkIdx int
+	Size     int64
+}
+
 // Download metadata for a LOB (to a stream); no progress callback as very small
 func (self *PersistentTransport) DownloadMetadata(lobsha string, out io.Writer) error {
-	// TODO
-	return nil
+	prepparams := DownloadFilePrepareRequest{
+		LobSHA: lobsha,
+		Type:   "meta",
+	}
+	resp := DownloadFilePrepareResponse{}
+	err := self.doFullJSONRequestResponse("DownloadFilePrepare", &prepparams, &resp)
+	if err != nil {
+		return fmt.Errorf("Error while downloading metadata for %v (while sending DownloadFilePrepare JSON request): %v", lobsha, err.Error())
+	}
+	startparams := DownloadFileStartRequest{
+		LobSHA: lobsha,
+		Type:   "meta",
+		Size:   resp.Size,
+	}
 
+	// Response is just raw byte data - no callback as small enough not to need one
+	err = self.doJSONRequestDownload("DownloadFileStart", &startparams, resp.Size, out, nil)
+	if err != nil {
+		return fmt.Errorf("Error while downloading metadata for %v (during download): %v", lobsha, err.Error())
+	}
+
+	return nil
 }
 
 // Download chunk content for a LOB (from a stream); must call back progress
