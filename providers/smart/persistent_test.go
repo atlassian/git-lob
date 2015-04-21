@@ -4,6 +4,7 @@ import (
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -337,6 +338,39 @@ var _ = Describe("Persistent Transport", func() {
 			err := trans.UploadMetadata(sha, int64(len(metacontent)), rdr)
 			Expect(err).To(BeNil(), "Should not be an error in UploadFile")
 			Expect(rdr.Len()).To(BeZero(), "Server should have read all bytes")
+		})
+
+		It("Uploads chunk data", func() {
+			// Content doesn't actually matter here, just create some random data
+			// Make sure it's big enough to require > 1 callback
+			sz := PersistentTransportBufferSize*3 + 157
+			data := make([]byte, sz)
+			// don't bother to populate with any data, doesn't matter - leave random
+			sha := "5e0865e76e8956900c3ef6fec2d2af1c05f31ec4"
+			rdr := bytes.NewReader(data)
+
+			cli, srv := net.Pipe()
+			go serve(srv)
+			defer cli.Close()
+
+			numCallbacks := 0
+			var totalBytesDone int64
+			var totalBytesReported int64
+			callback := func(bytesDone, totalBytes int64) {
+				totalBytesDone = bytesDone
+				totalBytesReported = totalBytes
+				numCallbacks++
+			}
+			fmt.Println(data)
+
+			trans := NewPersistentTransport(cli)
+			err := trans.UploadChunk(sha, 0, sz, rdr, callback)
+			Expect(err).To(BeNil(), "Should not be an error in UploadFile")
+			Expect(rdr.Len()).To(BeZero(), "Server should have read all bytes")
+			Expect(totalBytesDone).To(BeEquivalentTo(sz), "Callback should have reported bytesDone to 100%")
+			Expect(totalBytesReported).To(BeEquivalentTo(sz), "Callback should have reported totalBytes correctly")
+			Expect(numCallbacks).To(BeEquivalentTo(4), "Should have been 4 callbacks in total")
+
 		})
 
 		It("Deals with disconnection", func() {

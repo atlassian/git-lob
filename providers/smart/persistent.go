@@ -386,16 +386,44 @@ func (self *PersistentTransport) UploadMetadata(lobsha string, sz int64, data io
 		}
 
 	} else {
-		return fmt.Errorf("Server rejected request to upload metadata for %v (no other error)")
+		return fmt.Errorf("Server rejected request to upload metadata for %v (no other error)", lobsha)
 	}
 	return nil
 }
 
 // Upload chunk content for a LOB (from a stream); must call back progress
 func (self *PersistentTransport) UploadChunk(lobsha string, chunk int, sz int64, data io.Reader, callback TransportProgressCallback) error {
-	// TODO
-	return nil
+	params := UploadFileRequest{
+		LobSHA:   lobsha,
+		Type:     "chunk",
+		ChunkIdx: chunk,
+		Size:     sz,
+	}
+	resp := UploadFileStartResponse{}
+	err := self.doFullJSONRequestResponse("UploadFile", &params, &resp)
+	if err != nil {
+		return fmt.Errorf("Error while uploading chunk %d for %v (while sending UploadFile JSON request): %v", chunk, lobsha, err.Error())
+	}
+	if resp.OKToSend {
+		// Send data, this does it in batches and calls back
+		err = self.sendRawData(sz, data, callback)
+		if err != nil {
+			return fmt.Errorf("Error while uploading chunk %d for %v (while sending raw content): %v", chunk, lobsha, err.Error())
+		}
+		// Now read response to sent data
+		received := UploadFileCompleteResponse{}
+		err = self.readFullJSONResponse(nil, &received)
+		if err != nil {
+			return fmt.Errorf("Error while uploading chunk %d for %v (response to raw content): %v", chunk, lobsha, err.Error())
+		}
+		if !received.ReceivedOK {
+			return fmt.Errorf("Data not fully received while uploading chunk %d for %v: Unknown server error", chunk, lobsha)
+		}
 
+	} else {
+		return fmt.Errorf("Server rejected request to upload chunk %d for %v (no other error)", chunk, lobsha)
+	}
+	return nil
 }
 
 // Download metadata for a LOB (to a stream); no progress callback as very small
