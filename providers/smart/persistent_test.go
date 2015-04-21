@@ -61,6 +61,26 @@ var _ = Describe("Persistent Transport", func() {
 			[]int64{16777216, 3210},
 		}
 
+		testsha := "5e0865e76e8956900c3ef6fec2d2af1c05f31ec4"
+		metacontent := `{"SHA":"5e0865e76e8956900c3ef6fec2d2af1c05f31ec4","Size":21982,"NumChunks":4}`
+		// Content doesn't actually matter here, just create some random data
+		// Make sure it's big enough to require > 1 callback
+		testchunkdatasz := PersistentTransportBufferSize*3 + 157
+		testchunkidx := 3
+		var testchunkdata []byte
+
+		BeforeEach(func() {
+			testchunkdata = make([]byte, testchunkdatasz)
+			// put something interesting in it so we can detect it at each end
+			testchunkdata[0] = 'a'
+			testchunkdata[1] = '1'
+			testchunkdata[2] = '6'
+			testchunkdata[testchunkdatasz-1] = 'z'
+			testchunkdata[testchunkdatasz-2] = '2'
+			testchunkdata[testchunkdatasz-3] = '5'
+
+		})
+
 		serve := func(conn net.Conn) {
 			defer GinkgoRecover()
 			defer conn.Close()
@@ -176,6 +196,12 @@ var _ = Describe("Persistent Transport", func() {
 				case "UploadFile":
 					upreq := UploadFileRequest{}
 					extractStructFromJsonRawMessage(req.Params, &upreq)
+					if upreq.LobSHA != testsha {
+						Fail("Test persistent server: SHA incorrect")
+					}
+					if upreq.Type == "chunk" && upreq.ChunkIdx != testchunkidx {
+						Fail("Test persistent server: Chunk index incorrect")
+					}
 					startresult := UploadFileStartResponse{}
 					startresult.OKToSend = true
 					// Send start response immediately
@@ -195,20 +221,41 @@ var _ = Describe("Persistent Transport", func() {
 					receivedresult := UploadFileCompleteResponse{}
 					receivedresult.ReceivedOK = true
 					var receiveerr error
+					// make pre-sized buffer
+					contentbuf := bytes.NewBuffer(make([]byte, 0, upreq.Size))
 					bytesLeft := upreq.Size
-					buf := make([]byte, PersistentTransportBufferSize)
 					for bytesLeft > 0 {
 						c := PersistentTransportBufferSize
 						if c > bytesLeft {
 							c = bytesLeft
 						}
-						// Just read into buf, don't do anything with it
-						n, err := rdr.Read(buf[:c])
+						n, err := io.CopyN(contentbuf, rdr, c)
 						bytesLeft -= int64(n)
 						if err != nil {
 							receivedresult.ReceivedOK = false
 							receiveerr = fmt.Errorf("Test persistent server: unable to read data: %v", err.Error())
 							break
+						}
+					}
+					// Check we received what we expected to receive
+					if upreq.Type == "meta" {
+						if string(contentbuf.Bytes()) != metacontent {
+							receiveerr = fmt.Errorf("Test persistent server: data didn't match")
+						}
+					} else {
+						// test first & last 5 bytes
+						contentbytes := contentbuf.Bytes()
+						for i := 0; i < 5; i++ {
+							if contentbytes[i] != testchunkdata[i] {
+								receiveerr = fmt.Errorf("Test persistent server: data didn't match")
+								break
+							}
+						}
+						for i := len(contentbytes) - 5; i < len(contentbytes); i++ {
+							if contentbytes[i] != testchunkdata[i] {
+								receiveerr = fmt.Errorf("Test persistent server: data didn't match")
+								break
+							}
 						}
 					}
 					// After we've read all the content bytes, send received response
@@ -217,17 +264,69 @@ var _ = Describe("Persistent Transport", func() {
 					} else {
 						resp, _ = NewJsonResponse(req.Id, receivedresult)
 					}
+				case "DownloadFilePrepare":
+					downreq := DownloadFilePrepareRequest{}
+					extractStructFromJsonRawMessage(req.Params, &downreq)
+					if downreq.LobSHA != testsha {
+						Fail("Test persistent server: SHA incorrect")
+					}
+					if downreq.Type == "chunk" && downreq.ChunkIdx != testchunkidx {
+						Fail("Test persistent server: Chunk index incorrect")
+					}
+					result := DownloadFilePrepareResponse{}
+					if downreq.Type == "meta" {
+						result.Size = int64(len(metacontent))
+					} else {
+						result.Size = int64(len(testchunkdata))
+					}
+					resp, err = NewJsonResponse(req.Id, result)
+					if err != nil {
+						Fail(fmt.Sprintf("Test persistent server: unable to create response: %v", err.Error()))
+					}
+				case "DownloadFileStart":
+					// Can't return any error responses here (byte stream response only), have to just fail
+					downreq := DownloadFileStartRequest{}
+					extractStructFromJsonRawMessage(req.Params, &downreq)
+					// there is no response to this
+					var sz int64
+					var datasrc io.Reader
+					if downreq.Type == "meta" {
+						sz = int64(len(metacontent))
+						datasrc = strings.NewReader(metacontent)
+					} else {
+						sz = int64(len(testchunkdata))
+						datasrc = bytes.NewReader(testchunkdata)
+					}
+					// confirm size
+					if sz != downreq.Size {
+						Fail("Test persistent server: download size incorrect")
+					}
+
+					bytesLeft := sz
+					for bytesLeft > 0 {
+						c := PersistentTransportBufferSize
+						if c > bytesLeft {
+							c = bytesLeft
+						}
+						n, err := io.CopyN(conn, datasrc, c)
+						bytesLeft -= int64(n)
+						if err != nil {
+							Fail(fmt.Sprintf("Test persistent server: unable to read data: %v", err.Error()))
+						}
+					}
 
 				default:
 					resp = NewJsonErrorResponse(req.Id, fmt.Sprintf("Unknown method %v", req.Method))
 				}
-				responseBytes, err := json.Marshal(resp)
-				if err != nil {
-					Fail(fmt.Sprintf("Test persistent server: unable to marshal response:%v %v", resp, err.Error()))
+				if resp != nil {
+					responseBytes, err := json.Marshal(resp)
+					if err != nil {
+						Fail(fmt.Sprintf("Test persistent server: unable to marshal response:%v %v", resp, err.Error()))
+					}
+					// null terminate response
+					responseBytes = append(responseBytes, byte(0))
+					conn.Write(responseBytes)
 				}
-				// null terminate response
-				responseBytes = append(responseBytes, byte(0))
-				conn.Write(responseBytes)
 			}
 			conn.Close()
 		}
@@ -325,9 +424,6 @@ var _ = Describe("Persistent Transport", func() {
 		})
 
 		It("Uploads metadata", func() {
-			// Content doesn't actually matter here, just create something that seems right (don't want to have dependency on core)
-			metacontent := `{"SHA":"5e0865e76e8956900c3ef6fec2d2af1c05f31ec4","Size":21982,"NumChunks":1}`
-			sha := "5e0865e76e8956900c3ef6fec2d2af1c05f31ec4"
 			rdr := strings.NewReader(metacontent)
 
 			cli, srv := net.Pipe()
@@ -335,19 +431,13 @@ var _ = Describe("Persistent Transport", func() {
 			defer cli.Close()
 
 			trans := NewPersistentTransport(cli)
-			err := trans.UploadMetadata(sha, int64(len(metacontent)), rdr)
+			err := trans.UploadMetadata(testsha, int64(len(metacontent)), rdr)
 			Expect(err).To(BeNil(), "Should not be an error in UploadFile")
 			Expect(rdr.Len()).To(BeZero(), "Server should have read all bytes")
 		})
 
 		It("Uploads chunk data", func() {
-			// Content doesn't actually matter here, just create some random data
-			// Make sure it's big enough to require > 1 callback
-			sz := PersistentTransportBufferSize*3 + 157
-			data := make([]byte, sz)
-			// don't bother to populate with any data, doesn't matter - leave random
-			sha := "5e0865e76e8956900c3ef6fec2d2af1c05f31ec4"
-			rdr := bytes.NewReader(data)
+			rdr := bytes.NewReader(testchunkdata)
 
 			cli, srv := net.Pipe()
 			go serve(srv)
@@ -361,14 +451,13 @@ var _ = Describe("Persistent Transport", func() {
 				totalBytesReported = totalBytes
 				numCallbacks++
 			}
-			fmt.Println(data)
 
 			trans := NewPersistentTransport(cli)
-			err := trans.UploadChunk(sha, 0, sz, rdr, callback)
+			err := trans.UploadChunk(testsha, testchunkidx, testchunkdatasz, rdr, callback)
 			Expect(err).To(BeNil(), "Should not be an error in UploadFile")
 			Expect(rdr.Len()).To(BeZero(), "Server should have read all bytes")
-			Expect(totalBytesDone).To(BeEquivalentTo(sz), "Callback should have reported bytesDone to 100%")
-			Expect(totalBytesReported).To(BeEquivalentTo(sz), "Callback should have reported totalBytes correctly")
+			Expect(totalBytesDone).To(BeEquivalentTo(testchunkdatasz), "Callback should have reported bytesDone to 100%")
+			Expect(totalBytesReported).To(BeEquivalentTo(testchunkdatasz), "Callback should have reported totalBytes correctly")
 			Expect(numCallbacks).To(BeEquivalentTo(4), "Should have been 4 callbacks in total")
 
 		})
