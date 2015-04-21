@@ -381,6 +381,9 @@ func (self *PersistentTransport) UploadMetadata(lobsha string, sz int64, data io
 		if err != nil {
 			return fmt.Errorf("Error while uploading metadata for %v (response to raw content): %v", lobsha, err.Error())
 		}
+		if !received.ReceivedOK {
+			return fmt.Errorf("Data not fully received while uploading metadata for %v: Unknown server error", lobsha)
+		}
 
 	} else {
 		return fmt.Errorf("Server rejected request to upload metadata for %v (no other error)")

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 )
 
 var _ = Describe("Persistent Transport", func() {
@@ -171,6 +172,51 @@ var _ = Describe("Persistent Transport", func() {
 					if err != nil {
 						Fail(fmt.Sprintf("Test persistent server: unable to create response: %v", err.Error()))
 					}
+				case "UploadFile":
+					upreq := UploadFileRequest{}
+					extractStructFromJsonRawMessage(req.Params, &upreq)
+					startresult := UploadFileStartResponse{}
+					startresult.OKToSend = true
+					// Send start response immediately
+					resp, err = NewJsonResponse(req.Id, startresult)
+					if err != nil {
+						Fail(fmt.Sprintf("Test persistent server: unable to create response: %v", err.Error()))
+					}
+					responseBytes, err := json.Marshal(resp)
+					if err != nil {
+						Fail(fmt.Sprintf("Test persistent server: unable to marshal response:%v %v", resp, err.Error()))
+					}
+					// null terminate response
+					responseBytes = append(responseBytes, byte(0))
+					conn.Write(responseBytes)
+					// Next should by byte stream
+					// Must read from buffered reader since bytes may have been read already
+					receivedresult := UploadFileCompleteResponse{}
+					receivedresult.ReceivedOK = true
+					var receiveerr error
+					bytesLeft := upreq.Size
+					buf := make([]byte, PersistentTransportBufferSize)
+					for bytesLeft > 0 {
+						c := PersistentTransportBufferSize
+						if c > bytesLeft {
+							c = bytesLeft
+						}
+						// Just read into buf, don't do anything with it
+						n, err := rdr.Read(buf[:c])
+						bytesLeft -= int64(n)
+						if err != nil {
+							receivedresult.ReceivedOK = false
+							receiveerr = fmt.Errorf("Test persistent server: unable to read data: %v", err.Error())
+							break
+						}
+					}
+					// After we've read all the content bytes, send received response
+					if receiveerr != nil {
+						resp = NewJsonErrorResponse(req.Id, receiveerr.Error())
+					} else {
+						resp, _ = NewJsonResponse(req.Id, receivedresult)
+					}
+
 				default:
 					resp = NewJsonErrorResponse(req.Id, fmt.Sprintf("Unknown method %v", req.Method))
 				}
@@ -275,6 +321,22 @@ var _ = Describe("Persistent Transport", func() {
 			trans := NewPersistentTransport(cli)
 			err := trans.SetEnabledCaps([]string{"Feature1", "THISISWRONG"})
 			Expect(err).ToNot(BeNil(), "Should be an error")
+		})
+
+		It("Uploads metadata", func() {
+			// Content doesn't actually matter here, just create something that seems right (don't want to have dependency on core)
+			metacontent := `{"SHA":"5e0865e76e8956900c3ef6fec2d2af1c05f31ec4","Size":21982,"NumChunks":1}`
+			sha := "5e0865e76e8956900c3ef6fec2d2af1c05f31ec4"
+			rdr := strings.NewReader(metacontent)
+
+			cli, srv := net.Pipe()
+			go serve(srv)
+			defer cli.Close()
+
+			trans := NewPersistentTransport(cli)
+			err := trans.UploadMetadata(sha, int64(len(metacontent)), rdr)
+			Expect(err).To(BeNil(), "Should not be an error in UploadFile")
+			Expect(rdr.Len()).To(BeZero(), "Server should have read all bytes")
 		})
 
 		It("Deals with disconnection", func() {
