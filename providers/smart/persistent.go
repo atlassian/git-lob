@@ -143,7 +143,7 @@ func (self *PersistentTransport) doJSONRequestDownload(method string, params int
 	if err != nil {
 		return err
 	}
-	err = self.receiveRawData(sz, out, nil)
+	err = self.receiveRawData(sz, out, callback)
 	if err != nil {
 		return err
 	}
@@ -523,7 +523,29 @@ func (self *PersistentTransport) DownloadMetadata(lobsha string, out io.Writer) 
 // Download chunk content for a LOB (from a stream); must call back progress
 // This is a non-delta download operation, just provide entire chunk content
 func (self *PersistentTransport) DownloadChunk(lobsha string, chunk int, out io.Writer, callback TransportProgressCallback) error {
-	// TODO
+	prepparams := DownloadFilePrepareRequest{
+		LobSHA:   lobsha,
+		Type:     "chunk",
+		ChunkIdx: chunk,
+	}
+	resp := DownloadFilePrepareResponse{}
+	err := self.doFullJSONRequestResponse("DownloadFilePrepare", &prepparams, &resp)
+	if err != nil {
+		return fmt.Errorf("Error while downloading chunk %d for %v (while sending DownloadFilePrepare JSON request): %v", chunk, lobsha, err.Error())
+	}
+	startparams := DownloadFileStartRequest{
+		LobSHA:   lobsha,
+		Type:     "chunk",
+		ChunkIdx: chunk,
+		Size:     resp.Size,
+	}
+
+	// Response is just raw byte data - no callback as small enough not to need one
+	err = self.doJSONRequestDownload("DownloadFileStart", &startparams, resp.Size, out, callback)
+	if err != nil {
+		return fmt.Errorf("Error while downloading chunk %d for %v (during download): %v", chunk, lobsha, err.Error())
+	}
+
 	return nil
 
 }

@@ -456,7 +456,7 @@ var _ = Describe("Persistent Transport", func() {
 			err := trans.UploadChunk(testsha, testchunkidx, testchunkdatasz, rdr, callback)
 			Expect(err).To(BeNil(), "Should not be an error in UploadFile")
 			Expect(rdr.Len()).To(BeZero(), "Server should have read all bytes")
-			Expect(totalBytesDone).To(BeEquivalentTo(testchunkdatasz), "Callback should have reported bytesDone to 100%")
+			Expect(totalBytesDone).To(BeEquivalentTo(testchunkdatasz), "Callback should have reported all bytes done")
 			Expect(totalBytesReported).To(BeEquivalentTo(testchunkdatasz), "Callback should have reported totalBytes correctly")
 			Expect(numCallbacks).To(BeEquivalentTo(4), "Should have been 4 callbacks in total")
 
@@ -473,6 +473,34 @@ var _ = Describe("Persistent Transport", func() {
 			err := trans.DownloadMetadata(testsha, &buf)
 			Expect(err).To(BeNil(), "Should not be an error in DownloadFile")
 			Expect(string(buf.Bytes())).To(Equal(metacontent), "Should download expected metadata content")
+		})
+		It("Downloads chunk data", func() {
+			var buf bytes.Buffer
+
+			cli, srv := net.Pipe()
+			go serve(srv)
+			defer cli.Close()
+
+			numCallbacks := 0
+			var totalBytesDone int64
+			var totalBytesReported int64
+			callback := func(bytesDone, totalBytes int64) {
+				totalBytesDone = bytesDone
+				totalBytesReported = totalBytes
+				numCallbacks++
+			}
+
+			trans := NewPersistentTransport(cli)
+			err := trans.DownloadChunk(testsha, testchunkidx, &buf, callback)
+			Expect(err).To(BeNil(), "Should not be an error in DownloadFile")
+			Expect(buf.Len()).To(BeEquivalentTo(testchunkdatasz), "Should download the correct number of bytes")
+			// Just check start & end of buffers
+			contentbytes := buf.Bytes()
+			Expect(contentbytes[:20]).To(Equal(testchunkdata[:20]), "Start of downloaded buffer should match")
+			Expect(contentbytes[testchunkdatasz-20:]).To(Equal(testchunkdata[testchunkdatasz-20:]), "Start of downloaded buffer should match")
+			Expect(totalBytesDone).To(BeEquivalentTo(testchunkdatasz), "Callback should have reported all bytes done")
+			Expect(totalBytesReported).To(BeEquivalentTo(testchunkdatasz), "Callback should have reported totalBytes correctly")
+			Expect(numCallbacks).To(BeEquivalentTo(4), "Should have been 4 callbacks in total")
 		})
 
 		It("Deals with disconnection", func() {
