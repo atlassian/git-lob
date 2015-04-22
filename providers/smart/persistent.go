@@ -571,16 +571,70 @@ func (self *PersistentTransport) GetFirstCompleteLOBFromList(candidateSHAs []str
 	return resp.FirstSHA, nil
 }
 
+type UploadDeltaRequest struct {
+	BaseLobSHA   string
+	TargetLobSHA string
+	Size         int64
+}
+type UploadDeltaStartResponse struct {
+	OKToSend bool
+}
+type UploadDeltaCompleteResponse struct {
+	ReceivedOK bool
+}
+
 // Upload a binary delta to apply against a LOB the server already has, to generate a new LOB
 // Deltas apply to whole LOB content and are not per-chunk
 // Returns a boolean to determine whether the upload was accepted or not (server may prefer not to accept, not an error)
 // In the case of false return, client will fall back to non-delta upload.
 // On true, server must return nil error only after data is fully received, applied, saved as targetSHA and the
 // integrity confirmed by recalculating the SHA of the final patched data.
+// This only does the content, not the metadata; you should have already called UploadMetadata beforehand.
 func (self *PersistentTransport) UploadDelta(baseSHA, targetSHA string, deltaSize int64, data io.Reader, callback TransportProgressCallback) (bool, error) {
-	// TODO
-	return false, nil
+	params := UploadDeltaRequest{
+		BaseLobSHA:   baseSHA,
+		TargetLobSHA: targetSHA,
+		Size:         deltaSize,
+	}
+	resp := UploadDeltaStartResponse{}
+	err := self.doFullJSONRequestResponse("UploadDelta", &params, &resp)
+	if err != nil {
+		return false, fmt.Errorf("Error calling UploadDelta JSON request from %v to %v: %v", baseSHA, targetSHA, err.Error())
+	}
+	// Server can opt not to accept the delta, caller should fall back to simpler upload if so
+	var sentOK bool
+	if resp.OKToSend {
+		// Send data, this does it in batches and calls back
+		err = self.sendRawData(deltaSize, data, callback)
+		if err != nil {
+			return false, fmt.Errorf("Error uploading delta content from %v to %v: %v", baseSHA, targetSHA, err.Error())
+		}
+		// Now read response to sent data
+		received := UploadDeltaCompleteResponse{}
+		err = self.readFullJSONResponse(nil, &received)
+		if err != nil {
+			return false, fmt.Errorf("Error in UploadDelta from %v to %v (response to raw content): %v", baseSHA, targetSHA, err.Error())
+		}
+		if !received.ReceivedOK {
+			return false, fmt.Errorf("Data not fully received in UploadDelta from %v to %v: Unknown server error", baseSHA, targetSHA)
+		}
+		sentOK = true
 
+	}
+	return sentOK, nil
+}
+
+type DownloadDeltaPrepareRequest struct {
+	BaseLobSHA   string
+	TargetLobSHA string
+}
+type DownloadDeltaPrepareResponse struct {
+	Size int64
+}
+type DownloadDeltaStartRequest struct {
+	BaseLobSHA   string
+	TargetLobSHA string
+	Size         int64
 }
 
 // Generate and download a binary delta that the client can apply locally to generate a new LOB
@@ -588,7 +642,30 @@ func (self *PersistentTransport) UploadDelta(baseSHA, targetSHA string, deltaSiz
 // The server should respect sizeLimit and if the delta is larger than that, abandon the process
 // Return a bool to indicate whether the delta went ahead or not (client will fall back to non-delta on false)
 func (self *PersistentTransport) DownloadDelta(baseSHA, targetSHA string, sizeLimit int64, out io.Writer, callback TransportProgressCallback) (bool, error) {
-	// TODO
-	return false, nil
+	prepparams := DownloadDeltaPrepareRequest{
+		BaseLobSHA:   baseSHA,
+		TargetLobSHA: targetSHA,
+	}
+	resp := DownloadDeltaPrepareResponse{}
+	err := self.doFullJSONRequestResponse("DownloadDeltaPrepare", &prepparams, &resp)
+	if err != nil {
+		return false, fmt.Errorf("Error in DownloadDeltaPrepare from %v to %v: %v", baseSHA, targetSHA, err.Error())
+	}
+	if resp.Size > sizeLimit {
+		// delta is too big
+		return false, nil
+	}
+	startparams := DownloadDeltaStartRequest{
+		BaseLobSHA:   baseSHA,
+		TargetLobSHA: targetSHA,
+		Size:         resp.Size,
+	}
 
+	// Response is just raw byte data - no callback as small enough not to need one
+	err = self.doJSONRequestDownload("DownloadDeltaStart", &startparams, resp.Size, out, callback)
+	if err != nil {
+		return false, fmt.Errorf("Error while downloading LOB delta from %v to %v: %v", baseSHA, targetSHA, err.Error())
+	}
+	// It's up to the caller to apply the delta
+	return true, nil
 }

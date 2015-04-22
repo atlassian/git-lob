@@ -69,6 +69,8 @@ var _ = Describe("Persistent Transport", func() {
 		testchunkidx := 3
 		var testchunkdata []byte
 		pickloblist := []string{"1234567890abcdef1234567890abcdef12345678", testsha, "0000000000000000000011111111112222222222"}
+		deltaBaseSHA := "1234567890abcdef1234567890abcdef12345678"
+		deltaTargetSHA := "5e0865e76e8956900c3ef6fec2d2af1c05f31ec4"
 
 		BeforeEach(func() {
 			testchunkdata = make([]byte, testchunkdatasz)
@@ -302,6 +304,94 @@ var _ = Describe("Persistent Transport", func() {
 					resp, err = NewJsonResponse(req.Id, result)
 					Expect(err).To(BeNil(), "Test persistent server: unable to create response")
 
+				case "UploadDelta":
+					upreq := UploadDeltaRequest{}
+					extractStructFromJsonRawMessage(req.Params, &upreq)
+					Expect(upreq.BaseLobSHA).To(Equal(deltaBaseSHA), "Test persistent server: base SHA incorrect")
+					Expect(upreq.TargetLobSHA).To(Equal(deltaTargetSHA), "Test persistent server: base SHA incorrect")
+					startresult := UploadDeltaStartResponse{}
+					startresult.OKToSend = true
+					// Send start response immediately
+					resp, err = NewJsonResponse(req.Id, startresult)
+					Expect(err).To(BeNil(), "Test persistent server: unable to create response")
+					responseBytes, err := json.Marshal(resp)
+					Expect(err).To(BeNil(), "Test persistent server: unable to marshal response")
+					// null terminate response
+					responseBytes = append(responseBytes, byte(0))
+					conn.Write(responseBytes)
+					// Next should by byte stream
+					// Must read from buffered reader since bytes may have been read already
+					receivedresult := UploadDeltaCompleteResponse{}
+					receivedresult.ReceivedOK = true
+					var receiveerr error
+					// make pre-sized buffer
+					contentbuf := bytes.NewBuffer(make([]byte, 0, upreq.Size))
+					bytesLeft := upreq.Size
+					for bytesLeft > 0 {
+						c := PersistentTransportBufferSize
+						if c > bytesLeft {
+							c = bytesLeft
+						}
+						n, err := io.CopyN(contentbuf, rdr, c)
+						bytesLeft -= int64(n)
+						if err != nil {
+							receivedresult.ReceivedOK = false
+							receiveerr = fmt.Errorf("Test persistent server: unable to read data: %v", err.Error())
+							break
+						}
+					}
+					// Check we received what we expected to receive
+					// test first & last 5 bytes
+					contentbytes := contentbuf.Bytes()
+					for i := 0; i < 5; i++ {
+						if contentbytes[i] != testchunkdata[i] {
+							receiveerr = fmt.Errorf("Test persistent server: data didn't match")
+							break
+						}
+					}
+					for i := len(contentbytes) - 5; i < len(contentbytes); i++ {
+						if contentbytes[i] != testchunkdata[i] {
+							receiveerr = fmt.Errorf("Test persistent server: data didn't match")
+							break
+						}
+					}
+					// After we've read all the content bytes, send received response
+					if receiveerr != nil {
+						resp = NewJsonErrorResponse(req.Id, receiveerr.Error())
+					} else {
+						resp, _ = NewJsonResponse(req.Id, receivedresult)
+					}
+				case "DownloadDeltaPrepare":
+					downreq := DownloadDeltaPrepareRequest{}
+					extractStructFromJsonRawMessage(req.Params, &downreq)
+					Expect(downreq.BaseLobSHA).To(Equal(deltaBaseSHA), "Test persistent server: base SHA incorrect")
+					Expect(downreq.TargetLobSHA).To(Equal(deltaTargetSHA), "Test persistent server: base SHA incorrect")
+					result := DownloadDeltaPrepareResponse{}
+					result.Size = int64(len(testchunkdata))
+					resp, err = NewJsonResponse(req.Id, result)
+					Expect(err).To(BeNil(), "Test persistent server: unable to create response")
+				case "DownloadDeltaStart":
+					// Can't return any error responses here (byte stream response only), have to just fail
+					downreq := DownloadDeltaStartRequest{}
+					extractStructFromJsonRawMessage(req.Params, &downreq)
+					// there is no response to this
+					Expect(downreq.BaseLobSHA).To(Equal(deltaBaseSHA), "Test persistent server: base SHA incorrect")
+					Expect(downreq.TargetLobSHA).To(Equal(deltaTargetSHA), "Test persistent server: base SHA incorrect")
+					sz := int64(len(testchunkdata))
+					datasrc := bytes.NewReader(testchunkdata)
+					// confirm size for testing
+					Expect(sz).To(BeEquivalentTo(downreq.Size), "Test persistent server: download size incorrect")
+
+					bytesLeft := sz
+					for bytesLeft > 0 {
+						c := PersistentTransportBufferSize
+						if c > bytesLeft {
+							c = bytesLeft
+						}
+						n, err := io.CopyN(conn, datasrc, c)
+						bytesLeft -= int64(n)
+						Expect(err).To(BeNil(), "Test persistent server: unable to read data")
+					}
 				default:
 					resp = NewJsonErrorResponse(req.Id, fmt.Sprintf("Unknown method %v", req.Method))
 				}
@@ -498,11 +588,68 @@ var _ = Describe("Persistent Transport", func() {
 			Expect(sha).To(Equal(testsha), "Should pick the correct sha")
 		})
 
-		It("Deals with disconnection", func() {
-			// ??
+		It("Uploads a delta", func() {
+			rdr := bytes.NewReader(testchunkdata)
+
+			cli, srv := net.Pipe()
+			go serve(srv)
+			defer cli.Close()
+
+			numCallbacks := 0
+			var totalBytesDone int64
+			var totalBytesReported int64
+			callback := func(bytesDone, totalBytes int64) {
+				totalBytesDone = bytesDone
+				totalBytesReported = totalBytes
+				numCallbacks++
+			}
+
+			trans := NewPersistentTransport(cli)
+			ok, err := trans.UploadDelta(deltaBaseSHA, deltaTargetSHA, testchunkdatasz, rdr, callback)
+			Expect(err).To(BeNil(), "Should not be an error in UploadDelta")
+			Expect(ok).To(BeTrue(), "UploadDelta should have worked")
+			Expect(rdr.Len()).To(BeZero(), "Server should have read all bytes")
+			Expect(totalBytesDone).To(BeEquivalentTo(testchunkdatasz), "Callback should have reported all bytes done")
+			Expect(totalBytesReported).To(BeEquivalentTo(testchunkdatasz), "Callback should have reported totalBytes correctly")
+			Expect(numCallbacks).To(BeEquivalentTo(4), "Should have been 4 callbacks in total")
+
 		})
-		It("Deals with timeouts", func() {
-			// ??
+		It("Downloads a delta", func() {
+			var buf bytes.Buffer
+
+			cli, srv := net.Pipe()
+			go serve(srv)
+			defer cli.Close()
+
+			numCallbacks := 0
+			var totalBytesDone int64
+			var totalBytesReported int64
+			callback := func(bytesDone, totalBytes int64) {
+				totalBytesDone = bytesDone
+				totalBytesReported = totalBytes
+				numCallbacks++
+			}
+
+			trans := NewPersistentTransport(cli)
+			ok, err := trans.DownloadDelta(deltaBaseSHA, deltaTargetSHA, 10000000, &buf, callback)
+			Expect(err).To(BeNil(), "Should not be an error in DownloadFile")
+			Expect(ok).To(BeTrue(), "DownloadDelta should have worked")
+			Expect(buf.Len()).To(BeEquivalentTo(testchunkdatasz), "Should download the correct number of bytes")
+			// Just check start & end of buffers
+			contentbytes := buf.Bytes()
+			Expect(contentbytes[:20]).To(Equal(testchunkdata[:20]), "Start of downloaded buffer should match")
+			Expect(contentbytes[testchunkdatasz-20:]).To(Equal(testchunkdata[testchunkdatasz-20:]), "Start of downloaded buffer should match")
+			Expect(totalBytesDone).To(BeEquivalentTo(testchunkdatasz), "Callback should have reported all bytes done")
+			Expect(totalBytesReported).To(BeEquivalentTo(testchunkdatasz), "Callback should have reported totalBytes correctly")
+			Expect(numCallbacks).To(BeEquivalentTo(4), "Should have been 4 callbacks in total")
+
+			// Now check that a size limit works
+			buf.Reset()
+			ok, err = trans.DownloadDelta(deltaBaseSHA, deltaTargetSHA, 100, &buf, callback)
+			Expect(err).To(BeNil(), "Should not be an error in DownloadFile")
+			Expect(ok).To(BeFalse(), "DownloadDelta should return false when delta size is exceeded")
+			Expect(buf.Len()).To(BeZero(), "Nothing should be downloaded when size exceeded")
+
 		})
 
 	})

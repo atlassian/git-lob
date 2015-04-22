@@ -114,29 +114,29 @@ Protocol methods
 
 |||
 |-----------|-------------|
-|**Method**     | __UploadLOBDelta__|
-|**Purpose**    | Ask to upload a binary patch between 2 lobs which the client has calculated so the server can apply it to its own store, without uploading the entire file content. This is only about the chunk content; metadata is uploaded the usual way.|
+|**Method**     | __UploadDelta__|
+|**Purpose**    | Ask to upload a binary patch between 2 lobs which the client has calculated so the server can apply it to its own store, without uploading the entire file content. This is only about the chunk content; metadata is uploaded with __UploadFile__ as usual and should be done before calling this method.|
 |**Params**     | BaseLobSHA (string): the SHA of the binary file content to use as a base. Client should have already identified that server has this via __PickCompleteLOB__|
 |               | TargetLobSHA (string): the SHA of the binary file content we want to reconstruct from base + delta|
 |               | Size (Number): size in bytes of the binary delta|
-|**Result**     | Result: True if server is ready to receive delta on this basis|
+|**Result**     | OKToSend: True if server is ready to receive delta on this basis|
 |**POST**       | Immediately after Result:True, a BINARY STREAM of bytes will be sent by the client to the server of length 'size' above. The server must read all the bytes and then generate the final file from the delta + base (must check SHA integrity) and store it.|
 | **POST Result** |ReceivedOK: True if server received all the bytes and stored the file successfully. On failure, return Error.|
 
 |||
 |-----------|-------------|
-|**Method**     | __DownloadLOBDeltaPrepare__|
+|**Method**     | __DownloadDeltaPrepare__|
 |**Purpose**    | Ask the server to generate a binary patch between 2 lobs which we know it has (or re-use an existing delta). This is only about the chunk content; metadata is downloaded the usual way.|
 |**Params**     | BaseLobSHA (string): the SHA of the binary file content to use as a base|
 |               | TargetLobSHA (string): the SHA of the binary file content we want to reconstruct from base + delta|
 |**Result**     | Size (Number): size in bytes of delta if server has generated it ready to to send (Error otherwise). Server should keep this calculated delta for a while, at least 1 day (maybe longer to re-use for multiple clients). 0 if there was a problem (error identifies). The client should subsequently request the calculated delta if it wants it (may choose not to if borderline)|
-|               | Client should follow up with a call to __DownloadLOBDeltaStart__ to trigger the binary data send, which includes all the same params|
+|               | Client should follow up with a call to __DownloadDeltaStart__ to trigger the binary data send, which includes all the same params|
 
 |||
 |-----------|-------------|
-|**Method**     | __DownloadLOBDeltaStart__|
+|**Method**     | __DownloadDeltaStart__|
 |**Purpose**    | Begin downloading a LOB delta file to apply locally against a base LOB to generate new content. Metadata is not included, that's downloaded the usual way|
 |**Params**     | BaseLobSHA (string): the SHA of the binary file content to use as a base|
 |               | TargetLobSHA (string): the SHA of the binary file content we want to reconstruct from base + delta|
-|               | Size (Number): size in bytes of delta as reported from __DownloadLOBDeltaPrepare__.| 
+|               | Size (Number): size in bytes of delta as reported from __DownloadDeltaPrepare__.| 
 |**Result**     | A pure binary stream of data of exactly Size bytes. Client must read all the bytes and use to apply to base LOB to create new content.|
