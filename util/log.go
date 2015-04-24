@@ -1,13 +1,13 @@
 package util
 
 import (
+	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/mitchellh/go-homedir"
 	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
 	"os"
-	"os/user"
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
@@ -172,11 +172,11 @@ func getLogFileHandle() *os.File {
 	if GlobalOptions.LogFile != "" {
 		logFileName = GlobalOptions.LogFile
 	} else {
-		usr, err := user.Current()
+		home, err := homedir.Dir()
 		if err != nil {
 			log.Fatal(err)
 		}
-		logFileName = filepath.Join(usr.HomeDir, "git-lob.log")
+		logFileName = filepath.Join(home, "git-lob.log")
 	}
 	var err error
 	logFile, err = os.OpenFile(logFileName, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
