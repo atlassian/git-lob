@@ -1,11 +1,11 @@
 package util
 
 import (
+	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/mitchellh/go-homedir"
 	"bufio"
 	"fmt"
 	"io"
 	"os"
-	"os/user"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -218,12 +218,12 @@ func ReadConfig() map[string]string {
 	var ret map[string]string = nil
 
 	// User config
-	usr, err := user.Current()
+	home, err := homedir.Dir()
 	if err != nil {
-		LogError("Unable to access user home directory")
+		LogError("Unable to access user home directory: ", err.Error())
 		// continue anyway
 	} else {
-		userConfigFile := path.Join(usr.HomeDir, ".gitconfig")
+		userConfigFile := path.Join(home, ".gitconfig")
 		userConfig, err := ReadConfigFile(userConfigFile)
 		if err == nil {
 			if ret == nil {

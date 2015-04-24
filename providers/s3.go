@@ -1,6 +1,7 @@
 package providers
 
 import (
+	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/mitchellh/go-homedir"
 	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/mitchellh/goamz/aws"
 	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/mitchellh/goamz/s3"
 	"bitbucket.org/sinbad/git-lob/util"
@@ -9,7 +10,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"os/user"
 	"path/filepath"
 	"strings"
 )
@@ -114,9 +114,9 @@ func (self *S3SyncProvider) getRegion() (aws.Region, error) {
 
 		cfgFile := os.Getenv("AWS_CONFIG_FILE")
 		if cfgFile == "" {
-			usr, usrerr := user.Current()
-			if usrerr == nil {
-				cfgFile = filepath.Join(usr.HomeDir, ".aws", "config")
+			home, herr := homedir.Dir()
+			if herr == nil {
+				cfgFile = filepath.Join(home, ".aws", "config")
 			}
 		}
 		if cfgFile != "" {

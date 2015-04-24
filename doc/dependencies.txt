@@ -7,6 +7,10 @@ github.com/mitchellh/goamz & fork github.com/sinbad/goamz
    AWS library for Go. LGPLv3 with static/dynamic linking exception
 github.com/vaughan0/go-ini 
    Dependency of goamz. MIT license
+github.com/mitchellh/go-homedir
+  Library for detecting home directory without cgo, thus allowing cross-compiling.
+  MIT license
+
 
 Build / test:
 
