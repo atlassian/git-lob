@@ -652,10 +652,61 @@ var _ = Describe("Persistent Transport", func() {
 
 		})
 
-	})
+		It("Deals with chained server requests over one connection with interleaved data", func() {
+			cli, srv := net.Pipe()
+			go serve(srv)
+			defer cli.Close()
+			trans := NewPersistentTransport(cli)
 
-	Context("Test chained server requests over one connection", func() {
-		// TODO
+			// JSON request
+			caps, err := trans.QueryCaps()
+			Expect(err).To(BeNil(), "Should be no error")
+			Expect(caps).To(ConsistOf([]string{"Feature1", "Feature2", "OMGSOAWESOME"}), "Capabilities should match server")
+
+			// Byte transfer (upload)
+			rdr := strings.NewReader(metacontent)
+			err = trans.UploadMetadata(testsha, int64(len(metacontent)), rdr)
+			Expect(err).To(BeNil(), "Should not be an error in UploadFile")
+			Expect(rdr.Len()).To(BeZero(), "Server should have read all bytes")
+
+			// Another byte transfer (chunk)
+			rdr2 := bytes.NewReader(testchunkdata)
+
+			numCallbacks := 0
+			var totalBytesDone int64
+			var totalBytesReported int64
+			callback := func(bytesDone, totalBytes int64) {
+				totalBytesDone = bytesDone
+				totalBytesReported = totalBytes
+				numCallbacks++
+			}
+			err = trans.UploadChunk(testsha, testchunkidx, testchunkdatasz, rdr2, callback)
+			Expect(err).To(BeNil(), "Should not be an error in UploadFile")
+			Expect(rdr2.Len()).To(BeZero(), "Server should have read all bytes")
+			Expect(totalBytesDone).To(BeEquivalentTo(testchunkdatasz), "Callback should have reported all bytes done")
+			Expect(totalBytesReported).To(BeEquivalentTo(testchunkdatasz), "Callback should have reported totalBytes correctly")
+			Expect(numCallbacks).To(BeEquivalentTo(4), "Should have been 4 callbacks in total")
+
+			// Another JSON request (pick LOB)
+			sha, err := trans.GetFirstCompleteLOBFromList(pickloblist)
+			Expect(err).To(BeNil(), "Should not be an error picking LOB")
+			Expect(sha).To(Equal(testsha), "Should pick the correct sha")
+
+			// Final byte transfer (delta)
+			numCallbacks = 0
+			var buf bytes.Buffer
+			ok, err := trans.DownloadDelta(deltaBaseSHA, deltaTargetSHA, 10000000, &buf, callback)
+			Expect(err).To(BeNil(), "Should not be an error in DownloadFile")
+			Expect(ok).To(BeTrue(), "DownloadDelta should have worked")
+			Expect(buf.Len()).To(BeEquivalentTo(testchunkdatasz), "Should download the correct number of bytes")
+			// Just check start & end of buffers
+			contentbytes := buf.Bytes()
+			Expect(contentbytes[:20]).To(Equal(testchunkdata[:20]), "Start of downloaded buffer should match")
+			Expect(contentbytes[testchunkdatasz-20:]).To(Equal(testchunkdata[testchunkdatasz-20:]), "Start of downloaded buffer should match")
+			Expect(totalBytesDone).To(BeEquivalentTo(testchunkdatasz), "Callback should have reported all bytes done")
+			Expect(totalBytesReported).To(BeEquivalentTo(testchunkdatasz), "Callback should have reported totalBytes correctly")
+			Expect(numCallbacks).To(BeEquivalentTo(4), "Should have been 4 callbacks in total")
+		})
 	})
 
 })
