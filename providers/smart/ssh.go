@@ -146,12 +146,10 @@ type SshConnection struct {
 
 // SSH Connection implementation
 func (self *SshConnection) Read(p []byte) (n int, err error) {
-	// TODO
-	return 0, nil
+	return self.stdout.Read(p)
 }
 func (self *SshConnection) Write(p []byte) (n int, err error) {
-	// TODO
-	return 0, nil
+	return self.stdin.Write(p)
 }
 func (self *SshConnection) Close() error {
 	// Docs say "It is incorrect to call Wait before all writes to the pipe have completed."
