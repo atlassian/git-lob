@@ -141,6 +141,11 @@ Prune settings:
                                binary before deleting. Without this only local 
                                push records are used to determine this.
 
+SSH Settings:
+  
+  git-lob.ssh-server           When using the smart provider over SSH, the
+                               remote command to run to provide the server
+                               end of the connection (default git-lob-serve)
 
 `)
 }

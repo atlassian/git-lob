@@ -65,6 +65,8 @@ type Options struct {
 	FetchIncludePaths []string
 	// List of paths to exclude when fetching
 	FetchExcludePaths []string
+	// The command to run over SSH on a remote smart server to push/pull (default "git-lob-server")
+	SSHServerCommand string
 	// Combination of root .gitconfig and repository config as map
 	GitConfig map[string]string
 }
@@ -84,6 +86,7 @@ func NewOptions() *Options {
 		RetentionCommitsPeriodHEAD:  7,
 		RetentionCommitsPeriodOther: 0,
 		PruneRemote:                 "origin",
+		SSHServerCommand:            "git-lob-serve",
 	}
 }
 
@@ -200,6 +203,9 @@ func parseConfig(configmap map[string]string, opts *Options) {
 	}
 	if strings.ToLower(configmap["git-lob.prune-safe"]) == "true" {
 		opts.PruneSafeMode = true
+	}
+	if sshserver := configmap["git-lob.ssh-server"]; sshserver != "" {
+		opts.SSHServerCommand = sshserver
 	}
 
 }

@@ -1,6 +1,7 @@
 package smart
 
 import (
+	"bitbucket.org/sinbad/git-lob/util"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -99,6 +100,17 @@ func (self *SshTransportFactory) Connect(u *url.URL) (Transport, error) {
 		args = append(args, port)
 	}
 	args = append(args, host)
+
+	// Now add remote program and path
+	args = append(args, util.GlobalOptions.SSHServerCommand)
+	// u.Path includes a preceding '/', strip off manually
+	// rooted paths in the URL will be '//path/to/blah'
+	// this is just how Go's URL parsing works
+	path := u.Path
+	if len(path) > 0 && strings.HasPrefix(path, "/") {
+		path = path[1:]
+	}
+	args = append(args, path)
 	cmd := exec.Command(ssh, args...)
 
 	outp, err := cmd.StdoutPipe()
