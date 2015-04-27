@@ -25,10 +25,12 @@ Rooted paths are disallowed by the default configuration for security, forcing a
 Configuration is via a simple key-value text file placed in the following locations:
 
 Windows:
+
 * %USERPROFILE%\git-lob-serve.ini
 * %PROGRAMDATA%\Atlassian\git-lob\git-lob-serve.ini
 
 Linux/Mac:
+
 * ~/.git-lob-serve
 * /etc/git-lob-serve.conf
 
