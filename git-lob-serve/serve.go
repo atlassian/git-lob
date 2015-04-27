@@ -9,14 +9,14 @@ import (
 	"os"
 )
 
-type MethodFunc func(req *smart.JsonRequest, config *Config) *smart.JsonResponse
+type MethodFunc func(req *smart.JsonRequest, config *Config, path string) *smart.JsonResponse
 
 var methodMap = map[string]MethodFunc{
 	"QueryCaps":      queryCaps,
 	"SetEnabledCaps": setCaps,
 }
 
-func Serve(config *Config) int {
+func Serve(config *Config, path string) int {
 
 	// Read input from client on stdin, buffered so we can detect terminators for JSON
 
@@ -49,7 +49,7 @@ func Serve(config *Config) int {
 			resp = smart.NewJsonErrorResponse(req.Id, fmt.Sprintf("Unknown method %v", req.Method))
 		} else {
 			// method found, process
-			resp = f(&req, config)
+			resp = f(&req, config, path)
 		}
 		// There may not have been a JSON response; that might be because method just streams bytes
 		// in which case we just ignore this bit

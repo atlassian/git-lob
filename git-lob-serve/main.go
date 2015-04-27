@@ -4,6 +4,7 @@ import (
 	"bitbucket.org/sinbad/git-lob/util"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime/debug"
 )
 
@@ -37,6 +38,9 @@ func MainImpl() int {
 		fmt.Fprintf(os.Stderr, "Invalid value for base-path: %v\nDirectory must exist.\n", cfg.BasePath)
 		return 14
 	}
+	// Change to the base path directory so filepath.Clean() can work with relative dirs
+	os.Chdir(cfg.BasePath)
+
 	if cfg.DeltaCachePath != "" && !util.DirExists(cfg.DeltaCachePath) {
 		// Create delta cache if doesn't exist, use same permissions as base path
 		s, err := os.Stat(cfg.BasePath)
@@ -51,7 +55,18 @@ func MainImpl() int {
 		}
 	}
 
-	return Serve(cfg)
+	// Get path argument
+	if len(os.Args) < 2 {
+		fmt.Fprintf(os.Stderr, "Path argument missing, cannot continue\n")
+		return 18
+	}
+	path := filepath.Clean(os.Args[1])
+	if filepath.IsAbs(path) && !cfg.AllowAbsolutePaths {
+		fmt.Fprintf(os.Stderr, "Path argument %v invalid, absolute paths are not allowed by this server\n", path)
+		return 18
+	}
+
+	return Serve(cfg, path)
 
 	return 0
 }
