@@ -12,8 +12,17 @@ import (
 type MethodFunc func(req *smart.JsonRequest, config *Config, path string) *smart.JsonResponse
 
 var methodMap = map[string]MethodFunc{
-	"QueryCaps":      queryCaps,
-	"SetEnabledCaps": setCaps,
+	"QueryCaps":            queryCaps,
+	"SetEnabledCaps":       setCaps,
+	"FileExists":           fileExists,
+	"FileExistsOfSize":     fileExistsOfSize,
+	"UploadFile":           uploadFile,
+	"DownloadFilePrepare":  downloadFilePrepare,
+	"DownloadFileStart":    downloadFileStart,
+	"PickCompleteLOB":      pickCompleteLOB,
+	"UploadDelta":          uploadDelta,
+	"DownloadDeltaPrepare": downloadDeltaPrepare,
+	"DownloadDeltaStart":   downloadDeltaStart,
 }
 
 func Serve(config *Config, path string) int {
