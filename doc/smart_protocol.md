@@ -4,6 +4,8 @@ Smart Protocol definition
 
 The smart protocol is a system by which the git-lob client and server exchange data, including potentially binary deltas, in order to fulfil what the 'dumb' sync protocol does just using file operations, more efficiently.
 
+A reference implementation is provided for the server end of this exchange, [git-lob-serve](git-lob-serve.md)
+
 The exchange in principle
 -------------------------
 
