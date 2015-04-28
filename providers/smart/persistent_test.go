@@ -113,7 +113,7 @@ var _ = Describe("Persistent Transport", func() {
 					Expect(err).To(BeNil(), "Test persistent server: unable to create response")
 				case "SetEnabledCaps":
 					capsreq := SetEnabledCapsRequest{}
-					extractStructFromJsonRawMessage(req.Params, &capsreq)
+					ExtractStructFromJsonRawMessage(req.Params, &capsreq)
 					result := SetEnabledCapsResponse{}
 					resp, err = NewJsonResponse(req.Id, result)
 					Expect(err).To(BeNil(), "Test persistent server: unable to create response")
@@ -135,7 +135,7 @@ var _ = Describe("Persistent Transport", func() {
 				case "FileExists":
 					fereq := FileExistsRequest{}
 					var strerr string
-					extractStructFromJsonRawMessage(req.Params, &fereq)
+					ExtractStructFromJsonRawMessage(req.Params, &fereq)
 					result := FileExistsResponse{}
 					if fereq.Type == "chunk" {
 						for i, chunk := range chunksThatExist {
@@ -172,7 +172,7 @@ var _ = Describe("Persistent Transport", func() {
 
 				case "FileExistsOfSize":
 					fereq := FileExistsOfSizeRequest{}
-					extractStructFromJsonRawMessage(req.Params, &fereq)
+					ExtractStructFromJsonRawMessage(req.Params, &fereq)
 					result := FileExistsResponse{}
 					for i, chunk := range chunksThatExist {
 						if fereq.LobSHA == chunk {
@@ -189,7 +189,7 @@ var _ = Describe("Persistent Transport", func() {
 					Expect(err).To(BeNil(), "Test persistent server: unable to create response")
 				case "UploadFile":
 					upreq := UploadFileRequest{}
-					extractStructFromJsonRawMessage(req.Params, &upreq)
+					ExtractStructFromJsonRawMessage(req.Params, &upreq)
 					Expect(upreq.LobSHA).To(Equal(testsha), "Test persistent server: SHA incorrect")
 					if upreq.Type == "chunk" {
 						Expect(upreq.ChunkIdx).To(BeEquivalentTo(testchunkidx), "Test persistent server: Chunk index incorrect")
@@ -254,7 +254,7 @@ var _ = Describe("Persistent Transport", func() {
 					}
 				case "DownloadFilePrepare":
 					downreq := DownloadFilePrepareRequest{}
-					extractStructFromJsonRawMessage(req.Params, &downreq)
+					ExtractStructFromJsonRawMessage(req.Params, &downreq)
 					Expect(downreq.LobSHA).To(Equal(testsha), "Test persistent server: SHA incorrect")
 					if downreq.Type == "chunk" {
 						Expect(downreq.ChunkIdx).To(BeEquivalentTo(testchunkidx), "Test persistent server: Chunk index incorrect")
@@ -270,7 +270,7 @@ var _ = Describe("Persistent Transport", func() {
 				case "DownloadFileStart":
 					// Can't return any error responses here (byte stream response only), have to just fail
 					downreq := DownloadFileStartRequest{}
-					extractStructFromJsonRawMessage(req.Params, &downreq)
+					ExtractStructFromJsonRawMessage(req.Params, &downreq)
 					// there is no response to this
 					var sz int64
 					var datasrc io.Reader
@@ -296,7 +296,7 @@ var _ = Describe("Persistent Transport", func() {
 					}
 				case "PickCompleteLOB":
 					params := GetFirstCompleteLOBFromListRequest{}
-					extractStructFromJsonRawMessage(req.Params, &params)
+					ExtractStructFromJsonRawMessage(req.Params, &params)
 					// check it's the list we expected
 					Expect(params.LobSHAs).To(ConsistOf(pickloblist), "Server should receive correct params")
 					result := GetFirstCompleteLOBFromListResponse{}
@@ -306,7 +306,7 @@ var _ = Describe("Persistent Transport", func() {
 
 				case "UploadDelta":
 					upreq := UploadDeltaRequest{}
-					extractStructFromJsonRawMessage(req.Params, &upreq)
+					ExtractStructFromJsonRawMessage(req.Params, &upreq)
 					Expect(upreq.BaseLobSHA).To(Equal(deltaBaseSHA), "Test persistent server: base SHA incorrect")
 					Expect(upreq.TargetLobSHA).To(Equal(deltaTargetSHA), "Test persistent server: base SHA incorrect")
 					startresult := UploadDeltaStartResponse{}
@@ -363,7 +363,7 @@ var _ = Describe("Persistent Transport", func() {
 					}
 				case "DownloadDeltaPrepare":
 					downreq := DownloadDeltaPrepareRequest{}
-					extractStructFromJsonRawMessage(req.Params, &downreq)
+					ExtractStructFromJsonRawMessage(req.Params, &downreq)
 					Expect(downreq.BaseLobSHA).To(Equal(deltaBaseSHA), "Test persistent server: base SHA incorrect")
 					Expect(downreq.TargetLobSHA).To(Equal(deltaTargetSHA), "Test persistent server: base SHA incorrect")
 					result := DownloadDeltaPrepareResponse{}
@@ -373,7 +373,7 @@ var _ = Describe("Persistent Transport", func() {
 				case "DownloadDeltaStart":
 					// Can't return any error responses here (byte stream response only), have to just fail
 					downreq := DownloadDeltaStartRequest{}
-					extractStructFromJsonRawMessage(req.Params, &downreq)
+					ExtractStructFromJsonRawMessage(req.Params, &downreq)
 					// there is no response to this
 					Expect(downreq.BaseLobSHA).To(Equal(deltaBaseSHA), "Test persistent server: base SHA incorrect")
 					Expect(downreq.TargetLobSHA).To(Equal(deltaTargetSHA), "Test persistent server: base SHA incorrect")

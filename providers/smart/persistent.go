@@ -152,14 +152,15 @@ func (self *PersistentTransport) doJSONRequestDownload(method string, params int
 
 }
 
-func extractStructFromJsonRawMessage(raw *json.RawMessage, out interface{}) error {
+// Late-bind a method-specific structure from the raw message
+func ExtractStructFromJsonRawMessage(raw *json.RawMessage, out interface{}) error {
 	nestedbytes, err := raw.MarshalJSON()
 	if err != nil {
-		return fmt.Errorf("Unable to extract type-specific JSON from server: %v\n%v", string(*raw), err.Error())
+		return fmt.Errorf("Unable to extract type-specific JSON from: %v\n%v", string(*raw), err.Error())
 	}
 	err = json.Unmarshal(nestedbytes, &out)
 	if err != nil {
-		return fmt.Errorf("Unable to decode type-specific Result from server: %v\n%v", string(nestedbytes), err.Error())
+		return fmt.Errorf("Unable to decode type-specific result: %v\n%v", string(nestedbytes), err.Error())
 	}
 	return nil
 
@@ -226,7 +227,7 @@ func (self *PersistentTransport) readFullJSONResponse(originalReq *JsonRequest, 
 	}
 	// response.Result is left as raw since it depends on the type of the expected result
 	// so now unmarshal the nested part
-	err = extractStructFromJsonRawMessage(response.Result, &result)
+	err = ExtractStructFromJsonRawMessage(response.Result, &result)
 	if err != nil {
 		return err
 	}
