@@ -125,6 +125,15 @@ var _ = Describe("git-lob-serve tests", func() {
 			Expect(contentbytes[:20]).To(Equal(testchunkdata[:20]), "Start of downloaded buffer should match")
 			Expect(contentbytes[testchunkdatasz-20:]).To(Equal(testchunkdata[testchunkdatasz-20:]), "Start of downloaded buffer should match")
 
+			// Make sure it fails safely when asking for the wrong SHA
+			buf.Reset()
+			err = trans.DownloadMetadata("0000000000000000000000000000000000000000", &buf)
+			Expect(err).ToNot(BeNil(), "Should be an error in DownloadMetadata when asking for incorrect sha")
+			Expect(buf.Len()).To(BeEquivalentTo(0), "Nothing should have been downloaded")
+			err = trans.DownloadChunk("0000000000000000000000000000000000000000", 0, &buf, callback)
+			Expect(err).ToNot(BeNil(), "Should be an error in DownloadChunk when asking for incorrect sha")
+			Expect(buf.Len()).To(BeEquivalentTo(0), "Nothing should have been downloaded")
+
 		})
 
 	})
