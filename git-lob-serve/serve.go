@@ -2,6 +2,7 @@ package main
 
 import (
 	"bitbucket.org/sinbad/git-lob/providers/smart"
+	"bitbucket.org/sinbad/git-lob/util"
 	"bufio"
 	"encoding/json"
 	"fmt"
@@ -23,6 +24,12 @@ var methodMap = map[string]MethodFunc{
 	"DownloadDeltaPrepare": downloadDeltaPrepare,
 	"DownloadDeltaStart":   downloadDeltaStart,
 }
+
+// these methods can't return any error responses
+var bytestreamResponseMethods = util.NewStringSetFromSlice([]string{
+	"DownloadFileStart",
+	"DownloadDeltaStart",
+})
 
 func Serve(in io.Reader, out io.Writer, outerr io.Writer, config *Config, path string) int {
 
@@ -62,10 +69,18 @@ func Serve(in io.Reader, out io.Writer, outerr io.Writer, config *Config, path s
 		// There may not have been a JSON response; that might be because method just streams bytes
 		// in which case we just ignore this bit
 		if resp != nil {
-			err := sendResponse(resp, out)
-			if err != nil {
-				fmt.Fprintf(outerr, "%v\n", err.Error())
-				return 23
+			if resp.Error != "" && bytestreamResponseMethods.Contains(req.Method) {
+				// there was an error but this was a bytestream-only method so can't return JSON
+				// just send it to stderr
+				fmt.Fprintf(outerr, "%v\n", resp.Error)
+				return 33
+			} else {
+				// normal method which responds in JSON
+				err := sendResponse(resp, out)
+				if err != nil {
+					fmt.Fprintf(outerr, "%v\n", err.Error())
+					return 23
+				}
 			}
 		}
 
