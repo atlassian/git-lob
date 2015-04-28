@@ -6,10 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 )
 
-type MethodFunc func(req *smart.JsonRequest, config *Config, path string) *smart.JsonResponse
+type MethodFunc func(req *smart.JsonRequest, in io.Reader, out io.Writer, config *Config, path string) *smart.JsonResponse
 
 var methodMap = map[string]MethodFunc{
 	"QueryCaps":            queryCaps,
@@ -25,11 +24,11 @@ var methodMap = map[string]MethodFunc{
 	"DownloadDeltaStart":   downloadDeltaStart,
 }
 
-func Serve(config *Config, path string) int {
+func Serve(in io.Reader, out io.Writer, outerr io.Writer, config *Config, path string) int {
 
 	// Read input from client on stdin, buffered so we can detect terminators for JSON
 
-	rdr := bufio.NewReader(os.Stdin)
+	rdr := bufio.NewReader(in)
 	// we keep reading until stdin is closed
 	for {
 		jsonbytes, err := rdr.ReadBytes(byte(0))
@@ -38,7 +37,7 @@ func Serve(config *Config, path string) int {
 				// normal exit
 				break
 			}
-			fmt.Fprintf(os.Stderr, "Unable to read from client: %v\n", err.Error())
+			fmt.Fprintf(outerr, "Unable to read from client: %v\n", err.Error())
 			return 21
 		}
 		// slice off the terminator
@@ -46,7 +45,7 @@ func Serve(config *Config, path string) int {
 		var req smart.JsonRequest
 		err = json.Unmarshal(jsonbytes, &req)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Unable to unmarhsal JSON: %v: %v\n", string(jsonbytes), err.Error())
+			fmt.Fprintf(outerr, "Unable to unmarhsal JSON: %v: %v\n", string(jsonbytes), err.Error())
 			return 22
 		}
 
@@ -58,19 +57,16 @@ func Serve(config *Config, path string) int {
 			resp = smart.NewJsonErrorResponse(req.Id, fmt.Sprintf("Unknown method %v", req.Method))
 		} else {
 			// method found, process
-			resp = f(&req, config, path)
+			resp = f(&req, rdr, out, config, path)
 		}
 		// There may not have been a JSON response; that might be because method just streams bytes
 		// in which case we just ignore this bit
 		if resp != nil {
-			responseBytes, err := json.Marshal(resp)
+			err := sendResponse(resp, out)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Unable to marhsal JSON response: %v: %v\n", resp, err.Error())
+				fmt.Fprintf(outerr, "%v\n", err.Error())
 				return 23
 			}
-			// null terminate response
-			responseBytes = append(responseBytes, byte(0))
-			os.Stdout.Write(responseBytes)
 		}
 
 		// Ready for next request from client
@@ -78,4 +74,15 @@ func Serve(config *Config, path string) int {
 	}
 
 	return 0
+}
+
+func sendResponse(resp *smart.JsonResponse, out io.Writer) error {
+	responseBytes, err := json.Marshal(resp)
+	if err != nil {
+		return fmt.Errorf("Unable to marhsal JSON response: %v: %v", resp, err.Error())
+	}
+	// null terminate response
+	responseBytes = append(responseBytes, byte(0))
+	_, err = out.Write(responseBytes)
+	return err
 }

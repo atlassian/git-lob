@@ -66,7 +66,5 @@ func MainImpl() int {
 		return 18
 	}
 
-	return Serve(cfg, path)
-
-	return 0
+	return Serve(os.Stdin, os.Stdout, os.Stderr, cfg, path)
 }
