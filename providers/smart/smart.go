@@ -129,13 +129,18 @@ func (self *SmartSyncProvider) Upload(remoteName string, filenames []string, fro
 	return nil
 }
 
+// Redefine this so we don't have a circular package reference
+type SyncProgressCallback func(fileInProgress string, progressType util.ProgressCallbackType, bytesDone, totalBytes int64) (abort bool)
+
 func (self *SmartSyncProvider) Download(remoteName string, filenames []string, toDir string,
-	force bool, callback TransportProgressCallback) error {
+	force bool, callback SyncProgressCallback) error {
 
 	err := self.connect(remoteName)
 	if err != nil {
 		return err
 	}
+
+	// MUST check existence before calling download, use callback to report if missing
 	// TODO
 
 	return nil
@@ -158,6 +163,8 @@ func (self *SmartSyncProvider) FileExistsAndIsOfSize(remoteName, filename string
 	// TODO
 	return false
 }
+
+// TODO add additional methods for deltas
 
 // Init core smart providers
 func InitCoreProviders() {
