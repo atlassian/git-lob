@@ -44,7 +44,7 @@ func getLOBMetaFilePath(sha string, config *Config, path string) string {
 
 // Generic method to get file path based on type (meta/chunk)
 // Does not create the directory nor validate that config is correct
-func getFilePath(sha, filetype string, chunk int, config *Config, path string) string {
+func getLOBFilePath(sha, filetype string, chunk int, config *Config, path string) string {
 	if filetype == "chunk" {
 		return getLOBChunkFilePath(sha, chunk, config, path)
 	} else if filetype == "meta" {
@@ -61,7 +61,7 @@ func fileExists(req *smart.JsonRequest, in io.Reader, out io.Writer, config *Con
 		return smart.NewJsonErrorResponse(req.Id, err.Error())
 	}
 	result := smart.FileExistsResponse{}
-	file := getFilePath(freq.LobSHA, freq.Type, freq.ChunkIdx, config, path)
+	file := getLOBFilePath(freq.LobSHA, freq.Type, freq.ChunkIdx, config, path)
 	if file == "" {
 		return smart.NewJsonErrorResponse(req.Id, fmt.Sprintf("Unsupported file type: %v", freq.Type))
 	}
@@ -82,7 +82,7 @@ func fileExistsOfSize(req *smart.JsonRequest, in io.Reader, out io.Writer, confi
 		return smart.NewJsonErrorResponse(req.Id, err.Error())
 	}
 	result := smart.FileExistsResponse{}
-	file := getFilePath(freq.LobSHA, freq.Type, freq.ChunkIdx, config, path)
+	file := getLOBFilePath(freq.LobSHA, freq.Type, freq.ChunkIdx, config, path)
 	if file == "" {
 		return smart.NewJsonErrorResponse(req.Id, fmt.Sprintf("Unsupported file type: %v", freq.Type))
 	}
@@ -130,7 +130,7 @@ func uploadFile(req *smart.JsonRequest, in io.Reader, out io.Writer, config *Con
 	}
 	// Next from client should be byte stream of exactly the stated number of bytes
 	// Write to temporary file then move to final on success
-	file := getFilePath(upreq.LobSHA, upreq.Type, upreq.ChunkIdx, config, path)
+	file := getLOBFilePath(upreq.LobSHA, upreq.Type, upreq.ChunkIdx, config, path)
 	if file == "" {
 		return smart.NewJsonErrorResponse(req.Id, fmt.Sprintf("Unsupported file type: %v", upreq.Type))
 	}
@@ -175,12 +175,67 @@ func uploadFile(req *smart.JsonRequest, in io.Reader, out io.Writer, config *Con
 }
 
 func downloadFilePrepare(req *smart.JsonRequest, in io.Reader, out io.Writer, config *Config, path string) *smart.JsonResponse {
-	// TODO
-	return nil
+	downreq := smart.DownloadFilePrepareRequest{}
+	err := smart.ExtractStructFromJsonRawMessage(req.Params, &downreq)
+	if err != nil {
+		return smart.NewJsonErrorResponse(req.Id, err.Error())
+	}
+	file := getLOBFilePath(downreq.LobSHA, downreq.Type, downreq.ChunkIdx, config, path)
+	if file == "" {
+		return smart.NewJsonErrorResponse(req.Id, fmt.Sprintf("Unsupported file type: %v", downreq.Type))
+	}
+	result := smart.DownloadFilePrepareResponse{}
+	s, err := os.Stat(file)
+	if err != nil {
+		// file doesn't exist, this should not have been called
+		return smart.NewJsonErrorResponse(req.Id, "File doesn't exist")
+	}
+	result.Size = s.Size()
+	resp, err := smart.NewJsonResponse(req.Id, result)
+	if err != nil {
+		return smart.NewJsonErrorResponse(req.Id, err.Error())
+	}
+	return resp
+
 }
 
 func downloadFileStart(req *smart.JsonRequest, in io.Reader, out io.Writer, config *Config, path string) *smart.JsonResponse {
-	// TODO
+	downreq := smart.DownloadFileStartRequest{}
+	err := smart.ExtractStructFromJsonRawMessage(req.Params, &downreq)
+	if err != nil {
+		// Serve() copes with converting this to stderr rather than JSON response
+		return smart.NewJsonErrorResponse(req.Id, err.Error())
+	}
+	file := getLOBFilePath(downreq.LobSHA, downreq.Type, downreq.ChunkIdx, config, path)
+	if file == "" {
+		return smart.NewJsonErrorResponse(req.Id, fmt.Sprintf("Unsupported file type: %v", downreq.Type))
+	}
+	// check size
+	s, err := os.Stat(file)
+	if err != nil {
+		// file doesn't exist, this should not have been called
+		return smart.NewJsonErrorResponse(req.Id, "File doesn't exist")
+	}
+	if s.Size() != downreq.Size {
+		// This won't work!
+		return smart.NewJsonErrorResponse(req.Id, fmt.Sprintf("File sizes disagree (client: %d server: %d)", downreq.Size, s.Size()))
+	}
+
+	f, err := os.OpenFile(file, os.O_RDONLY, 0644)
+	if err != nil {
+		return smart.NewJsonErrorResponse(req.Id, err.Error())
+	}
+	defer f.Close()
+
+	n, err := io.Copy(out, f)
+	if err != nil {
+		return smart.NewJsonErrorResponse(req.Id, fmt.Sprintf("Error copying data to output: %v", err.Error()))
+	}
+	if n != s.Size() {
+		return smart.NewJsonErrorResponse(req.Id, fmt.Sprintf("Amount of data copied disagrees (expected: %d actual: %d)", s.Size(), n))
+	}
+
+	// Don't return a response, only response is byte stream above except in error cases
 	return nil
 }
 

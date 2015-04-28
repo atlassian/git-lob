@@ -60,7 +60,7 @@ var _ = Describe("git-lob-serve tests", func() {
 
 		})
 
-		It("Uploads simple files (client + reference server)", func() {
+		It("Uploads & downloads simple files (client + reference server)", func() {
 			cli, srv := net.Pipe()
 			var outerr bytes.Buffer
 
@@ -93,8 +93,9 @@ var _ = Describe("git-lob-serve tests", func() {
 			Expect(exists).To(BeTrue(), "Metadata should now exist")
 
 			// Upload chunk (no callback used, that's tested in client tests)
+			callback := func(bytesDone, totalBytes int64) {}
 			chunkrdr := bytes.NewReader(testchunkdata)
-			err = trans.UploadChunk(testsha, testchunkidx, testchunkdatasz, chunkrdr, func(bytesDone, totalBytes int64) {})
+			err = trans.UploadChunk(testsha, testchunkidx, testchunkdatasz, chunkrdr, callback)
 			Expect(err).To(BeNil(), "Should not be an error in UploadChunk")
 			Expect(chunkrdr.Len()).To(BeZero(), "Server should have read all bytes")
 			s, err = os.Stat(getLOBChunkFilePath(testsha, testchunkidx, config, repopath))
@@ -108,7 +109,24 @@ var _ = Describe("git-lob-serve tests", func() {
 			exists, err = trans.ChunkExistsAndIsOfSize(testsha, testchunkidx, testchunkdatasz)
 			Expect(err).To(BeNil(), "Should not be an error in ChunkExistsAndIsOfSize")
 			Expect(exists).To(BeTrue(), "Chunk should now exist & be correct size")
+
+			// Now try to download same data
+			var buf bytes.Buffer
+			err = trans.DownloadMetadata(testsha, &buf)
+			Expect(err).To(BeNil(), "Should not be an error in DownloadMetadata")
+			Expect(string(buf.Bytes())).To(Equal(metacontent), "Should download expected metadata content")
+
+			buf.Reset()
+			err = trans.DownloadChunk(testsha, testchunkidx, &buf, callback)
+			Expect(err).To(BeNil(), "Should not be an error in DownloadChunk")
+			Expect(buf.Len()).To(BeEquivalentTo(testchunkdatasz), "Should download the correct number of bytes")
+			// Just check start & end of buffers
+			contentbytes := buf.Bytes()
+			Expect(contentbytes[:20]).To(Equal(testchunkdata[:20]), "Start of downloaded buffer should match")
+			Expect(contentbytes[testchunkdatasz-20:]).To(Equal(testchunkdata[testchunkdatasz-20:]), "Start of downloaded buffer should match")
+
 		})
+
 	})
 
 })
