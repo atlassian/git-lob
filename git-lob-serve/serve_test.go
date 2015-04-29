@@ -9,7 +9,7 @@ import (
 	"crypto/sha1"
 	"encoding/json"
 	"fmt"
-	"github.com/cloudflare/bm"
+	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/cloudflare/bm"
 	"io"
 	"net"
 	"os"

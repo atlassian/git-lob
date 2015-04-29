@@ -60,8 +60,10 @@ go get foo/bar
 ```
 [reference foo/bar in our source code]
 ```
-godep save -r
+godep save -r ./...
 ```
+
+The './...' parameter is to ensure godep looks in all of our packages. 
 
 Note that while adding the dependency you use the external package name foo/bar
 but that after 'godep save -r' this is re-written to "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/foo/bar", which you should use from then on.
@@ -74,7 +76,7 @@ To update the existing packages
 ```
 go get -u foo/bar (or customise & commit the package yourself)
 godep update foo/bar/...
-godep save -r
+godep save -r ./...
 ```
 
 Note the use of the '...' wildcard in the 'godep update' call, this is required

@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/cloudflare/bm"
+	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/cloudflare/bm"
 	"hash"
 	"io"
 	"io/ioutil"
