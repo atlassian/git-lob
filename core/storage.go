@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/cloudflare/bm"
 	"hash"
 	"io"
 	"io/ioutil"
@@ -818,4 +819,102 @@ func IsLocalLOBStoreEmpty() bool {
 	}
 	// Will be no entries if this is new
 	return len(dirs) == 0
+}
+
+// Generates a diff between the contents of 2 LOBs
+// Automatically copes with chunking, the diff is one file across the entire content
+func GenerateLOBDelta(basesha, targetsha string, out io.Writer) error {
+	return GenerateLOBDeltaInDir(GetLocalLOBRoot(), basesha, targetsha, out)
+}
+
+// Applies a diff to basesha and generates a LOB which should have targetsha (will be checked, error returned if disagrees)
+func ApplyLOBDelta(basesha, targetsha string, delta io.Reader) error {
+	var root string
+	if IsUsingSharedStorage() {
+		root = GetSharedLOBRoot()
+	} else {
+		root = GetLocalLOBRoot()
+	}
+	err := ApplyLOBDeltaInDir(root, basesha, targetsha, delta)
+	if err != nil {
+		// This may have stored in shared storage, so link if required
+		if IsUsingSharedStorage() {
+			recoverLocalLOBFilesFromSharedStore(targetsha)
+		}
+	}
+	return err
+}
+
+// Generates a diff between the contents of 2 LOBs, with a specified root storage
+// Automatically copes with chunking, the diff is one file across the entire content
+func GenerateLOBDeltaInDir(basedir, basesha, targetsha string, out io.Writer) error {
+	baseinfo, err := getLOBInfoRelative(basesha, basedir)
+	if err != nil {
+		return err
+	}
+	// Read all of base file into memory to use as dictionary
+	basebuf := bytes.NewBuffer(make([]byte, 0, baseinfo.Size))
+	var basebytesread int64
+	for i := 0; i < baseinfo.NumChunks; i++ {
+		chunkfile := filepath.Join(basedir, GetLOBChunkRelativePath(basesha, i))
+		cf, err := os.OpenFile(chunkfile, os.O_RDONLY, 0644)
+		if err != nil {
+			return err
+		}
+		defer cf.Close()
+		n, err := io.Copy(basebuf, cf)
+		if err != nil {
+			return fmt.Errorf("Error while copying data from base into memory: %v", err.Error())
+		}
+		basebytesread += n
+	}
+	if basebytesread != baseinfo.Size {
+		return fmt.Errorf("Incorrect number of bytes read for base file - expected %d actual %d", baseinfo.Size, basebytesread)
+	}
+	comp := bm.NewCompressor()
+	baseDict := &bm.Dictionary{Dict: basebuf.Bytes()}
+	// Use SetDictionary to set on compressor, this computes the hashes
+	comp.SetDictionary(baseDict)
+	// Set the delta buffer as the output
+	comp.SetWriter(out)
+
+	// Now we read all the targetsha's content and copy it into the compressor
+	targetinfo, err := getLOBInfoRelative(targetsha, basedir)
+	if err != nil {
+		return err
+	}
+	var targetbytesread int64
+	for i := 0; i < targetinfo.NumChunks; i++ {
+		chunkfile := filepath.Join(basedir, GetLOBChunkRelativePath(targetsha, i))
+		cf, err := os.OpenFile(chunkfile, os.O_RDONLY, 0644)
+		if err != nil {
+			return err
+		}
+		defer cf.Close()
+		n, err := io.Copy(comp, cf)
+		if err != nil {
+			return fmt.Errorf("Error while copying data from target into compressor: %v", err.Error())
+		}
+		targetbytesread += n
+	}
+	if targetbytesread != targetinfo.Size {
+		return fmt.Errorf("Incorrect number of bytes read for target file - expected %d actual %d", targetinfo.Size, targetbytesread)
+	}
+
+	// Now do the actual compression
+	// Maybe we can improve bm later so that it does it on the fly (less memory)
+	err = comp.Close()
+	if err != nil {
+		return fmt.Errorf("Error during compression of delta: %v", err.Error())
+	}
+	// This has been written to out now so we're done
+
+	return nil
+}
+
+// Applies a diff to basesha and generates a LOB, with a specified root storage,
+// which should have targetsha (will be checked, error returned if disagrees)
+func ApplyLOBDeltaInDir(basedir, basesha, targetsha string, delta io.Reader) error {
+	// TODO
+	return nil
 }

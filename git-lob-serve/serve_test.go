@@ -3,8 +3,14 @@ package main
 import (
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
+	"bitbucket.org/sinbad/git-lob/core"
 	"bitbucket.org/sinbad/git-lob/providers/smart"
 	"bytes"
+	"crypto/sha1"
+	"encoding/json"
+	"fmt"
+	"github.com/cloudflare/bm"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -12,7 +18,7 @@ import (
 )
 
 var _ = Describe("git-lob-serve tests", func() {
-	Context("Test individual server requests", func() {
+	Context("Test individual server requests with test data", func() {
 
 		var config *Config
 		var repopath string
@@ -21,9 +27,6 @@ var _ = Describe("git-lob-serve tests", func() {
 		metacontent := `{"SHA":"5e0865e76e8956900c3ef6fec2d2af1c05f31ec4","Size":21982,"NumChunks":4}`
 		testchunkdatasz := int64(16384)
 		testchunkidx := 3
-		// pickloblist := []string{"1234567890abcdef1234567890abcdef12345678", testsha, "0000000000000000000011111111112222222222"}
-		// deltaBaseSHA := "1234567890abcdef1234567890abcdef12345678"
-		// deltaTargetSHA := "5e0865e76e8956900c3ef6fec2d2af1c05f31ec4"
 
 		BeforeEach(func() {
 			config = NewConfig()
@@ -133,6 +136,141 @@ var _ = Describe("git-lob-serve tests", func() {
 			err = trans.DownloadChunk("0000000000000000000000000000000000000000", 0, &buf, callback)
 			Expect(err).ToNot(BeNil(), "Should be an error in DownloadChunk when asking for incorrect sha")
 			Expect(buf.Len()).To(BeEquivalentTo(0), "Nothing should have been downloaded")
+
+		})
+
+	})
+
+	Context("Delta tests which require valid binaries", func() {
+		var config *Config
+		var repopath string
+		var oldChunkSize int64
+
+		BeforeEach(func() {
+			config = NewConfig()
+			config.BasePath = filepath.Join(os.TempDir(), "git-lob-serve-test")
+			config.DeltaCachePath = filepath.Join(os.TempDir(), "git-lob-serve-test-deltacache")
+			os.MkdirAll(config.BasePath, 0755)
+			repopath = "test/repo/with/deltas"
+
+			// Alter the chunk size just for testing
+			oldChunkSize = core.ChunkSize
+			core.ChunkSize = 512
+
+		})
+		AfterEach(func() {
+			os.RemoveAll(config.BasePath)
+			os.RemoveAll(config.DeltaCachePath)
+			core.ChunkSize = oldChunkSize
+		})
+
+		It("Uploads and downloads deltas", func() {
+			cli, srv := net.Pipe()
+			var outerr bytes.Buffer
+
+			// 'Serve' is the real server function, usually connected to stdin/stdout but to pipe for test
+			go Serve(srv, srv, &outerr, config, repopath)
+			defer cli.Close()
+			trans := smart.NewPersistentTransport(cli)
+
+			// Firstly we upload a base LOB (must be complete)
+			// Use NewBuffer with capacity but zero size to pre-size
+			buf := bytes.NewBuffer(make([]byte, 0, core.ChunkSize*3+100))
+			buf.Write(bytes.Repeat([]byte{'0'}, 128))
+			buf.Write(bytes.Repeat([]byte{'1'}, 128))
+			buf.Write(bytes.Repeat([]byte{'2'}, 128))
+			buf.Write(bytes.Repeat([]byte{'3'}, 128)) // end of chunk 1
+			buf.Write(bytes.Repeat([]byte{'4'}, 128))
+			buf.Write(bytes.Repeat([]byte{'5'}, 128))
+			buf.Write(bytes.Repeat([]byte{'6'}, 128))
+			buf.Write(bytes.Repeat([]byte{'7'}, 128)) // end of chunk 2
+			buf.Write(bytes.Repeat([]byte{'8'}, 128))
+			buf.Write(bytes.Repeat([]byte{'9'}, 128))
+			buf.Write(bytes.Repeat([]byte{'A'}, 128))
+			buf.Write(bytes.Repeat([]byte{'B'}, 128)) // end of chunk 3
+			buf.Write(bytes.Repeat([]byte{'C'}, 100)) // end of file
+
+			// calculate SHA & generate metadata
+			shacalc := sha1.New()
+			shacalc.Write(buf.Bytes())
+			sha := fmt.Sprintf("%x", string(shacalc.Sum(nil)))
+
+			info := &core.LOBInfo{SHA: sha, Size: int64(buf.Len()), NumChunks: 4}
+			infobytes, _ := json.Marshal(info)
+
+			// Now upload
+			metardr := bytes.NewReader(infobytes)
+			err := trans.UploadMetadata(sha, int64(len(infobytes)), metardr)
+			Expect(err).To(BeNil(), "Should not be an error in UploadMetadata")
+			Expect(metardr.Len()).To(BeZero(), "Server should have read all bytes")
+
+			chunkrdr := bytes.NewReader(buf.Bytes())
+			callback := func(bytesDone, totalBytes int64) {}
+			err = trans.UploadChunk(sha, 0, core.ChunkSize, chunkrdr, callback) // chunk 0
+			Expect(err).To(BeNil(), "Should not be an error in UploadChunk")
+			Expect(chunkrdr.Len()).To(BeEquivalentTo(int64(buf.Len())-core.ChunkSize), "Server should have read a chunk")
+			err = trans.UploadChunk(sha, 1, core.ChunkSize, chunkrdr, callback) // chunk 1
+			Expect(err).To(BeNil(), "Should not be an error in UploadChunk")
+			Expect(chunkrdr.Len()).To(BeEquivalentTo(int64(buf.Len())-core.ChunkSize*2), "Server should have read a chunk")
+			err = trans.UploadChunk(sha, 2, core.ChunkSize, chunkrdr, callback) // chunk 2
+			Expect(err).To(BeNil(), "Should not be an error in UploadChunk")
+			Expect(chunkrdr.Len()).To(BeEquivalentTo(int64(buf.Len())-core.ChunkSize*3), "Server should have read a chunk")
+			err = trans.UploadChunk(sha, 3, 100, chunkrdr, callback) // final chunk
+			Expect(err).To(BeNil(), "Should not be an error in UploadChunk")
+			Expect(chunkrdr.Len()).To(BeZero(), "Server should have read final chunk")
+
+			// Now let's make a revised version of this file
+			// We'll change some bytes inside the file, across a chunk boundary, and add some data on at the end
+			buf2 := bytes.NewBuffer(make([]byte, 0, core.ChunkSize*3+120))
+			buf2.Write(bytes.Repeat([]byte{'0'}, 128))
+			buf2.Write(bytes.Repeat([]byte{'1'}, 128))
+			buf2.Write(bytes.Repeat([]byte{'2'}, 128))
+			buf2.Write(bytes.Repeat([]byte{'3'}, 128)) // end of chunk 1
+			buf2.Write(bytes.Repeat([]byte{'4'}, 128))
+			buf2.Write(bytes.Repeat([]byte{'5'}, 128))
+			buf2.Write(bytes.Repeat([]byte{'D'}, 128)) // changed
+			buf2.Write(bytes.Repeat([]byte{'E'}, 128)) // changed // end of chunk 2
+			buf2.Write(bytes.Repeat([]byte{'F'}, 128)) // changed
+			buf2.Write(bytes.Repeat([]byte{'G'}, 128)) // changed
+			buf2.Write(bytes.Repeat([]byte{'A'}, 128))
+			buf2.Write(bytes.Repeat([]byte{'B'}, 128)) // end of chunk 3
+			buf2.Write(bytes.Repeat([]byte{'C'}, 100))
+			buf2.Write(bytes.Repeat([]byte{'Q'}, 20)) // added
+
+			// calculate SHA & generate metadata
+			shacalc2 := sha1.New()
+			shacalc2.Write(buf2.Bytes())
+			sha2 := fmt.Sprintf("%x", string(shacalc2.Sum(nil)))
+
+			// Now let's look to upload the delta
+			// First make sure that server picks it when given the option
+			possibleSHAs := []string{"0022334455667788992200223344556677889922", sha, "99DDFFAA@@883322001199DDFFAA@@8833220011"}
+			pickedsha, err := trans.GetFirstCompleteLOBFromList(possibleSHAs)
+			Expect(err).To(BeNil(), "Should not be an error in GetFirstCompleteLOBFromList")
+			Expect(pickedsha).To(Equal(sha), "Should have picked the correct sha out of the list")
+
+			// let's generate a delta (not using client code right now, just VCDIFF directly)
+			comp := bm.NewCompressor()
+			var deltabuf bytes.Buffer
+			// Create a dictionary
+			baseDict := &bm.Dictionary{Dict: buf.Bytes()}
+			// Use SetDictionary to set on compressor, this computes the hashes
+			comp.SetDictionary(baseDict)
+			// Set the delta buffer as the output
+			comp.SetWriter(&deltabuf)
+			// Now we just write the contents of the changed file to the compressor, then close to compress
+			buf2.Reset()
+			_, err = io.Copy(comp, buf2)
+			Expect(err).To(BeNil(), "Should not be an error copying bytes to compressor")
+			// This does the compression
+			err = comp.Close()
+			Expect(err).To(BeNil(), "Should not be an error finishing compression")
+
+			deltabytes := deltabuf.Bytes()
+			deltardr := bytes.NewReader(deltabytes)
+			ok, err := trans.UploadDelta(sha, sha2, int64(len(deltabytes)), deltardr, callback)
+			Expect(err).To(BeNil(), "Should not be an error in UploadDelta")
+			Expect(ok).To(BeTrue(), "Delta should have been uploaded ok")
 
 		})
 
