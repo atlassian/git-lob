@@ -83,7 +83,7 @@ func Fsck(deep, shared, deleteBadFiles bool, shas []string, callback func(data *
 				quit = callback(&FsckCallbackData{FsckCorruptData, sha, sha, percent})
 				if !quit && deleteBadFiles {
 					// Delete all files for this LOB
-					delerr := deleteLOBRelative(sha, basedir)
+					delerr := DeleteLOBInBaseDir(sha, basedir)
 					if delerr != nil {
 						// Log but don't abort for this
 						util.LogErrorf("fsck error: Unable to delete bad LOB %v from %v: %v", sha, basedir, delerr.Error())

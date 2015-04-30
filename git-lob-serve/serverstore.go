@@ -294,12 +294,6 @@ func uploadDelta(req *smart.JsonRequest, in io.Reader, out io.Writer, config *Co
 	}
 	// Next from client should be byte stream of exactly the stated number of bytes
 	// Write to temporary file then move to final on success
-	file := getLOBDeltaFilePath(upreq.BaseLobSHA, upreq.TargetLobSHA, config, path)
-	if file == "" {
-		return smart.NewJsonErrorResponse(req.Id, "Unable to get delta file path")
-	}
-
-	// Now open temp file to write to
 	outf, err := ioutil.TempFile("", "tempchunk")
 	defer outf.Close()
 	n, err := io.CopyN(outf, in, upreq.Size)
@@ -311,38 +305,49 @@ func uploadDelta(req *smart.JsonRequest, in io.Reader, out io.Writer, config *Co
 
 	receivedresult := smart.UploadDeltaCompleteResponse{}
 	receivedresult.ReceivedOK = true
-	var receiveerr string
 	// force close now before defer so we can copy, if this works
 	tempdeltafilename := outf.Name()
+	// If any errors, delete the temp file automatically (will fail silently if already moved)
+	defer os.Remove(tempdeltafilename)
 	err = outf.Close()
 
-	// Apply the patch from the temp file, to make sure it applies ok
-	// TODO
-	_ = tempdeltafilename
-
 	if err != nil {
-		receivedresult.ReceivedOK = false
-		receiveerr = fmt.Sprintf("Error when closing temp file: %v", err.Error())
-	} else {
+		return smart.NewJsonErrorResponse(req.Id, fmt.Sprintf("Error when closing temp file: %v", err.Error()))
+	}
+
+	// Apply the patch from the temp file, to make sure it applies ok
+	// Other servers might choose just to store the delta and to not store the applied result, but we will
+	// we sacrifice some data storage for saved CPU work later
+	indeltaf, err := os.OpenFile(tempdeltafilename, os.O_RDONLY, 0644)
+	if err != nil {
+		return smart.NewJsonErrorResponse(req.Id, fmt.Sprintf("Error re-opening delta file for apply: %v", err.Error()))
+	}
+	defer indeltaf.Close()
+	lobroot := getLOBRoot(config, path)
+	ensureDirExists(lobroot, config)
+	err = core.ApplyLOBDeltaInBaseDir(lobroot, upreq.BaseLobSHA, upreq.TargetLobSHA, indeltaf)
+	if err != nil {
+		return smart.NewJsonErrorResponse(req.Id, fmt.Sprintf("Error when applying delta: %v", err.Error()))
+	}
+
+	// Now save the delta so we can use it later on in DownloadDelta for other clients
+	// Ignore any errors on renaming, just means it won't be in the cache (inconvenient but not fatal, temp will be deleted on return)
+	file := getLOBDeltaFilePath(upreq.BaseLobSHA, upreq.TargetLobSHA, config, path)
+	if file != "" {
 		// ensure final directory exists
 		ensureDirExists(filepath.Dir(file), config)
 		// Move temp file to final location
 		// We keep all deltas, we can use them to send to clients too (saves calculating)
 		// Should have a cron which deletes old ones
-		err = os.Rename(outf.Name(), file)
-		if err != nil {
-			receivedresult.ReceivedOK = false
-			receiveerr = fmt.Sprintf("Error when closing temp file: %v", err.Error())
-		}
-
+		os.Rename(outf.Name(), file)
 	}
 
-	resp, _ = smart.NewJsonResponse(req.Id, receivedresult)
-	if receiveerr != "" {
-		resp.Error = receiveerr
+	resp, err = smart.NewJsonResponse(req.Id, receivedresult)
+	if err != nil {
+		return smart.NewJsonErrorResponse(req.Id, err.Error())
 	}
-
 	return resp
+
 }
 
 func downloadDeltaPrepare(req *smart.JsonRequest, in io.Reader, out io.Writer, config *Config, path string) *smart.JsonResponse {

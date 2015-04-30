@@ -1,13 +1,13 @@
 package core
 
 import (
+	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/cloudflare/bm"
 	"bitbucket.org/sinbad/git-lob/util"
 	"bytes"
 	"crypto/sha1"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/cloudflare/bm"
 	"hash"
 	"io"
 	"io/ioutil"
@@ -111,33 +111,41 @@ func getLOBChunkFilename(sha string, chunkIdx int) string {
 	return fmt.Sprintf("%v_%d", sha, chunkIdx)
 }
 
+// Gets the absolute path to the meta file for a LOB from a base dir
+func GetLOBMetaPathInBaseDir(basedir, sha string) string {
+	fld := getLOBSubDir(basedir, sha)
+	return filepath.Join(fld, getLOBMetaFilename(sha))
+}
+
+// Gets the absolute path to the chunk file for a LOB from a base dir
+func GetLOBChunkPathInBaseDir(basedir, sha string, chunkIdx int) string {
+	fld := getLOBSubDir(basedir, sha)
+	return filepath.Join(fld, getLOBChunkFilename(sha, chunkIdx))
+}
+
 // Gets the absolute path to the meta file for a LOB in local store
 func GetLocalLOBMetaPath(sha string) string {
-	fld := GetLocalLOBDir(sha)
-	return filepath.Join(fld, getLOBMetaFilename(sha))
+	return GetLOBMetaPathInBaseDir(GetLocalLOBRoot(), sha)
 }
 
 // Gets the absolute path to the chunk file for a LOB in local store
 func GetLocalLOBChunkPath(sha string, chunkIdx int) string {
-	fld := GetLocalLOBDir(sha)
-	return filepath.Join(fld, getLOBChunkFilename(sha, chunkIdx))
+	return GetLOBChunkPathInBaseDir(GetLocalLOBRoot(), sha, chunkIdx)
 }
 
 // Gets the absolute path to the meta file for a LOB in shared store
 func getSharedLOBMetaPath(sha string) string {
-	fld := GetSharedLOBDir(sha)
-	return filepath.Join(fld, getLOBMetaFilename(sha))
+	return GetLOBMetaPathInBaseDir(GetSharedLOBRoot(), sha)
 }
 
 // Gets the absolute path to the chunk file for a LOB in local store
 func GetSharedLOBChunkPath(sha string, chunkIdx int) string {
-	fld := GetSharedLOBDir(sha)
-	return filepath.Join(fld, getLOBChunkFilename(sha, chunkIdx))
+	return GetLOBChunkPathInBaseDir(GetSharedLOBRoot(), sha, chunkIdx)
 }
 
 // Retrieve information about an existing stored LOB, from a base dir
-func getLOBInfoRelative(sha, basedir string) (*LOBInfo, error) {
-	file := filepath.Join(getLOBSubDir(basedir, sha), getLOBMetaFilename(sha))
+func getLOBInfoInBaseDir(sha, basedir string) (*LOBInfo, error) {
+	file := GetLOBMetaPathInBaseDir(basedir, sha)
 	_, err := os.Stat(file)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -155,12 +163,12 @@ func getLOBInfoRelative(sha, basedir string) (*LOBInfo, error) {
 
 // Retrieve information about an existing stored LOB (local)
 func GetLOBInfo(sha string) (*LOBInfo, error) {
-	info, err := getLOBInfoRelative(sha, GetLocalLOBRoot())
+	info, err := getLOBInfoInBaseDir(sha, GetLocalLOBRoot())
 	if err != nil {
 		if IsNotFoundError(err) {
 			// Try to recover from shared
 			if recoverLocalLOBFilesFromSharedStore(sha) {
-				info, err = getLOBInfoRelative(sha, GetLocalLOBRoot())
+				info, err = getLOBInfoInBaseDir(sha, GetLocalLOBRoot())
 				if err != nil {
 					// Dang
 					return nil, err
@@ -361,16 +369,23 @@ func linkSharedLOBFilename(destSharedFile string) error {
 // Store the metadata for a given sha
 // If it already exists and is of the right size, will do nothing
 func StoreLOBInfo(info *LOBInfo) error {
+	var root string
+	if IsUsingSharedStorage() {
+		root = GetSharedLOBRoot()
+	} else {
+		root = GetLocalLOBRoot()
+	}
+	return StoreLOBInfoInBaseDir(root, info)
+}
+
+// Store the metadata for a given sha in a relative path
+// If it already exists and is of the right size, will do nothing
+func StoreLOBInfoInBaseDir(basedir string, info *LOBInfo) error {
 	infoBytes, err := json.Marshal(info)
 	if err != nil {
 		return errors.New(fmt.Sprintf("Unable to convert LOB info to JSON: %v", err))
 	}
-	var infoFilename string
-	if IsUsingSharedStorage() {
-		infoFilename = getSharedLOBMetaPath(info.SHA)
-	} else {
-		infoFilename = GetLocalLOBMetaPath(info.SHA)
-	}
+	infoFilename := GetLOBMetaPathInBaseDir(basedir, info.SHA)
 	if !util.FileExistsAndIsOfSize(infoFilename, int64(len(infoBytes))) {
 		// Since all the details are derived from the SHA the only variant is chunking or incomplete writes so
 		// we don't need to worry about needing to update the content (it must be correct)
@@ -384,7 +399,7 @@ func StoreLOBInfo(info *LOBInfo) error {
 	}
 
 	// This may have stored in shared storage, so link if required
-	if IsUsingSharedStorage() {
+	if IsUsingSharedStorage() && basedir == GetSharedLOBRoot() {
 		return linkSharedLOBFilename(infoFilename)
 	} else {
 		return nil
@@ -404,14 +419,23 @@ func IsUsingSharedStorage() bool {
 // If file already exists and is of the right size, will do nothing
 // fromChunkFile will be moved into its final location or deleted if the data is already valid,
 // so the file will not exist after this call (renamed to final location or deleted), unless error
-func storeLOBChunk(sha string, chunkNo int, fromChunkFile string, sz int64) error {
-	var destFile string
-
+func StoreLOBChunk(sha string, chunkNo int, fromChunkFile string, sz int64) error {
+	var root string
 	if IsUsingSharedStorage() {
-		destFile = GetSharedLOBChunkPath(sha, chunkNo)
+		root = GetSharedLOBRoot()
 	} else {
-		destFile = GetLocalLOBChunkPath(sha, chunkNo)
+		root = GetLocalLOBRoot()
 	}
+	return StoreLOBChunkInBaseDir(root, sha, chunkNo, fromChunkFile, sz)
+}
+
+// Write the contents of fromFile to final storage with sha, checking the size, to a relative root
+// If file already exists and is of the right size, will do nothing
+// fromChunkFile will be moved into its final location or deleted if the data is already valid,
+// so the file will not exist after this call (renamed to final location or deleted), unless error
+func StoreLOBChunkInBaseDir(basedir, sha string, chunkNo int, fromChunkFile string, sz int64) error {
+	destFile := GetLOBChunkPathInBaseDir(basedir, sha, chunkNo)
+
 	if !util.FileExistsAndIsOfSize(destFile, int64(sz)) {
 		util.LogDebugf("Saving final LOB metadata file: %v\n", destFile)
 		// delete any existing (incorrectly sized) file since will probably not be allowed to rename over it
@@ -428,7 +452,7 @@ func storeLOBChunk(sha string, chunkNo int, fromChunkFile string, sz int64) erro
 	}
 
 	// This may have stored in shared storage, so link if required
-	if IsUsingSharedStorage() {
+	if IsUsingSharedStorage() && basedir == GetSharedLOBRoot() {
 		return linkSharedLOBFilename(destFile)
 	}
 	return nil
@@ -438,7 +462,19 @@ func storeLOBChunk(sha string, chunkNo int, fromChunkFile string, sz int64) erro
 // Read from a stream and calculate SHA, while also writing content to chunked content
 // leader is a slice of bytes that has already been read (probe for SHA)
 func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
+	var root string
+	if IsUsingSharedStorage() {
+		root = GetSharedLOBRoot()
+	} else {
+		root = GetLocalLOBRoot()
+	}
+	return StoreLOBInBaseDir(root, in, leader)
+}
 
+// Read from a stream and calculate SHA, while also writing content to chunked content
+// leader is a slice of bytes that has already been read (probe for SHA)
+// Store underneath a specified LOB root
+func StoreLOBInBaseDir(basedir string, in io.Reader, leader []byte) (*LOBInfo, error) {
 	sha := sha1.New()
 	// Write chunks to temporary files, then move based on SHA filename once calculated
 	chunkFilenames := make([]string, 0, 5)
@@ -537,7 +573,7 @@ func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
 	// We won't if it already exists & is the correct size
 	// Construct LOBInfo & write to final location
 	info := &LOBInfo{SHA: shaStr, Size: totalSize, NumChunks: len(chunkFilenames)}
-	err = StoreLOBInfo(info)
+	err = StoreLOBInfoInBaseDir(basedir, info)
 	if err != nil {
 		return nil, err
 	}
@@ -549,7 +585,7 @@ func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
 			// Last chunk, get size
 			sz = currentChunkSize
 		}
-		err = storeLOBChunk(shaStr, i, f, sz)
+		err = StoreLOBChunkInBaseDir(basedir, shaStr, i, f, sz)
 		if err != nil {
 			return nil, err
 		}
@@ -562,11 +598,11 @@ func StoreLOB(in io.Reader, leader []byte) (*LOBInfo, error) {
 // Delete all files associated with a given LOB SHA from the local store
 func DeleteLOB(sha string) error {
 	// Delete from local always (either only copy, or hard link)
-	return deleteLOBRelative(sha, GetLocalLOBRoot())
+	return DeleteLOBInBaseDir(sha, GetLocalLOBRoot())
 }
 
 // Delete all files associated with a given LOB SHA from a specified root dir
-func deleteLOBRelative(sha, basedir string) error {
+func DeleteLOBInBaseDir(sha, basedir string) error {
 
 	dir := getLOBSubDir(basedir, sha)
 	names, err := filepath.Glob(filepath.Join(dir, fmt.Sprintf("%v*", sha)))
@@ -620,7 +656,7 @@ func deleteLOBRelative(sha, basedir string) error {
 // store has it
 func GetLOBFilesForSHA(sha, basedir string, check bool, checkHash bool) (files []string, size int64, _err error) {
 	var ret []string
-	info, err := getLOBInfoRelative(sha, basedir)
+	info, err := getLOBInfoInBaseDir(sha, basedir)
 	if err != nil {
 		return []string{}, 0, err
 	}
@@ -824,7 +860,7 @@ func IsLocalLOBStoreEmpty() bool {
 // Generates a diff between the contents of 2 LOBs
 // Automatically copes with chunking, the diff is one file across the entire content
 func GenerateLOBDelta(basesha, targetsha string, out io.Writer) error {
-	return GenerateLOBDeltaInDir(GetLocalLOBRoot(), basesha, targetsha, out)
+	return GenerateLOBDeltaInBaseDir(GetLocalLOBRoot(), basesha, targetsha, out)
 }
 
 // Applies a diff to basesha and generates a LOB which should have targetsha (will be checked, error returned if disagrees)
@@ -835,7 +871,7 @@ func ApplyLOBDelta(basesha, targetsha string, delta io.Reader) error {
 	} else {
 		root = GetLocalLOBRoot()
 	}
-	err := ApplyLOBDeltaInDir(root, basesha, targetsha, delta)
+	err := ApplyLOBDeltaInBaseDir(root, basesha, targetsha, delta)
 	if err != nil {
 		// This may have stored in shared storage, so link if required
 		if IsUsingSharedStorage() {
@@ -845,31 +881,49 @@ func ApplyLOBDelta(basesha, targetsha string, delta io.Reader) error {
 	return err
 }
 
-// Generates a diff between the contents of 2 LOBs, with a specified root storage
-// Automatically copes with chunking, the diff is one file across the entire content
-func GenerateLOBDeltaInDir(basedir, basesha, targetsha string, out io.Writer) error {
-	baseinfo, err := getLOBInfoRelative(basesha, basedir)
+// Retrieve the entire content for all chunks of a LOB and write to 'out'
+func GetLOBCompleteContent(sha string, out io.Writer) error {
+	return GetLOBCompleteContentInBaseDir(GetLocalLOBRoot(), sha, out)
+}
+
+// Retrieve the entire content for all chunks of a LOB within a base root, and write to 'out'
+func GetLOBCompleteContentInBaseDir(basedir, sha string, out io.Writer) error {
+	info, err := getLOBInfoInBaseDir(sha, basedir)
 	if err != nil {
 		return err
 	}
-	// Read all of base file into memory to use as dictionary
-	basebuf := bytes.NewBuffer(make([]byte, 0, baseinfo.Size))
-	var basebytesread int64
-	for i := 0; i < baseinfo.NumChunks; i++ {
-		chunkfile := filepath.Join(basedir, GetLOBChunkRelativePath(basesha, i))
+	var bytesread int64
+	for i := 0; i < info.NumChunks; i++ {
+		chunkfile := filepath.Join(basedir, GetLOBChunkRelativePath(sha, i))
 		cf, err := os.OpenFile(chunkfile, os.O_RDONLY, 0644)
 		if err != nil {
 			return err
 		}
 		defer cf.Close()
-		n, err := io.Copy(basebuf, cf)
+		n, err := io.Copy(out, cf)
 		if err != nil {
-			return fmt.Errorf("Error while copying data from base into memory: %v", err.Error())
+			return fmt.Errorf("Error while copying data from content: %v", err.Error())
 		}
-		basebytesread += n
+		bytesread += n
 	}
-	if basebytesread != baseinfo.Size {
-		return fmt.Errorf("Incorrect number of bytes read for base file - expected %d actual %d", baseinfo.Size, basebytesread)
+	if bytesread != info.Size {
+		return fmt.Errorf("Incorrect number of bytes read for LOB - expected %d actual %d", info.Size, bytesread)
+	}
+	return nil
+}
+
+// Generates a diff between the contents of 2 LOBs, with a specified root storage
+// Automatically copes with chunking, the diff is one file across the entire content
+func GenerateLOBDeltaInBaseDir(basedir, basesha, targetsha string, out io.Writer) error {
+	// Read all of base file into memory to use as dictionary (pre-size from info)
+	baseinfo, err := getLOBInfoInBaseDir(basesha, basedir)
+	basebuf := bytes.NewBuffer(make([]byte, 0, baseinfo.Size))
+	if err != nil {
+		return err
+	}
+	err = GetLOBCompleteContentInBaseDir(basedir, basesha, basebuf)
+	if err != nil {
+		return fmt.Errorf("Error getting base file content for delta: %v", err.Error())
 	}
 	comp := bm.NewCompressor()
 	baseDict := &bm.Dictionary{Dict: basebuf.Bytes()}
@@ -879,7 +933,7 @@ func GenerateLOBDeltaInDir(basedir, basesha, targetsha string, out io.Writer) er
 	comp.SetWriter(out)
 
 	// Now we read all the targetsha's content and copy it into the compressor
-	targetinfo, err := getLOBInfoRelative(targetsha, basedir)
+	targetinfo, err := getLOBInfoInBaseDir(targetsha, basedir)
 	if err != nil {
 		return err
 	}
@@ -914,7 +968,52 @@ func GenerateLOBDeltaInDir(basedir, basesha, targetsha string, out io.Writer) er
 
 // Applies a diff to basesha and generates a LOB, with a specified root storage,
 // which should have targetsha (will be checked, error returned if disagrees)
-func ApplyLOBDeltaInDir(basedir, basesha, targetsha string, delta io.Reader) error {
-	// TODO
+func ApplyLOBDeltaInBaseDir(basedir, basesha, targetsha string, delta io.Reader) error {
+	// Read all of base file into memory to use as dictionary (pre-size from info)
+	baseinfo, err := getLOBInfoInBaseDir(basesha, basedir)
+	basebuf := bytes.NewBuffer(make([]byte, 0, baseinfo.Size))
+	if err != nil {
+		return err
+	}
+	err = GetLOBCompleteContentInBaseDir(basedir, basesha, basebuf)
+	if err != nil {
+		return fmt.Errorf("Error getting base file content for delta: %v", err.Error())
+	}
+
+	exp := bm.NewExpander(delta, basebuf.Bytes())
+
+	// output result to temp file
+	outf, err := ioutil.TempFile("", fmt.Sprintf("tempdelta%v_%v", basesha, targetsha))
+	if err != nil {
+		return fmt.Errorf("Error opening temp file for writing: %v\n", err)
+	}
+	defer outf.Close()
+	defer os.Remove(outf.Name()) // always remove temp file if not moved
+
+	// bm.Expander claims to support io.Reader but it doesn't
+	// so can't use the same io.Copy approach we use for Compressor
+	// Probably because it doesn't currently implement the buffering required to support arbitrary Read() calls
+	// Do it all in memory right now - we should probably enhance bm to make this more efficient
+	// Reading the code, the input to Expand is the current slice if you want it
+	// good to pre-allocate some space here, estimate same size as base
+	outbytes, err := exp.Expand(make([]byte, 0, basebuf.Len()))
+	if err != nil {
+		return fmt.Errorf("Error applying LOB delta: %v", err)
+	}
+	// Check the SHA
+	shacalc := sha1.New()
+	shacalc.Write(outbytes)
+	testsha := fmt.Sprintf("%x", string(shacalc.Sum(nil)))
+	if testsha != targetsha {
+		return fmt.Errorf("Integrity error applying delta, SHA does not agree (expected: %v actual %v)", targetsha, testsha)
+	}
+	// Otherwise, we're good. Store this data
+	targetinfo, err := StoreLOBInBaseDir(basedir, bytes.NewReader(outbytes), nil)
+	if err != nil {
+		return fmt.Errorf("Error storing target LOB %v: %v", targetsha, err.Error())
+	} else if targetinfo.SHA != targetsha {
+		return fmt.Errorf("Integrity error saving applied delta, SHA does not agree (expected: %v actual %v)", targetsha, targetinfo)
+	}
+
 	return nil
 }

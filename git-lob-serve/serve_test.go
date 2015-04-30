@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/cloudflare/bm"
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
 	"bitbucket.org/sinbad/git-lob/core"
@@ -9,7 +10,6 @@ import (
 	"crypto/sha1"
 	"encoding/json"
 	"fmt"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/cloudflare/bm"
 	"io"
 	"net"
 	"os"
@@ -259,14 +259,13 @@ var _ = Describe("git-lob-serve tests", func() {
 			// Set the delta buffer as the output
 			comp.SetWriter(&deltabuf)
 			// Now we just write the contents of the changed file to the compressor, then close to compress
-			buf2.Reset()
 			_, err = io.Copy(comp, buf2)
 			Expect(err).To(BeNil(), "Should not be an error copying bytes to compressor")
 			// This does the compression
 			err = comp.Close()
 			Expect(err).To(BeNil(), "Should not be an error finishing compression")
-
 			deltabytes := deltabuf.Bytes()
+			Expect(len(deltabytes)).ToNot(BeZero(), "Length of delta bytes should not be zero")
 			deltardr := bytes.NewReader(deltabytes)
 			ok, err := trans.UploadDelta(sha, sha2, int64(len(deltabytes)), deltardr, callback)
 			Expect(err).To(BeNil(), "Should not be an error in UploadDelta")
