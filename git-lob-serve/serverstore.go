@@ -4,6 +4,7 @@ import (
 	"bitbucket.org/sinbad/git-lob/core"
 	"bitbucket.org/sinbad/git-lob/providers/smart"
 	"bitbucket.org/sinbad/git-lob/util"
+	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -235,6 +236,12 @@ func downloadFileStart(req *smart.JsonRequest, in io.Reader, out io.Writer, conf
 	if n != s.Size() {
 		return smart.NewJsonErrorResponse(req.Id, fmt.Sprintf("Amount of data copied disagrees (expected: %d actual: %d)", s.Size(), n))
 	}
+	if err != nil {
+		return smart.NewJsonErrorResponse(req.Id, fmt.Sprintf("Error copying data to output: %v", err.Error()))
+	}
+	if n != s.Size() {
+		return smart.NewJsonErrorResponse(req.Id, fmt.Sprintf("Amount of data copied disagrees (expected: %d actual: %d)", s.Size(), n))
+	}
 
 	// Don't return a response, only response is byte stream above except in error cases
 	return nil
@@ -295,6 +302,11 @@ func uploadDelta(req *smart.JsonRequest, in io.Reader, out io.Writer, config *Co
 	// Next from client should be byte stream of exactly the stated number of bytes
 	// Write to temporary file then move to final on success
 	outf, err := ioutil.TempFile("", "tempchunk")
+	if err != nil {
+		return smart.NewJsonErrorResponse(req.Id, fmt.Sprintf("Error when opening temp file: %v", err.Error()))
+	}
+	// If any errors, delete the temp file automatically (will fail silently if already moved)
+	defer os.Remove(outf.Name())
 	defer outf.Close()
 	n, err := io.CopyN(outf, in, upreq.Size)
 	if err != nil {
@@ -307,8 +319,6 @@ func uploadDelta(req *smart.JsonRequest, in io.Reader, out io.Writer, config *Co
 	receivedresult.ReceivedOK = true
 	// force close now before defer so we can copy, if this works
 	tempdeltafilename := outf.Name()
-	// If any errors, delete the temp file automatically (will fail silently if already moved)
-	defer os.Remove(tempdeltafilename)
 	err = outf.Close()
 
 	if err != nil {
@@ -351,10 +361,72 @@ func uploadDelta(req *smart.JsonRequest, in io.Reader, out io.Writer, config *Co
 }
 
 func downloadDeltaPrepare(req *smart.JsonRequest, in io.Reader, out io.Writer, config *Config, path string) *smart.JsonResponse {
-	// TODO
-	return nil
+	downreq := smart.DownloadDeltaPrepareRequest{}
+	err := smart.ExtractStructFromJsonRawMessage(req.Params, &downreq)
+	if err != nil {
+		return smart.NewJsonErrorResponse(req.Id, err.Error())
+	}
+	result := smart.DownloadDeltaPrepareResponse{}
+	// First see if we have this delta in the cache already
+	deltafile := getLOBDeltaFilePath(downreq.BaseLobSHA, downreq.TargetLobSHA, config, path)
+	s, err := os.Stat(deltafile)
+	if err == nil {
+		result.Size = s.Size()
+	} else {
+		// either there was no cache file or we need to regen
+		lobroot := getLOBRoot(config, path)
+		var deltabuf bytes.Buffer
+		err = core.GenerateLOBDeltaInBaseDir(lobroot, downreq.BaseLobSHA, downreq.TargetLobSHA, &deltabuf)
+		if err != nil {
+			return smart.NewJsonErrorResponse(req.Id, err.Error())
+		}
+		result.Size = int64(deltabuf.Len())
+
+		// Write this delta to cache, via temp + rename to ensure not interrupted
+		tempf, err := ioutil.TempFile("", "deltatemp")
+		if err == nil {
+			defer os.Remove(tempf.Name()) // in case any errors
+			n, err := tempf.Write(deltabuf.Bytes())
+			tempf.Close()
+			if err == nil && n == deltabuf.Len() {
+				// only rename to final if correct size & no errors (don't want to bake incorrect delta
+				// don't check error here, if it doesn't work we just don't store in cache (and defer deletes))
+				os.Rename(tempf.Name(), deltafile)
+			}
+		}
+	}
+
+	resp, err := smart.NewJsonResponse(req.Id, result)
+	if err != nil {
+		return smart.NewJsonErrorResponse(req.Id, err.Error())
+	}
+	return resp
 }
 func downloadDeltaStart(req *smart.JsonRequest, in io.Reader, out io.Writer, config *Config, path string) *smart.JsonResponse {
-	// TODO
+	downreq := smart.DownloadDeltaStartRequest{}
+	err := smart.ExtractStructFromJsonRawMessage(req.Params, &downreq)
+	if err != nil {
+		return smart.NewJsonErrorResponse(req.Id, err.Error())
+	}
+	deltafile := getLOBDeltaFilePath(downreq.BaseLobSHA, downreq.TargetLobSHA, config, path)
+	if !util.FileExistsAndIsOfSize(deltafile, downreq.Size) {
+		// Caller will turn this into stderr output
+		return smart.NewJsonErrorResponse(req.Id, fmt.Sprintf("Delta file for %v/%v is not present or is wrong size (not %d), cannot send. Did you call 'prepare'?",
+			downreq.BaseLobSHA, downreq.TargetLobSHA, downreq.Size))
+	}
+
+	deltaf, err := os.OpenFile(deltafile, os.O_RDONLY, 0644)
+	if err != nil {
+		return smart.NewJsonErrorResponse(req.Id, err)
+	}
+	n, err := io.Copy(out, deltaf)
+	if err != nil {
+		return smart.NewJsonErrorResponse(req.Id, fmt.Sprintf("Error copying delta data to output: %v", err.Error()))
+	}
+	if n != downreq.Size {
+		return smart.NewJsonErrorResponse(req.Id, fmt.Sprintf("Amount of delta data copied disagrees (expected: %d actual: %d)", downreq.Size, n))
+	}
+
+	// There is no response, just data above
 	return nil
 }

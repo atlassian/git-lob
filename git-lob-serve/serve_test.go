@@ -292,6 +292,34 @@ var _ = Describe("git-lob-serve tests", func() {
 			Expect(err).To(BeNil(), "Should not be an error reading delta cache path")
 			Expect(fi).To(HaveLen(1), "Should be one file in cache")
 			Expect(fi[0].Size()).To(BeEquivalentTo(len(deltabytes)), "Delta file should match")
+
+			// Now request delta download, should use cache
+			downloadbuf.Reset()
+			// Check nothing happens when size limit exceeded
+			ok, err = trans.DownloadDelta(sha, sha2, 10, &downloadbuf, callback)
+			Expect(err).To(BeNil(), "Should not be an error in DownloadDelta")
+			Expect(ok).To(BeFalse(), "Delta should not have happened becuase size is too big")
+
+			downloadbuf.Reset()
+			ok, err = trans.DownloadDelta(sha, sha2, 9999999, &downloadbuf, callback)
+			Expect(err).To(BeNil(), "Should not be an error in DownloadDelta (cached)")
+			Expect(ok).To(BeTrue(), "Delta should have happened (cached)")
+			Expect(downloadbuf.Bytes()).To(Equal(deltabytes), "Delta should be identical (cached)")
+
+			// Now request delta download again, but delete the cached item so it generates it again
+			err = os.Remove(getLOBDeltaFilePath(sha, sha2, config, repopath))
+			Expect(err).To(BeNil(), "Should not be an error deleting delta cache file")
+			downloadbuf.Reset()
+			ok, err = trans.DownloadDelta(sha, sha2, 9999999, &downloadbuf, callback)
+			Expect(err).To(BeNil(), "Should not be an error in DownloadDelta (not cached)")
+			Expect(ok).To(BeTrue(), "Delta should have happened (not cached)")
+			Expect(downloadbuf.Bytes()).To(Equal(deltabytes), "Delta should be identical (not cached)")
+
+			// Test that delta was re-cached after being generated
+			s, err := os.Stat(getLOBDeltaFilePath(sha, sha2, config, repopath))
+			Expect(err).To(BeNil(), "Delta should have been re-cached after calculation in DownloadDelta")
+			Expect(s.Size()).To(BeEquivalentTo(len(deltabytes)), "Cached delta should be the same size")
+
 		})
 
 	})
