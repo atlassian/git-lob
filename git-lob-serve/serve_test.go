@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
@@ -242,6 +243,9 @@ var _ = Describe("git-lob-serve tests", func() {
 			shacalc2.Write(buf2.Bytes())
 			sha2 := fmt.Sprintf("%x", string(shacalc2.Sum(nil)))
 
+			info2 := &core.LOBInfo{SHA: sha2, Size: int64(buf2.Len()), NumChunks: 4}
+			infobytes2, _ := json.Marshal(info2)
+
 			// Now let's look to upload the delta
 			// First make sure that server picks it when given the option
 			possibleSHAs := []string{"0022334455667788992200223344556677889922", sha, "99DDFFAA@@883322001199DDFFAA@@8833220011"}
@@ -271,6 +275,23 @@ var _ = Describe("git-lob-serve tests", func() {
 			Expect(err).To(BeNil(), "Should not be an error in UploadDelta")
 			Expect(ok).To(BeTrue(), "Delta should have been uploaded ok")
 
+			// Now download the target version & validate (not deltas yet)
+			var downloadbuf bytes.Buffer
+			err = trans.DownloadMetadata(sha2, &downloadbuf)
+			Expect(err).To(BeNil(), "Should not be an error in DownloadMetadata")
+			Expect(string(downloadbuf.Bytes())).To(Equal(string(infobytes2)), "Should download expected metadata content")
+			// Just check one of the changed chunks
+			downloadbuf.Reset()
+			err = trans.DownloadChunk(sha2, 1, &downloadbuf, callback)
+			Expect(err).To(BeNil(), "Should not be an error in DownloadChunk")
+			Expect(downloadbuf.Len()).To(BeEquivalentTo(core.ChunkSize), "Should download the correct number of bytes")
+			Expect(downloadbuf.Bytes()).To(Equal(buf2.Bytes()[core.ChunkSize:core.ChunkSize*2]), "Second chunk buffer should match")
+
+			// Check that cache was saved
+			fi, err := ioutil.ReadDir(config.DeltaCachePath)
+			Expect(err).To(BeNil(), "Should not be an error reading delta cache path")
+			Expect(fi).To(HaveLen(1), "Should be one file in cache")
+			Expect(fi[0].Size()).To(BeEquivalentTo(len(deltabytes)), "Delta file should match")
 		})
 
 	})
