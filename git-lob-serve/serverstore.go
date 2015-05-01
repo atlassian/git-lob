@@ -67,8 +67,11 @@ func fileExists(req *smart.JsonRequest, in io.Reader, out io.Writer, config *Con
 	if file == "" {
 		return smart.NewJsonErrorResponse(req.Id, fmt.Sprintf("Unsupported file type: %v", freq.Type))
 	}
-
-	result.Result = util.FileExists(file)
+	s, err := os.Stat(file)
+	if err == nil {
+		result.Exists = true
+		result.Size = s.Size()
+	} // otherwise defaults false/0
 
 	resp, err := smart.NewJsonResponse(req.Id, result)
 	if err != nil {
@@ -83,7 +86,7 @@ func fileExistsOfSize(req *smart.JsonRequest, in io.Reader, out io.Writer, confi
 	if err != nil {
 		return smart.NewJsonErrorResponse(req.Id, err.Error())
 	}
-	result := smart.FileExistsResponse{}
+	result := smart.FileExistsOfSizeResponse{}
 	file := getLOBFilePath(freq.LobSHA, freq.Type, freq.ChunkIdx, config, path)
 	if file == "" {
 		return smart.NewJsonErrorResponse(req.Id, fmt.Sprintf("Unsupported file type: %v", freq.Type))

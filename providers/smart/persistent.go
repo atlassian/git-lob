@@ -343,11 +343,12 @@ type FileExistsRequest struct {
 	ChunkIdx int
 }
 type FileExistsResponse struct {
-	Result bool
+	Exists bool
+	Size   int64
 }
 
 // Return whether LOB metadata exists on the server
-func (self *PersistentTransport) MetadataExists(lobsha string) (bool, error) {
+func (self *PersistentTransport) MetadataExists(lobsha string) (bool, int64, error) {
 	params := FileExistsRequest{
 		LobSHA: lobsha,
 		Type:   "meta",
@@ -355,13 +356,13 @@ func (self *PersistentTransport) MetadataExists(lobsha string) (bool, error) {
 	resp := FileExistsResponse{}
 	err := self.doFullJSONRequestResponse("FileExists", &params, &resp)
 	if err != nil {
-		return false, err
+		return false, 0, err
 	}
-	return resp.Result, nil
+	return resp.Exists, resp.Size, nil
 }
 
 // Return whether LOB chunk content exists on the server
-func (self *PersistentTransport) ChunkExists(lobsha string, chunk int) (bool, error) {
+func (self *PersistentTransport) ChunkExists(lobsha string, chunk int) (bool, int64, error) {
 	params := FileExistsRequest{
 		LobSHA:   lobsha,
 		Type:     "chunk",
@@ -370,9 +371,9 @@ func (self *PersistentTransport) ChunkExists(lobsha string, chunk int) (bool, er
 	resp := FileExistsResponse{}
 	err := self.doFullJSONRequestResponse("FileExists", &params, &resp)
 	if err != nil {
-		return false, err
+		return false, 0, err
 	}
-	return resp.Result, nil
+	return resp.Exists, resp.Size, nil
 }
 
 type FileExistsOfSizeRequest struct {
@@ -380,6 +381,9 @@ type FileExistsOfSizeRequest struct {
 	Type     string
 	ChunkIdx int
 	Size     int64
+}
+type FileExistsOfSizeResponse struct {
+	Result bool
 }
 
 // Return whether LOB chunk content exists on the server, and is of a specific size
@@ -390,7 +394,7 @@ func (self *PersistentTransport) ChunkExistsAndIsOfSize(lobsha string, chunk int
 		ChunkIdx: chunk,
 		Size:     sz,
 	}
-	resp := FileExistsResponse{}
+	resp := FileExistsOfSizeResponse{}
 	err := self.doFullJSONRequestResponse("FileExistsOfSize", &params, &resp)
 	if err != nil {
 		return false, err

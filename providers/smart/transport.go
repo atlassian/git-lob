@@ -19,10 +19,10 @@ type Transport interface {
 	// Request that the server enable capabilities for this exchange (note, non-persistent transports can store & send this with every request)
 	SetEnabledCaps(caps []string) error
 
-	// Return whether LOB metadata exists on the server
-	MetadataExists(lobsha string) (bool, error)
+	// Return whether LOB metadata exists on the server (also returns size)
+	MetadataExists(lobsha string) (ex bool, sz int64, e error)
 	// Return whether LOB chunk content exists on the server
-	ChunkExists(lobsha string, chunk int) (bool, error)
+	ChunkExists(lobsha string, chunk int) (ex bool, sz int64, e error)
 	// Return whether LOB chunk content exists on the server, and is of a specific size
 	ChunkExistsAndIsOfSize(lobsha string, chunk int, sz int64) (bool, error)
 

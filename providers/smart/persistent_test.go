@@ -142,19 +142,21 @@ var _ = Describe("Persistent Transport", func() {
 							if fereq.LobSHA == chunk {
 								for _, chunkidx := range chunkIndexesThatExist[i] {
 									if fereq.ChunkIdx == chunkidx {
-										result.Result = true
+										result.Exists = true
+										result.Size = testchunkdatasz
 										break
 									}
 								}
 							}
-							if result.Result == true {
+							if result.Exists == true {
 								break
 							}
 						}
 					} else if fereq.Type == "meta" {
 						for _, meta := range metasThatExist {
 							if fereq.LobSHA == meta {
-								result.Result = true
+								result.Exists = true
+								result.Size = int64(len(metacontent))
 								break
 							}
 						}
@@ -173,7 +175,7 @@ var _ = Describe("Persistent Transport", func() {
 				case "FileExistsOfSize":
 					fereq := FileExistsOfSizeRequest{}
 					ExtractStructFromJsonRawMessage(req.Params, &fereq)
-					result := FileExistsResponse{}
+					result := FileExistsOfSizeResponse{}
 					for i, chunk := range chunksThatExist {
 						if fereq.LobSHA == chunk {
 							for chunkidx, sz := range chunkSizes[i] {
@@ -434,26 +436,28 @@ var _ = Describe("Persistent Transport", func() {
 
 			trans := NewPersistentTransport(cli)
 			for _, meta := range metasThatExist {
-				exists, err := trans.MetadataExists(meta)
+				exists, sz, err := trans.MetadataExists(meta)
 				Expect(err).To(BeNil(), "Should be no error")
 				Expect(exists).To(BeTrue(), "Metafile should exist")
+				Expect(sz).To(BeEquivalentTo(len(metacontent)), "Metafile should be right size")
 			}
 			for i, chunk := range chunksThatExist {
 				for _, chunkidx := range chunkIndexesThatExist[i] {
-					exists, err := trans.ChunkExists(chunk, chunkidx)
+					exists, sz, err := trans.ChunkExists(chunk, chunkidx)
 					Expect(err).To(BeNil(), "Should be no error")
 					Expect(exists).To(BeTrue(), "Chunk should exist")
+					Expect(sz).To(BeEquivalentTo(testchunkdatasz), "Chunk should be right size")
 				}
 			}
 
 			// Now try a few that should fail
-			exists, err := trans.MetadataExists("9999999999999999999999999999999999999999")
+			exists, _, err := trans.MetadataExists("9999999999999999999999999999999999999999")
 			Expect(err).To(BeNil(), "Should be no error")
 			Expect(exists).To(BeFalse(), "Chunk should not exist")
-			exists, err = trans.ChunkExists("9999999999999999999999999999999999999999", 0)
+			exists, _, err = trans.ChunkExists("9999999999999999999999999999999999999999", 0)
 			Expect(err).To(BeNil(), "Should be no error")
 			Expect(exists).To(BeFalse(), "Chunk should not exist")
-			exists, err = trans.ChunkExists(chunksThatExist[0], 99)
+			exists, _, err = trans.ChunkExists(chunksThatExist[0], 99)
 			Expect(err).To(BeNil(), "Should be no error")
 			Expect(exists).To(BeFalse(), "Chunk should not exist")
 

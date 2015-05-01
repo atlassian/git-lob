@@ -75,11 +75,11 @@ var _ = Describe("git-lob-serve tests", func() {
 			trans := smart.NewPersistentTransport(cli)
 
 			// in this test we'll upload totally 'wrong' LOBs but we're just testing plumbing
-			exists, err := trans.MetadataExists(testsha)
+			exists, _, err := trans.MetadataExists(testsha)
 			Expect(err).To(BeNil(), "Should not be an error in MetadataExists")
 			Expect(exists).To(BeFalse(), "Metadata should not exist yet")
 
-			exists, err = trans.ChunkExists(testsha, testchunkidx)
+			exists, _, err = trans.ChunkExists(testsha, testchunkidx)
 			Expect(err).To(BeNil(), "Should not be an error in ChunkExists")
 			Expect(exists).To(BeFalse(), "Chunk should not exist yet")
 
@@ -92,9 +92,10 @@ var _ = Describe("git-lob-serve tests", func() {
 			Expect(err).To(BeNil(), "Should not be an error stat'ing metadata")
 			Expect(s.Size()).To(BeEquivalentTo(len(metacontent)), "Server should have saved metacontent at right size")
 
-			exists, err = trans.MetadataExists(testsha)
+			exists, sz, err := trans.MetadataExists(testsha)
 			Expect(err).To(BeNil(), "Should not be an error in MetadataExists")
 			Expect(exists).To(BeTrue(), "Metadata should now exist")
+			Expect(sz).To(BeEquivalentTo(len(metacontent)), "Metadata should report right size")
 
 			// Upload chunk (no callback used, that's tested in client tests)
 			callback := func(bytesDone, totalBytes int64) {}
@@ -106,9 +107,10 @@ var _ = Describe("git-lob-serve tests", func() {
 			Expect(err).To(BeNil(), "Should not be an error stat'ing chunk")
 			Expect(s.Size()).To(BeEquivalentTo(testchunkdatasz), "Server should have saved chunk at right size")
 
-			exists, err = trans.ChunkExists(testsha, testchunkidx)
+			exists, sz, err = trans.ChunkExists(testsha, testchunkidx)
 			Expect(err).To(BeNil(), "Should not be an error in ChunkExists")
 			Expect(exists).To(BeTrue(), "Chunk should now exist")
+			Expect(sz).To(BeEquivalentTo(testchunkdatasz), "Server should report chunk at right size")
 
 			exists, err = trans.ChunkExistsAndIsOfSize(testsha, testchunkidx, testchunkdatasz)
 			Expect(err).To(BeNil(), "Should not be an error in ChunkExistsAndIsOfSize")
