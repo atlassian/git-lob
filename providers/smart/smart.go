@@ -1,6 +1,7 @@
 package smart
 
 import (
+	"bitbucket.org/sinbad/git-lob/providers"
 	"bitbucket.org/sinbad/git-lob/util"
 	"fmt"
 	"net/url"
@@ -170,4 +171,8 @@ func (self *SmartSyncProvider) FileExistsAndIsOfSize(remoteName, filename string
 func InitCoreProviders() {
 	// SSH transport
 	RegisterSshTransportFactory()
+	// Smart sync provider is a single instance which uses the transports to figure out concrete connection
+	// from a URL. Only implementation right now is persistent/SSH but can have different modes (e.g. transient)
+	// and different underlying network protocols (e.g. REST)
+	providers.RegisterSyncProvider(&SmartSyncProvider{})
 }

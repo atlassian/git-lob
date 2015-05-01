@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bitbucket.org/sinbad/git-lob/providers"
+	"bitbucket.org/sinbad/git-lob/providers/smart"
 	"bitbucket.org/sinbad/git-lob/util"
 	"fmt"
 	"os"
@@ -34,6 +35,7 @@ func MainImpl() int {
 	// Init logging after command line opts
 	util.InitLogging()
 	providers.InitCoreProviders()
+	smart.InitCoreProviders()
 	defer util.ShutDownLogging()
 
 	if len(errors) > 0 {

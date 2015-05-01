@@ -1,7 +1,6 @@
 package providers
 
 import (
-	"bitbucket.org/sinbad/git-lob/providers/smart"
 	"bitbucket.org/sinbad/git-lob/util"
 	"errors"
 	"fmt"
@@ -87,10 +86,6 @@ func GetSyncProvider(typeID string) (SyncProvider, error) {
 func InitCoreProviders() {
 	RegisterSyncProvider(&FileSystemSyncProvider{})
 	RegisterSyncProvider(&S3SyncProvider{})
-
-	// Smart transports & providers
-	smart.InitCoreProviders()
-
 }
 
 // Get the provider name specified for the named remote in the current git repo
