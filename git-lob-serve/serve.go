@@ -16,6 +16,7 @@ var methodMap = map[string]MethodFunc{
 	"SetEnabledCaps":       setCaps,
 	"FileExists":           fileExists,
 	"FileExistsOfSize":     fileExistsOfSize,
+	"LOBExists":            lobExists,
 	"UploadFile":           uploadFile,
 	"DownloadFilePrepare":  downloadFilePrepare,
 	"DownloadFileStart":    downloadFileStart,

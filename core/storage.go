@@ -1017,3 +1017,12 @@ func ApplyLOBDeltaInBaseDir(basedir, basesha, targetsha string, delta io.Reader)
 
 	return nil
 }
+
+// Record of a LOB delta (calculated but still to be done)
+type LOBDelta struct {
+	BaseSHA, TargetSHA string
+	DeltaSize          int64
+	FinalSize          int64
+	// Optional already present delta filename, can be blank
+	Filename string
+}

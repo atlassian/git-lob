@@ -274,6 +274,26 @@ func pickCompleteLOB(req *smart.JsonRequest, in io.Reader, out io.Writer, config
 	return resp
 }
 
+func lobExists(req *smart.JsonRequest, in io.Reader, out io.Writer, config *Config, path string) *smart.JsonResponse {
+	params := smart.LOBExistsRequest{}
+	err := smart.ExtractStructFromJsonRawMessage(req.Params, &params)
+	if err != nil {
+		return smart.NewJsonErrorResponse(req.Id, err.Error())
+	}
+	result := smart.LOBExistsResponse{}
+	_, sz, err := core.GetLOBFilesForSHA(params.LobSHA, getLOBRoot(config, path), true, false)
+	// in the case of error, assume missing so return default false
+	if err == nil {
+		result.Exists = true
+		result.Size = sz
+	}
+	resp, err := smart.NewJsonResponse(req.Id, result)
+	if err != nil {
+		return smart.NewJsonErrorResponse(req.Id, err.Error())
+	}
+	return resp
+}
+
 func uploadDelta(req *smart.JsonRequest, in io.Reader, out io.Writer, config *Config, path string) *smart.JsonResponse {
 	upreq := smart.UploadDeltaRequest{}
 	err := smart.ExtractStructFromJsonRawMessage(req.Params, &upreq)

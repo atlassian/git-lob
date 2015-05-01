@@ -62,7 +62,16 @@ Protocol methods
 |**Params**  |LobSHA (string): the SHA of the binary file in question|
 |            |Type (string): "meta" or "chunk"|
 |            |ChunkIdx (Number): only applicable to chunks, the chunk number (16MB)|
-|**Result**  |Result: True or False|
+|**Result**  |Exists: True or False|
+|            |Size: Size of the file|
+
+|||
+|-----------|-------------|
+|**Method**  | __LOBExists__ |
+|**Purpose** |Find out whether a given LOB exists in its entirety (meta and all chunks of right size|
+|**Params**  |LobSHA (string): the SHA of the binary file in question|
+|**Result**  |Exists: True or False|
+|            |Size: Size of the LOB content (excluding meta)|
 
 |||
 |-----------|-------------|

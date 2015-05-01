@@ -222,6 +222,12 @@ var _ = Describe("git-lob-serve tests", func() {
 			Expect(err).To(BeNil(), "Should not be an error in UploadChunk")
 			Expect(chunkrdr.Len()).To(BeZero(), "Server should have read final chunk")
 
+			// Server should have LOB now
+			exists, sz, err := trans.LOBExists(sha)
+			Expect(err).To(BeNil(), "Should not be an error in LOBExists")
+			Expect(exists).To(BeTrue(), "LOB should exist")
+			Expect(sz).To(BeEquivalentTo(len(buf.Bytes())), "LOB should be right size")
+
 			// Now let's make a revised version of this file
 			// We'll change some bytes inside the file, across a chunk boundary, and add some data on at the end
 			buf2 := bytes.NewBuffer(make([]byte, 0, core.ChunkSize*3+120))

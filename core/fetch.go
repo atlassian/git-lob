@@ -216,8 +216,11 @@ func fetchLOBs(lobshas []string, provider providers.SyncProvider, remoteName str
 	}
 
 	// So now we have all the metadata available locally, we can know what files to download
+
 	var filesTotalBytes int64
 	var files []string
+	var deltas []*LOBDelta
+	var deltaTotalBytes int64
 	callback(&util.ProgressCallbackData{util.ProgressCalculate, "Calculating content files to download",
 		0, 0, 0, 0})
 	for _, sha := range lobshas {
@@ -230,6 +233,21 @@ func fetchLOBs(lobshas []string, provider providers.SyncProvider, remoteName str
 			// We notified earlier
 			continue
 		}
+		// If this is a smart provider, try to download deltas where appropriate
+		if info.Size > util.GlobalOptions.FetchDeltasAboveSize {
+			switch p := provider.(type) {
+			case providers.SmartSyncProvider:
+				// This doesn't download, just prepares and gets size
+				delta := prepareFetchDelta(sha, p)
+				if delta != nil {
+					deltas = append(deltas, delta)
+					deltaTotalBytes += delta.DeltaSize
+					// We'll do a delta for this so don't continue to determine files
+					continue
+				}
+			}
+		}
+		// fallback to basic file download
 		filesTotalBytes += info.Size
 		for i := 0; i < info.NumChunks; i++ {
 			// get relative filename for download purposes
@@ -242,6 +260,13 @@ func fetchLOBs(lobshas []string, provider providers.SyncProvider, remoteName str
 	// Download content now
 	return fetchContentFiles(files, filesTotalBytes, provider, remoteName, force, callback)
 
+}
+
+func prepareFetchDelta(lobsha string, provider providers.SmartSyncProvider) *LOBDelta {
+	// TODO
+	// How to figure out what file to log to get previous versions? Only have LOB SHA
+	// Can I do better than a git log -G since I've already done that to figure out what to fetch
+	return nil
 }
 
 // Internal method for fetching

@@ -25,6 +25,8 @@ type Transport interface {
 	ChunkExists(lobsha string, chunk int) (ex bool, sz int64, e error)
 	// Return whether LOB chunk content exists on the server, and is of a specific size
 	ChunkExistsAndIsOfSize(lobsha string, chunk int, sz int64) (bool, error)
+	// Entire LOB exists? Also returns entire content size
+	LOBExists(lobsha string) (ex bool, sz int64, e error)
 
 	// Upload metadata for a LOB (from a stream); no progress callback as very small
 	UploadMetadata(lobsha string, sz int64, data io.Reader) error

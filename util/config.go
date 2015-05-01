@@ -65,6 +65,10 @@ type Options struct {
 	FetchIncludePaths []string
 	// List of paths to exclude when fetching
 	FetchExcludePaths []string
+	// Size above which we'll try to download deltas on fetch (smart servers only)
+	FetchDeltasAboveSize int64
+	// Size above which we'll try to upload deltas on push (smart servers only)
+	PushDeltasAboveSize int64
 	// The command to run over SSH on a remote smart server to push/pull (default "git-lob-server")
 	SSHServerCommand string
 	// Combination of root .gitconfig and repository config as map
@@ -82,6 +86,8 @@ func NewOptions() *Options {
 		FetchCommitsPeriodOther:     0,
 		FetchIncludePaths:           []string{},
 		FetchExcludePaths:           []string{},
+		FetchDeltasAboveSize:        1024 * 1024,
+		PushDeltasAboveSize:         1024 * 1024,
 		RetentionRefsPeriod:         30,
 		RetentionCommitsPeriodHEAD:  7,
 		RetentionCommitsPeriodOther: 0,
@@ -206,6 +212,19 @@ func parseConfig(configmap map[string]string, opts *Options) {
 	}
 	if sshserver := configmap["git-lob.ssh-server"]; sshserver != "" {
 		opts.SSHServerCommand = sshserver
+	}
+
+	if recent := configmap["git-lob.fetch-delta-size"]; recent != "" {
+		n, err := strconv.ParseInt(recent, 10, 64)
+		if err == nil {
+			opts.FetchDeltasAboveSize = int64(n)
+		}
+	}
+	if recent := configmap["git-lob.push-delta-size"]; recent != "" {
+		n, err := strconv.ParseInt(recent, 10, 64)
+		if err == nil {
+			opts.PushDeltasAboveSize = int64(n)
+		}
 	}
 
 }

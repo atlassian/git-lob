@@ -19,7 +19,7 @@ import (
 // (only possible with options like SSH), or 'transient' mode where all requests & responses are
 // separate round-trips (e.g. REST). The Transport interface provides the abstraction required
 // for that.
-type SmartSyncProvider struct {
+type SmartSyncProviderImpl struct {
 	// The remote we're working with right now (for cached info)
 	remoteName string
 	// The parsed url we're using
@@ -35,15 +35,15 @@ type SmartSyncProvider struct {
 
 // See doc/smart_protocol.md for protocol definition
 
-func (*SmartSyncProvider) TypeID() string {
+func (*SmartSyncProviderImpl) TypeID() string {
 	return "smart"
 }
 
-func (*SmartSyncProvider) HelpTextSummary() string {
+func (*SmartSyncProviderImpl) HelpTextSummary() string {
 	return `smart: communicates with a git-lob compatible server to exchange binaries`
 }
 
-func (*SmartSyncProvider) HelpTextDetail() string {
+func (*SmartSyncProviderImpl) HelpTextDetail() string {
 	return `The "smart" provider transfers files by talking to service hosted on
 the remote binary store which can communicate using a git-lob protocol. Many
 transports are supportable so long as client and server can establish comms. 
@@ -71,11 +71,11 @@ in the target file structure and can be safely deleted if older than 24h.
 `
 }
 
-func (self *SmartSyncProvider) ValidateConfig(remoteName string) error {
+func (self *SmartSyncProviderImpl) ValidateConfig(remoteName string) error {
 	return self.retrieveUrl(remoteName)
 }
 
-func (self *SmartSyncProvider) retrieveUrl(remoteName string) error {
+func (self *SmartSyncProviderImpl) retrieveUrl(remoteName string) error {
 	urlsetting := fmt.Sprintf("remote.%v.git-lob-url", remoteName)
 	urlstr := util.GlobalOptions.GitConfig[urlsetting]
 	if urlstr == "" {
@@ -92,7 +92,7 @@ func (self *SmartSyncProvider) retrieveUrl(remoteName string) error {
 
 // Internal method to make sure we've established a connection
 // we re-use connections where possible (TODO disconnection issues?)
-func (self *SmartSyncProvider) connect(remoteName string) error {
+func (self *SmartSyncProviderImpl) connect(remoteName string) error {
 	if remoteName != self.remoteName || self.transport == nil {
 		if self.transport != nil {
 			self.transport.Release()
@@ -127,7 +127,7 @@ func (self *SmartSyncProvider) connect(remoteName string) error {
 }
 
 // Negotiate with the server to determine capabilities
-func (self *SmartSyncProvider) determineCaps() error {
+func (self *SmartSyncProviderImpl) determineCaps() error {
 	var err error
 	self.serverCaps, err = self.transport.QueryCaps()
 	if err != nil {
@@ -151,7 +151,7 @@ func (self *SmartSyncProvider) determineCaps() error {
 
 // This is the file-based upload (i.e. a meta or a chunk) so no deltas here
 // Client will use delta alts if it wants
-func (self *SmartSyncProvider) Upload(remoteName string, filenames []string, fromDir string,
+func (self *SmartSyncProviderImpl) Upload(remoteName string, filenames []string, fromDir string,
 	force bool, callback providers.SyncProgressCallback) error {
 
 	err := self.connect(remoteName)
@@ -178,7 +178,7 @@ func (self *SmartSyncProvider) Upload(remoteName string, filenames []string, fro
 
 // This is the file-based download (i.e. a meta or a chunk) so no deltas here
 // Client will use delta alts if it wants
-func (self *SmartSyncProvider) Download(remoteName string, filenames []string, toDir string,
+func (self *SmartSyncProviderImpl) Download(remoteName string, filenames []string, toDir string,
 	force bool, callback providers.SyncProgressCallback) error {
 
 	err := self.connect(remoteName)
@@ -203,7 +203,7 @@ func (self *SmartSyncProvider) Download(remoteName string, filenames []string, t
 	return nil
 }
 
-func (self *SmartSyncProvider) parseFilename(filename string) (sha string, ischunk bool, chunk int) {
+func (self *SmartSyncProviderImpl) parseFilename(filename string) (sha string, ischunk bool, chunk int) {
 	thesha := filename[:40]
 	if strings.HasSuffix(filename, "meta") {
 		return thesha, false, 0
@@ -214,7 +214,7 @@ func (self *SmartSyncProvider) parseFilename(filename string) (sha string, ischu
 	}
 }
 
-func (self *SmartSyncProvider) FileExists(remoteName, filename string) bool {
+func (self *SmartSyncProviderImpl) FileExists(remoteName, filename string) bool {
 	err := self.connect(remoteName)
 	if err != nil {
 		return false
@@ -230,7 +230,7 @@ func (self *SmartSyncProvider) FileExists(remoteName, filename string) bool {
 	}
 	return exists
 }
-func (self *SmartSyncProvider) FileExistsAndIsOfSize(remoteName, filename string, sz int64) bool {
+func (self *SmartSyncProviderImpl) FileExistsAndIsOfSize(remoteName, filename string, sz int64) bool {
 	err := self.connect(remoteName)
 	if err != nil {
 		return false
@@ -246,7 +246,7 @@ func (self *SmartSyncProvider) FileExistsAndIsOfSize(remoteName, filename string
 	return exists
 }
 
-func (self *SmartSyncProvider) downloadSingleFile(remoteName, filename, toDir string,
+func (self *SmartSyncProviderImpl) downloadSingleFile(remoteName, filename, toDir string,
 	force bool, callback providers.SyncProgressCallback) (errorList []string, abort bool) {
 
 	sha, ischunk, chunk := self.parseFilename(filename)
@@ -344,7 +344,7 @@ func (self *SmartSyncProvider) downloadSingleFile(remoteName, filename, toDir st
 	return errorList, abortAfterThisFile
 }
 
-func (self *SmartSyncProvider) uploadSingleFile(remoteName, filename, fromDir string,
+func (self *SmartSyncProviderImpl) uploadSingleFile(remoteName, filename, fromDir string,
 	force bool, callback providers.SyncProgressCallback) (errorList []string, abort bool) {
 
 	// Check to see if the file is already there, right size
@@ -413,6 +413,29 @@ func (self *SmartSyncProvider) uploadSingleFile(remoteName, filename, fromDir st
 
 }
 
+// Whether a LOB exists in full on the remote, and gets its size
+func (self *SmartSyncProviderImpl) LOBExists(remoteName, sha string) (ex bool, sz int64) {
+	err := self.connect(remoteName)
+	if err != nil {
+		return false, 0
+	}
+
+	exists, sz, _ := self.transport.LOBExists(sha)
+	return exists, sz
+}
+
+// Download delta of LOB content (must be applied later)
+func (self *SmartSyncProviderImpl) DownloadDelta(remoteName, basesha, targetsha, destfile string, callback providers.SyncProgressCallback) error {
+	// TODO
+	return nil
+}
+
+// Upload delta of LOB content (must be calculated first)
+func (self *SmartSyncProviderImpl) UploadDelta(remoteName, basesha, targetsha, fromfile string, callback providers.SyncProgressCallback) error {
+	// TODO
+	return nil
+}
+
 // Init core smart providers
 func InitCoreProviders() {
 	// SSH transport
@@ -420,5 +443,5 @@ func InitCoreProviders() {
 	// Smart sync provider is a single instance which uses the transports to figure out concrete connection
 	// from a URL. Only implementation right now is persistent/SSH but can have different modes (e.g. transient)
 	// and different underlying network protocols (e.g. REST)
-	providers.RegisterSyncProvider(&SmartSyncProvider{})
+	providers.RegisterSyncProvider(&SmartSyncProviderImpl{})
 }

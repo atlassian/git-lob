@@ -402,6 +402,27 @@ func (self *PersistentTransport) ChunkExistsAndIsOfSize(lobsha string, chunk int
 	return resp.Result, nil
 }
 
+type LOBExistsRequest struct {
+	LobSHA string
+}
+type LOBExistsResponse struct {
+	Exists bool
+	Size   int64
+}
+
+// Return whether LOB exists in entirety on the server
+func (self *PersistentTransport) LOBExists(lobsha string) (bool, int64, error) {
+	params := LOBExistsRequest{
+		LobSHA: lobsha,
+	}
+	resp := LOBExistsResponse{}
+	err := self.doFullJSONRequestResponse("LOBExists", &params, &resp)
+	if err != nil {
+		return false, 0, err
+	}
+	return resp.Exists, resp.Size, nil
+}
+
 type UploadFileRequest struct {
 	LobSHA   string
 	Type     string

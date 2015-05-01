@@ -67,6 +67,7 @@ var _ = Describe("Persistent Transport", func() {
 		// Make sure it's big enough to require > 1 callback
 		testchunkdatasz := PersistentTransportBufferSize*3 + 157
 		testchunkidx := 3
+		testlobsize := 10002
 		var testchunkdata []byte
 		pickloblist := []string{"1234567890abcdef1234567890abcdef12345678", testsha, "0000000000000000000011111111112222222222"}
 		deltaBaseSHA := "1234567890abcdef1234567890abcdef12345678"
@@ -187,6 +188,17 @@ var _ = Describe("Persistent Transport", func() {
 							break
 						}
 					}
+					resp, err = NewJsonResponse(req.Id, result)
+					Expect(err).To(BeNil(), "Test persistent server: unable to create response")
+				case "LOBExists":
+					fereq := LOBExistsRequest{}
+					ExtractStructFromJsonRawMessage(req.Params, &fereq)
+					result := LOBExistsResponse{}
+					if fereq.LobSHA == testsha {
+						result.Exists = true
+						result.Size = int64(testlobsize)
+					}
+
 					resp, err = NewJsonResponse(req.Id, result)
 					Expect(err).To(BeNil(), "Test persistent server: unable to create response")
 				case "UploadFile":
@@ -488,6 +500,12 @@ var _ = Describe("Persistent Transport", func() {
 			exists, err := trans.ChunkExistsAndIsOfSize("9999999999999999999999999999999999999999", 0, 150)
 			Expect(err).To(BeNil(), "Should be no error")
 			Expect(exists).To(BeFalse(), "Chunk should not exist")
+
+			// Test entire LOB exists
+			exists, sz, err := trans.LOBExists(testsha)
+			Expect(err).To(BeNil(), "Should be no error")
+			Expect(exists).To(BeTrue(), "LOB should exist")
+			Expect(sz).To(BeEquivalentTo(testlobsize), "LOB should exist")
 
 		})
 

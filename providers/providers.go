@@ -49,6 +49,21 @@ type SyncProvider interface {
 	FileExistsAndIsOfSize(remoteName, filename string, sz int64) bool
 }
 
+// Smart sync provider interface with more options
+type SmartSyncProvider interface {
+	// Everything from core SyncProvider
+	SyncProvider
+
+	// Plus entire LOB-oriented calls
+
+	// Whether a LOB exists in full on the remote, and gets its size
+	LOBExists(remoteName, sha string) (ex bool, sz int64)
+	// Download delta of LOB content (must be applied later)
+	DownloadDelta(remoteName, basesha, targetsha, destfile string, callback SyncProgressCallback) error
+	// Upload delta of LOB content (must be calculated first)
+	UploadDelta(remoteName, basesha, targetsha, fromfile string, callback SyncProgressCallback) error
+}
+
 // Callback when progress is made uploading / downloading
 // fileInProgress: relative path of file, isSkipped: whether file was up to date, bytesDone/totalBytes: progress for current file
 // return true to abort the process for this and all other files in the batch

@@ -107,6 +107,17 @@ Fetch settings:
                                just like gitignore.
   git-lob.fetch-exclude        Do not fetch matching paths. Same comma
                                separator & wildcard rules as above
+  git-lob.fetch-delta-size     The file size above which git-lob will try to
+                               download deltas between versions instead of
+                               the entire file (smart servers only)
+                               Default 1MB
+
+Push settings:
+
+  git-lob.push-delta-size      The file size above which git-lob will try to
+                               upload deltas between versions instead of
+                               the entire file (smart servers only)
+                               Default 1MB
 
 Remote settings:
   These settings are stored underneath the regular remote configuration in git.
