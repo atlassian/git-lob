@@ -3,8 +3,14 @@ package smart
 import (
 	"bitbucket.org/sinbad/git-lob/providers"
 	"bitbucket.org/sinbad/git-lob/util"
+	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/url"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 )
 
 // The smart sync provider implements everything the standard SyncProvider does, but in addition
@@ -100,11 +106,19 @@ func (self *SmartSyncProvider) connect(remoteName string) error {
 				return err
 			}
 		}
-		// TODO, use serverURL to establish transport
-
+		// use serverURL to establish transport
+		tf := GetTransportFactory(self.serverUrl)
+		if tf == nil {
+			return fmt.Errorf("Unsupported URL: %v", self.serverUrl)
+		}
+		var err error
+		self.transport, err = tf.Connect(self.serverUrl)
+		if err != nil {
+			return err
+		}
 		self.remoteName = remoteName
 
-		err := self.determineCaps()
+		err = self.determineCaps()
 		if err != nil {
 			return err
 		}
@@ -114,37 +128,90 @@ func (self *SmartSyncProvider) connect(remoteName string) error {
 
 // Negotiate with the server to determine capabilities
 func (self *SmartSyncProvider) determineCaps() error {
-	// TODO
+	var err error
+	self.serverCaps, err = self.transport.QueryCaps()
+	if err != nil {
+		return err
+	}
+	// Always enable deltas if available
+	self.enabledCaps = nil
+	for _, c := range self.serverCaps {
+		if c == "binary_delta" {
+			self.enabledCaps = append(self.enabledCaps, c)
+		}
+		// nothing else for now
+	}
+	err = self.transport.SetEnabledCaps(self.enabledCaps)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
+// This is the file-based upload (i.e. a meta or a chunk) so no deltas here
+// Client will use delta alts if it wants
 func (self *SmartSyncProvider) Upload(remoteName string, filenames []string, fromDir string,
-	force bool, callback TransportProgressCallback) error {
+	force bool, callback providers.SyncProgressCallback) error {
 
 	err := self.connect(remoteName)
 	if err != nil {
 		return err
 	}
 
-	// TODO
+	var errorList []string
+	for _, filename := range filenames {
+		// Allow aborting
+		newerrs, abort := self.uploadSingleFile(remoteName, filename, fromDir, force, callback)
+		errorList = append(errorList, newerrs...)
+		if abort {
+			break
+		}
+	}
+
+	if len(errorList) > 0 {
+		return errors.New(strings.Join(errorList, "\n"))
+	}
+
 	return nil
 }
 
-// Redefine this so we don't have a circular package reference
-type SyncProgressCallback func(fileInProgress string, progressType util.ProgressCallbackType, bytesDone, totalBytes int64) (abort bool)
-
+// This is the file-based download (i.e. a meta or a chunk) so no deltas here
+// Client will use delta alts if it wants
 func (self *SmartSyncProvider) Download(remoteName string, filenames []string, toDir string,
-	force bool, callback SyncProgressCallback) error {
+	force bool, callback providers.SyncProgressCallback) error {
 
 	err := self.connect(remoteName)
 	if err != nil {
 		return err
 	}
 
-	// MUST check existence before calling download, use callback to report if missing
-	// TODO
+	var errorList []string
+	for _, filename := range filenames {
+		// Allow aborting
+		newerrs, abort := self.downloadSingleFile(remoteName, filename, toDir, force, callback)
+		errorList = append(errorList, newerrs...)
+		if abort {
+			break
+		}
+	}
+
+	if len(errorList) > 0 {
+		return errors.New(strings.Join(errorList, "\n"))
+	}
 
 	return nil
+}
+
+func (self *SmartSyncProvider) parseFilename(filename string) (sha string, ischunk bool, chunk int) {
+	thesha := filename[:40]
+	if strings.HasSuffix(filename, "meta") {
+		return thesha, false, 0
+	} else {
+		parts := strings.Split(filename, "_")
+		c, _ := strconv.ParseInt(parts[1], 10, 32)
+		return thesha, true, int(c)
+	}
 }
 
 func (self *SmartSyncProvider) FileExists(remoteName, filename string) bool {
@@ -153,19 +220,198 @@ func (self *SmartSyncProvider) FileExists(remoteName, filename string) bool {
 		return false
 	}
 
-	// TODO
-	return false
+	sha, ischunk, chunk := self.parseFilename(filename)
+	var exists bool
+	if ischunk {
+		exists, _, _ = self.transport.ChunkExists(sha, chunk)
+	} else {
+		exists, _, _ = self.transport.MetadataExists(sha)
+		return exists
+	}
+	return exists
 }
 func (self *SmartSyncProvider) FileExistsAndIsOfSize(remoteName, filename string, sz int64) bool {
 	err := self.connect(remoteName)
 	if err != nil {
 		return false
 	}
-	// TODO
-	return false
+	sha, ischunk, chunk := self.parseFilename(filename)
+	var exists bool
+	if ischunk {
+		exists, _ = self.transport.ChunkExistsAndIsOfSize(sha, chunk, sz)
+	} else {
+		// Never check size for meta
+		exists, _, _ = self.transport.MetadataExists(sha)
+	}
+	return exists
 }
 
-// TODO add additional methods for deltas
+func (self *SmartSyncProvider) downloadSingleFile(remoteName, filename, toDir string,
+	force bool, callback providers.SyncProgressCallback) (errorList []string, abort bool) {
+
+	sha, ischunk, chunk := self.parseFilename(filename)
+	var exists bool
+	var sz int64
+	if ischunk {
+		exists, sz, _ = self.transport.ChunkExists(sha, chunk)
+	} else {
+		exists, sz, _ = self.transport.MetadataExists(sha)
+	}
+	if !exists {
+		if callback != nil {
+			if callback(filename, util.ProgressNotFound, 0, 0) {
+				return errorList, true
+			}
+		}
+		// Note how we don't add an error to the returned error list
+		// As per provider docs, we simply tell callback it happened & treat it
+		// as a skipped item otherwise, since caller can only request files & not know
+		// if they're on the remote or not
+		// Keep going with other files
+		return errorList, false
+	}
+
+	destfilename := filepath.Join(toDir, filename)
+	if !force {
+		// Check existence & size before downloading
+		if destfi, err := os.Stat(destfilename); err == nil {
+			// File exists locally, check the size
+			if destfi.Size() == sz {
+				// File already present and correct size, skip
+				if callback != nil {
+					if callback(filename, util.ProgressSkip, sz, sz) {
+						return errorList, true
+					}
+				}
+				return errorList, false
+			}
+		}
+	}
+
+	// Make sure dest dir exists
+	parentDir := filepath.Dir(destfilename)
+	err := os.MkdirAll(parentDir, 0755)
+	if err != nil {
+		msg := fmt.Sprintf("Unable to create dir %v: %v", parentDir, err)
+		errorList = append(errorList, msg)
+		return errorList, false
+	}
+	// Create a temporary file to copy, avoid issues with interruptions
+	// Note this isn't a valid thing to do in security conscious cases but this isn't one
+	// by opening the file we will get a unique temp file name (albeit a predictable one)
+	outf, err := ioutil.TempFile(parentDir, "tempdownload")
+	if err != nil {
+		msg := fmt.Sprintf("Unable to create temp file for download in %v: %v", parentDir, err)
+		errorList = append(errorList, msg)
+		return errorList, false
+	}
+	tmpfilename := outf.Name()
+	// This is safe to do even though we manually close & rename because both calls are no-ops if we succeed
+	defer func() {
+		outf.Close()
+		os.Remove(tmpfilename)
+	}()
+	var abortAfterThisFile bool
+	localcallback := func(bytesDone, totalBytes int64) {
+		if callback != nil {
+			if callback(filename, util.ProgressTransferBytes, bytesDone, totalBytes) {
+				// Can't abort in the middle of a transfer with smart protocol
+				abortAfterThisFile = true
+			}
+		}
+	}
+	// Initial callback
+	if callback != nil {
+		if callback(filename, util.ProgressTransferBytes, 0, sz) {
+			return errorList, true
+		}
+	}
+	if ischunk {
+		err = self.transport.DownloadChunk(sha, chunk, outf, localcallback)
+	} else {
+		err = self.transport.DownloadMetadata(sha, outf)
+	}
+	outf.Close()
+	if err != nil {
+		os.Remove(tmpfilename)
+		msg := fmt.Sprintf("Problem while downloading %v from %v: %v", filename, remoteName, err)
+		errorList = append(errorList, msg)
+		return errorList, abortAfterThisFile
+	}
+	// Move to correct location - remove before to deal with force or bad size cases
+	os.Remove(destfilename)
+	os.Rename(tmpfilename, destfilename)
+	return errorList, abortAfterThisFile
+}
+
+func (self *SmartSyncProvider) uploadSingleFile(remoteName, filename, fromDir string,
+	force bool, callback providers.SyncProgressCallback) (errorList []string, abort bool) {
+
+	// Check to see if the file is already there, right size
+	srcfilename := filepath.Join(fromDir, filename)
+	srcfi, err := os.Stat(srcfilename)
+	if err != nil {
+		if callback != nil {
+			if callback(filename, util.ProgressNotFound, 0, 0) {
+				return errorList, true
+			}
+		}
+		msg := fmt.Sprintf("Unable to stat %v: %v", srcfilename, err)
+		errorList = append(errorList, msg)
+		// Keep going with other files
+		return errorList, false
+	}
+
+	if !force {
+		// Check existence & size before uploading
+		if self.FileExistsAndIsOfSize(remoteName, filename, srcfi.Size()) {
+			// File already present and correct size, skip
+			if callback != nil {
+				if callback(filename, util.ProgressSkip, srcfi.Size(), srcfi.Size()) {
+					return errorList, true
+				}
+			}
+			return errorList, false
+		}
+	}
+
+	sha, ischunk, chunk := self.parseFilename(filename)
+
+	// Initial callback
+	if callback != nil {
+		if callback(filename, util.ProgressTransferBytes, 0, srcfi.Size()) {
+			return errorList, true
+		}
+	}
+	var abortAfterThisFile bool
+	localcallback := func(bytesDone, totalBytes int64) {
+		if callback != nil {
+			if callback(filename, util.ProgressTransferBytes, bytesDone, totalBytes) {
+				// Can't abort in the middle of a transfer with smart protocol
+				abortAfterThisFile = true
+			}
+		}
+	}
+	inf, err := os.OpenFile(srcfilename, os.O_RDONLY, 0644)
+	if err != nil {
+		msg := fmt.Sprintf("Unable to read input file for upload %v: %v", srcfilename, err)
+		errorList = append(errorList, msg)
+		return errorList, abortAfterThisFile
+	}
+	defer inf.Close()
+	if ischunk {
+		err = self.transport.UploadChunk(sha, chunk, srcfi.Size(), inf, localcallback)
+	} else {
+		err = self.transport.UploadMetadata(sha, srcfi.Size(), inf)
+	}
+	if err != nil {
+		msg := fmt.Sprintf("Problem while uploading %v to %v: %v", srcfilename, remoteName, err)
+		errorList = append(errorList, msg)
+	}
+
+	return errorList, abortAfterThisFile
+
+}
 
 // Init core smart providers
 func InitCoreProviders() {
