@@ -79,11 +79,31 @@ func (r *GitRefSpec) String() string {
 type CommitLOBRef struct {
 	Commit  string
 	Parents []string
+	// Bare LOBs
 	LobSHAs []string
+	// LOBs with file names
+	FileLOBs []*FileLOB
 }
 
 func (self *CommitLOBRef) String() string {
 	return fmt.Sprintf("Commit: %v\n  Files:%v\n", self.Commit, self.LobSHAs)
+}
+
+// A filename & LOB SHA pair
+type FileLOB struct {
+	// Filename relative to repository root
+	Filename string
+	// LOB SHA
+	SHA string
+}
+
+// Convert a slice of FileLOBs to a map of lob sha to filename, eliminates duplicates
+func ConvertFileLOBSliceToMap(slice []*FileLOB) map[string]string {
+	ret := make(map[string]string, len(slice))
+	for _, filelob := range slice {
+		ret[filelob.SHA] = filelob.Filename
+	}
+	return ret
 }
 
 // Walk first parents starting from startSHA and call callback
@@ -294,6 +314,7 @@ func walkGitLogOutputForLOBReferences(outp io.Reader, additions, removals bool,
 			// Use filename context to include/exclude if paths were used
 			if currentFileIncluded {
 				currentCommit.LobSHAs = append(currentCommit.LobSHAs, sha)
+				currentCommit.FileLOBs = append(currentCommit.FileLOBs, &FileLOB{Filename: currentFilename, SHA: sha})
 			}
 		}
 	}
@@ -743,6 +764,56 @@ func GetGitAllLOBsToCheckoutInRefSpec(refspec *GitRefSpec, includePaths, exclude
 
 }
 
+// Gets a list of LOB SHAs with their filenames for all binary files that are needed when checking out any of
+// the commits referred to by refspec.
+// As opposed to GetGitCommitsReferencingLOBsInRange which only picks up changes to LOBs,
+// this function returns the complete set of LOBs needed if you checked out a commit either at
+// a single commit, or any in a range (if the refspec is a range; only .. range operator allowed)
+// This means it will include any LOBs that were added in commits before the range, if they are still used,
+// while GetGitCommitsReferencingLOBsInRange wouldn't mention those.
+// Note that git ranges are start AND end inclusive in this case.
+// Note that duplicate SHAs are not eliminated for efficiency, you must do it if you need it
+func GetGitAllFilesAndLOBsToCheckoutInRefSpec(refspec *GitRefSpec, includePaths, excludePaths []string) ([]*FileLOB, error) {
+
+	var snapshotref string
+	if refspec.IsRange() {
+		if refspec.RangeOp != ".." {
+			return nil, errors.New("Only '..' range operator allowed in GetGitAllLOBsToCheckoutInRefSpec")
+		}
+		// snapshot at end of range, then look at diffs later
+		snapshotref = refspec.Ref2
+	} else {
+		snapshotref = refspec.Ref1
+	}
+
+	ret, err := GetGitAllFilesAndLOBsToCheckoutAtCommit(snapshotref, includePaths, excludePaths)
+	if err != nil {
+		return ret, err
+	}
+
+	if refspec.IsRange() {
+		// Now we have all LOBs at the snapshot, find any extra ones earlier in the range
+		// to do this, we look for diffs in the commit range that start with "-git-lob:"
+		// because a removal means it was referenced before that commit therefore we need it
+		// to go back to that state
+		// git log is range start exclusive, but that's actually OK since a -git-lob diff line
+		// represents the state one commit earlier, giving us an inclusive start range
+		commits, err := getGitCommitsReferencingLOBsInRange(refspec.Ref1, refspec.Ref2, false, true, includePaths, excludePaths)
+		if err != nil {
+			return ret, err
+		}
+		for _, commit := range commits {
+			// possible to end up with duplicates here if same SHA referenced more than once
+			// caller to resolve if they need uniques
+			ret = append(ret, commit.FileLOBs...)
+		}
+
+	}
+
+	return ret, nil
+
+}
+
 // Get all the LOB SHAs that you would need to have available to check out a commit, and any other
 // ancestor of it within a number of days of that commit date (not today's date)
 // Note that if a LOB was modified to the same SHA more than once, duplicates may appear in the return
@@ -755,7 +826,7 @@ func GetGitAllLOBsToCheckoutAtCommitAndRecent(commit string, days int, includePa
 	// All LOBs at the commit itself
 	shasAtCommit, err := GetGitAllLOBsToCheckoutAtCommit(commit, includePaths, excludePaths)
 	if err != nil {
-		return []string{}, "", err
+		return nil, "", err
 	}
 
 	// days == 0 means we only snapshot latest
@@ -766,30 +837,6 @@ func GetGitAllLOBsToCheckoutAtCommitAndRecent(commit string, days int, includePa
 		}
 		return shasAtCommit, earliest, nil
 	} else {
-		// get the commit date
-		commitDetails, err := GetGitCommitSummary(commit)
-		if err != nil {
-			return []string{}, "", err
-		}
-		sinceDate := commitDetails.CommitDate.AddDate(0, 0, -days)
-		// Now use git log to scan backwards
-		// We use git log from commit backwards, not commit^ (parent) because
-		// we're looking for *previous* SHAs, which means we're looking for diffs
-		// with a '-' line. So SHAs replaced in the latest commit are old versions too
-		// that we haven't included yet in shasAtCommit
-		args := []string{"log", `--format=commitsha: %H %P`, "-p",
-			fmt.Sprintf("--since=%v", FormatGitDate(sinceDate)),
-			"-G", SHALineRegexStr,
-			commit}
-
-		cmd := exec.Command("git", args...)
-		outp, err := cmd.StdoutPipe()
-		if err != nil {
-			return []string{}, "", errors.New(fmt.Sprintf("Unable to call git-log: %v", err.Error()))
-		}
-		cmd.Start()
-
-		// Looking backwards, so removals
 		ret := shasAtCommit
 		earliestCommit := commit
 		callback := func(lobcommit *CommitLOBRef) (quit bool, err error) {
@@ -797,28 +844,89 @@ func GetGitAllLOBsToCheckoutAtCommitAndRecent(commit string, days int, includePa
 			earliestCommit = lobcommit.Commit
 			return false, nil
 		}
-		walkGitLogOutputForLOBReferences(outp, false, true, includePaths, excludePaths, callback)
+		err := walkGitAllLOBsInRecentCommits(commit, days, includePaths, excludePaths, callback)
 
-		cmd.Wait()
-
-		return ret, earliestCommit, nil
+		return ret, earliestCommit, err
 	}
 
 }
 
-// A filename & LOB SHA pair
-type FileLOB struct {
-	// Filename relative to repository root
-	Filename string
-	// LOB SHA
-	SHA string
+// Get all the Filenames & LOB SHAs that you would need to have available to check out a commit, and any other
+// ancestor of it within a number of days of that commit date (not today's date)
+// Note that if a LOB was modified to the same SHA more than once, duplicates may appear in the return
+// They are not routinely eliminated for performance, so perform your own dupe removal if you need it
+// as well as a list of LOBs, returns the commit SHA of the earliest change that was included in the scan.
+// Since this is the first *change* included (which would be removing the previous SHA), the earliest LOB
+// SHA included is from the *parent* of this commit.
+func GetGitAllFileLOBsToCheckoutAtCommitAndRecent(commit string, days int, includePaths,
+	excludePaths []string) (filelobs []*FileLOB, earliestChangeCommit string, reterr error) {
+	// All LOBs at the commit itself
+	fileshasAtCommit, err := GetGitAllFilesAndLOBsToCheckoutAtCommit(commit, includePaths, excludePaths)
+	if err != nil {
+		return nil, "", err
+	}
+
+	// days == 0 means we only snapshot latest
+	if days == 0 {
+		earliest := commit
+		if !GitRefIsFullSHA(earliest) {
+			earliest, _ = GitRefToFullSHA(earliest)
+		}
+		return fileshasAtCommit, earliest, nil
+	} else {
+		ret := fileshasAtCommit
+		earliestCommit := commit
+		callback := func(lobcommit *CommitLOBRef) (quit bool, err error) {
+			ret = append(ret, lobcommit.FileLOBs...)
+			earliestCommit = lobcommit.Commit
+			return false, nil
+		}
+		err := walkGitAllLOBsInRecentCommits(commit, days, includePaths, excludePaths, callback)
+
+		return ret, earliestCommit, err
+	}
+
+}
+
+// Walk backwards in history looking for all ancestors and references to LOBs in the '-' side of the diff
+func walkGitAllLOBsInRecentCommits(startcommit string, days int, includePaths, excludePaths []string,
+	callback func(lobcommit *CommitLOBRef) (quit bool, err error)) error {
+	// get the commit date
+	commitDetails, err := GetGitCommitSummary(startcommit)
+	if err != nil {
+		return err
+	}
+	sinceDate := commitDetails.CommitDate.AddDate(0, 0, -days)
+	// Now use git log to scan backwards
+	// We use git log from commit backwards, not commit^ (parent) because
+	// we're looking for *previous* SHAs, which means we're looking for diffs
+	// with a '-' line. So SHAs replaced in the latest commit are old versions too
+	// that we haven't included yet in fileshasAtCommit
+	args := []string{"log", `--format=commitsha: %H %P`, "-p",
+		fmt.Sprintf("--since=%v", FormatGitDate(sinceDate)),
+		"-G", SHALineRegexStr,
+		startcommit}
+
+	cmd := exec.Command("git", args...)
+	outp, err := cmd.StdoutPipe()
+	if err != nil {
+		return errors.New(fmt.Sprintf("Unable to call git-log: %v", err.Error()))
+	}
+	cmd.Start()
+
+	// Looking backwards, so removals
+	walkGitLogOutputForLOBReferences(outp, false, true, includePaths, excludePaths, callback)
+
+	cmd.Wait()
+
+	return nil
 }
 
 // Get all the binary files & their LOB SHAs that you would need to check out at a given commit (not changed in that commit)
-func GetGitAllFilesAndLOBsToCheckoutAtCommit(commit string, includePaths, excludePaths []string) ([]FileLOB, error) {
-	var ret []FileLOB
+func GetGitAllFilesAndLOBsToCheckoutAtCommit(commit string, includePaths, excludePaths []string) ([]*FileLOB, error) {
+	var ret []*FileLOB
 	err := WalkGitAllLOBsToCheckoutAtCommit(commit, includePaths, excludePaths, func(filelob *FileLOB) {
-		ret = append(ret, *filelob)
+		ret = append(ret, filelob)
 	})
 	return ret, err
 }

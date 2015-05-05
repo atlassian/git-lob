@@ -468,6 +468,7 @@ func SetupRepoForTest(inputs []*TestCommitSetupInput) []*CommitLOBRef {
 			}
 			info := CreateAndStoreLOBFileForTest(sz, filename)
 			output.LobSHAs = append(output.LobSHAs, info.SHA)
+			output.FileLOBs = append(output.FileLOBs, &FileLOB{Filename: filename, SHA: info.SHA})
 			RunGitCommandForTest(true, "add", filename)
 		}
 		// Now commit

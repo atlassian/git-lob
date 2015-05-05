@@ -753,7 +753,7 @@ func GetMissingLOBs(lobshas []string, checkHash bool) []string {
 	localroot := GetLocalLOBRoot()
 	var missing []string
 	for _, sha := range lobshas {
-		err := CheckLOBFilesForSHA(sha, localroot, false)
+		err := CheckLOBFilesForSHA(sha, localroot, checkHash)
 		if err != nil {
 			// Recover from shared storage if possible
 			if IsUsingSharedStorage() && recoverLocalLOBFilesFromSharedStore(sha) {
@@ -764,6 +764,22 @@ func GetMissingLOBs(lobshas []string, checkHash bool) []string {
 		}
 	}
 	return missing
+}
+
+// Return whether a single LOB is missing
+func IsLOBMissing(sha string, checkHash bool) bool {
+	localroot := GetLocalLOBRoot()
+	err := CheckLOBFilesForSHA(sha, localroot, checkHash)
+	if err != nil {
+		// Recover from shared storage if possible
+		if IsUsingSharedStorage() && recoverLocalLOBFilesFromSharedStore(sha) {
+			// then we're OK
+		} else {
+			return true
+		}
+	}
+
+	return false
 }
 
 // Retrieve the list of local/shared filenames backing the list of LOB SHAs passed in
