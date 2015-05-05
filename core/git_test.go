@@ -832,6 +832,14 @@ var _ = Describe("Git tests", func() {
 			Expect(lobs).To(ConsistOf(correctLOBsFeature2), fmt.Sprintf("LOBs on feature/2 should be correct; all LOBS were:\n%v", strings.Join(lobshas, "\n")))
 			Expect(earliestCommit).To(Equal(firstFeature2Commit), "Earliest commit for feature2 should be first commit")
 
+			// Also check file history
+			shas, err := GetGitLOBHistoryForFile("file1.txt", "")
+			Expect(err).To(BeNil(), "Shouldn't be an error in GetGitLOBHistoryForFile")
+			Expect(shas).To(Equal([]string{lobshas[2], lobshas[0]}), "Should be correct SHAs in file history in right order (latest first)")
+			shas, err = GetGitLOBHistoryForFile("file1.txt", lobshas[2])
+			Expect(err).To(BeNil(), "Shouldn't be an error in GetGitLOBHistoryForFile")
+			Expect(shas).To(Equal([]string{lobshas[0]}), "Should be correct SHAs in file history (exclude latest)")
+
 		})
 
 	})

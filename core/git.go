@@ -922,6 +922,42 @@ func walkGitAllLOBsInRecentCommits(startcommit string, days int, includePaths, e
 	return nil
 }
 
+// Return a slice of LOB SHAs representing versions of filename, ordered by latest first
+// if shatoskip is supplied, this sha is excluded from the return if found
+func GetGitLOBHistoryForFile(filename, shatoskip string) ([]string, error) {
+
+	// Scan all history for this filename that includes a git-lob marker
+	args := []string{"log", `--format=commitsha: %H %P`, "-p",
+		"-G", SHALineRegexStr,
+		"--", filename}
+
+	cmd := exec.Command("git", args...)
+	outp, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("Unable to call git-log: %v", err.Error()))
+	}
+	cmd.Start()
+
+	// We'll just look for additions ever, walking backwards
+	var ret []string
+	callback := func(commitLOB *CommitLOBRef) (quit bool, err error) {
+		// Already filtered by filename so there can only be one entry, but be sure
+		if len(commitLOB.FileLOBs) == 1 {
+			sha := commitLOB.FileLOBs[0].SHA
+			if sha != shatoskip {
+				ret = append(ret, sha)
+			}
+		}
+		return false, nil
+	}
+	walkGitLogOutputForLOBReferences(outp, true, false, nil, nil, callback)
+
+	cmd.Wait()
+
+	return ret, nil
+
+}
+
 // Get all the binary files & their LOB SHAs that you would need to check out at a given commit (not changed in that commit)
 func GetGitAllFilesAndLOBsToCheckoutAtCommit(commit string, includePaths, excludePaths []string) ([]*FileLOB, error) {
 	var ret []*FileLOB
