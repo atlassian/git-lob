@@ -5,6 +5,8 @@ import (
 	"bitbucket.org/sinbad/git-lob/util"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"os"
 	"path/filepath"
 	"time"
 )
@@ -225,6 +227,13 @@ func fetchLOBs(lobshas map[string]string, provider providers.SyncProvider, remot
 	var files []string
 	var deltas []*LOBDelta
 	var deltaTotalBytes int64
+	var smartProvider providers.SmartSyncProvider
+	switch p := provider.(type) {
+	case providers.SmartSyncProvider:
+		smartProvider = p
+	default:
+	}
+
 	callback(&util.ProgressCallbackData{util.ProgressCalculate, "Calculating content files to download",
 		0, 0, 0, 0})
 	for sha, filename := range lobshas {
@@ -238,17 +247,14 @@ func fetchLOBs(lobshas map[string]string, provider providers.SyncProvider, remot
 			continue
 		}
 		// If this is a smart provider, try to download deltas where appropriate
-		if info.Size > util.GlobalOptions.FetchDeltasAboveSize {
-			switch p := provider.(type) {
-			case providers.SmartSyncProvider:
-				// This doesn't download, just prepares and gets size
-				delta := prepareFetchDelta(sha, filename, p)
-				if delta != nil {
-					deltas = append(deltas, delta)
-					deltaTotalBytes += delta.DeltaSize
-					// We'll do a delta for this so don't continue to determine files
-					continue
-				}
+		if info.Size > util.GlobalOptions.FetchDeltasAboveSize && smartProvider != nil {
+			// This doesn't download, just prepares and gets size
+			delta := prepareFetchDelta(sha, filename, smartProvider, remoteName)
+			if delta != nil {
+				deltas = append(deltas, delta)
+				deltaTotalBytes += delta.DeltaSize
+				// We'll do a delta for this so don't continue to determine files
+				continue
 			}
 		}
 		// fallback to basic file download
@@ -258,21 +264,67 @@ func fetchLOBs(lobshas map[string]string, provider providers.SyncProvider, remot
 			files = append(files, GetLOBChunkRelativePath(sha, i))
 		}
 	}
-	callback(&util.ProgressCallbackData{util.ProgressCalculate, fmt.Sprintf("Metadata done, downloading content (%v)", util.FormatSize(filesTotalBytes)),
+	totalBytes := filesTotalBytes + deltaTotalBytes
+	callback(&util.ProgressCallbackData{util.ProgressCalculate, fmt.Sprintf("Metadata done, downloading content (%v)", util.FormatSize(totalBytes)),
 		0, 0, 0, 0})
 
 	// Download content now
+	if smartProvider != nil && len(deltas) > 0 {
+		// First try deltas, if any fail fall back on regular download
+		failedDeltas := fetchDeltas(deltas, deltaTotalBytes, smartProvider, remoteName, force, callback)
+		if len(failedDeltas) > 0 {
+			for _, delta := range failedDeltas {
+				// Slightly costly but this should be rare for prepare to work and download not to
+				info, err := GetLOBInfo(delta.TargetSHA)
+				if err != nil {
+					return fmt.Errorf("LOB info for %v went missing, this should be impossible: %v", delta.TargetSHA, err.Error())
+				}
+				filesTotalBytes += info.Size
+				for i := 0; i < info.NumChunks; i++ {
+					// get relative filename for download purposes
+					files = append(files, GetLOBChunkRelativePath(info.SHA, i))
+				}
+			}
+		}
+	}
 	return fetchContentFiles(files, filesTotalBytes, provider, remoteName, force, callback)
 
 }
 
-func prepareFetchDelta(lobsha, filename string, provider providers.SmartSyncProvider) *LOBDelta {
-	// TODO
-	// How to figure out what file to log to get previous versions? Only have LOB SHA
-	// Can I do better than a git log -G since I've already done that to figure out what to fetch
-	// We already have FileLOB structure but GetGitAllFilesAndLOBsToCheckoutAtCommit sanitised this to just SHA
-	// Maybe we need to change all those return methods to []*FileLOB instead of []string?
-	return nil
+func prepareFetchDelta(lobsha, filename string, provider providers.SmartSyncProvider, remoteName string) *LOBDelta {
+	othershas, err := GetGitLOBHistoryForFile(filename, lobsha)
+	if err != nil {
+		util.LogErrorf("Unable to prepare delta for %v(%v): %v\n", lobsha, filename, err.Error())
+		return nil
+	}
+	// This is all the possible base shas, but we can only use ones we have locally too
+	// Right now we're not trying to cope with ordered downloads where we might have newer ones part way through fetch (too fiddly)
+	var localbaseshas []string
+	for _, sha := range othershas {
+		if !IsLOBMissing(sha, false) {
+			localbaseshas = append(localbaseshas, sha)
+		}
+	}
+	if len(localbaseshas) == 0 {
+		// no base shas, cannot do this
+		return nil
+	}
+	// Now ask the server to pick a sha, generate a delta, cache it and tell us how big it is
+	sz, chosenbasesha, err := provider.PrepareDeltaForDownload(remoteName, lobsha, localbaseshas)
+	if err != nil {
+		util.LogErrorf("Unable to prepare delta %v(%v): %v\n", lobsha, filename, err.Error())
+		return nil
+	}
+	// No common base to use
+	if chosenbasesha == "" {
+		return nil
+	}
+	return &LOBDelta{
+		BaseSHA:   chosenbasesha,
+		TargetSHA: lobsha,
+		DeltaSize: sz,
+		Filename:  filename,
+	}
 }
 
 // Internal method for fetching
@@ -408,6 +460,98 @@ func fetchContentFiles(files []string, filesTotalBytes int64, provider providers
 	}
 
 	return err
+}
+
+// Fetch via deltas which have already been picked & prepared on the server. Any that fail for any reason are added
+// to the faileddeltas return list and will be re-tried using the standard download
+func fetchDeltas(deltas []*LOBDelta, deltaTotalBytes int64, provider providers.SmartSyncProvider, remoteName string,
+	force bool, callback util.ProgressCallback) (faileddeltas []*LOBDelta) {
+
+	var failed []*LOBDelta
+	var bytesDoneSoFar int64
+	for _, delta := range deltas {
+
+		err := fetchSingleDelta(delta, bytesDoneSoFar, deltaTotalBytes, provider, remoteName, force, callback)
+		bytesDoneSoFar += delta.DeltaSize
+		if err != nil {
+			failed = append(failed, delta)
+			msg := fmt.Sprintf("Error applying %v: %v. Falling back to non-delta download", getDeltaProgressDesc(delta), err.Error())
+			callback(&util.ProgressCallbackData{util.ProgressError, msg, delta.DeltaSize, delta.DeltaSize,
+				bytesDoneSoFar, deltaTotalBytes})
+		}
+
+	}
+	return failed
+
+}
+
+func getDeltaProgressDesc(delta *LOBDelta) string {
+	return fmt.Sprintf("Delta %v..%v", delta.BaseSHA[:7], delta.TargetSHA[:7])
+}
+
+func fetchSingleDelta(delta *LOBDelta, bytesSoFar int64, deltaTotalBytes int64, provider providers.SmartSyncProvider, remoteName string,
+	force bool, callback util.ProgressCallback) error {
+
+	// Description for progress
+	desc := getDeltaProgressDesc(delta)
+
+	// Initial 0% call
+	callback(&util.ProgressCallbackData{util.ProgressTransferBytes, desc, 0, delta.DeltaSize,
+		bytesSoFar, deltaTotalBytes})
+
+	// We could pipe download output directly into ApplyDelta via a goroutine
+	// But for simplicity of fail states, use a temp file
+	tempf, err := ioutil.TempFile("", "deltadownload")
+	if err != nil {
+		return err
+	}
+	tempfilename := tempf.Name()
+	defer os.Remove(tempfilename) // ensure always removed
+	defer tempf.Close()           // only used in panic cases, we close manually
+	localcallback := func(txt string, progressType util.ProgressCallbackType, bytesDone, totalBytes int64) (abort bool) {
+
+		var ret bool
+		if bytesDone != totalBytes {
+			// only do part progress in here, do final outside to ensure it always happens regardless
+			ret = callback(&util.ProgressCallbackData{util.ProgressTransferBytes, desc, bytesDone, totalBytes,
+				bytesSoFar + bytesDone, deltaTotalBytes})
+
+		}
+
+		return ret
+	}
+
+	err = provider.DownloadDelta(remoteName, delta.BaseSHA, delta.TargetSHA, tempf, localcallback)
+	tempf.Close() // Close so available to read back
+	if err != nil {
+		return err
+	}
+	// finished download OK, now apply
+	deltain, err := os.OpenFile(tempfilename, os.O_RDONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer deltain.Close()
+	// Apply to shared or local
+	err = ApplyLOBDeltaInBaseDir(getFetchDestination(), delta.BaseSHA, delta.TargetSHA, deltain)
+	if err != nil {
+		return err
+	}
+
+	// Also if downloading to shared store, link into local
+	if IsUsingSharedStorage() {
+		ok := recoverLocalLOBFilesFromSharedStore(delta.TargetSHA)
+		if !ok {
+			return fmt.Errorf("%v was applied to shared store but linking to local failed", desc)
+		}
+	}
+
+	// yay, call final 100%
+	callback(&util.ProgressCallbackData{util.ProgressTransferBytes, desc, delta.DeltaSize, delta.DeltaSize,
+		bytesSoFar + delta.DeltaSize, deltaTotalBytes})
+
+	return nil
+
 }
 
 // Fetch the files required for a single LOB

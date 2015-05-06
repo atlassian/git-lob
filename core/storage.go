@@ -1038,7 +1038,6 @@ func ApplyLOBDeltaInBaseDir(basedir, basesha, targetsha string, delta io.Reader)
 type LOBDelta struct {
 	BaseSHA, TargetSHA string
 	DeltaSize          int64
-	FinalSize          int64
 	// Optional already present delta filename, can be blank
 	Filename string
 }
