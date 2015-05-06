@@ -58,10 +58,12 @@ type SmartSyncProvider interface {
 
 	// Whether a LOB exists in full on the remote, and gets its size
 	LOBExists(remoteName, sha string) (ex bool, sz int64)
+	// Prepare a delta from a list of candidate shas and report the size of it, the chosen base SHA. If this fails caller should use standard Download()
+	PrepareDeltaForDownload(remoteName, sha string, candidateBaseSHAs []string) (sz int64, base string, e error)
 	// Download delta of LOB content (must be applied later)
-	DownloadDelta(remoteName, basesha, targetsha, destfile string, callback SyncProgressCallback) error
+	DownloadDelta(remoteName, basesha, targetsha string, out io.Writer, callback SyncProgressCallback) error
 	// Upload delta of LOB content (must be calculated first)
-	UploadDelta(remoteName, basesha, targetsha, fromfile string, callback SyncProgressCallback) error
+	UploadDelta(remoteName, basesha, targetsha string, in io.Reader, size int64, callback SyncProgressCallback) error
 }
 
 // Callback when progress is made uploading / downloading

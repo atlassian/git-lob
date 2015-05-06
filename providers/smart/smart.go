@@ -5,6 +5,7 @@ import (
 	"bitbucket.org/sinbad/git-lob/util"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/url"
 	"os"
@@ -424,16 +425,58 @@ func (self *SmartSyncProviderImpl) LOBExists(remoteName, sha string) (ex bool, s
 	return exists, sz
 }
 
+func (self *SmartSyncProviderImpl) PrepareDeltaForDownload(remoteName, sha string, candidateBaseSHAs []string) (size int64, base string, e error) {
+	err := self.connect(remoteName)
+	if err != nil {
+		return 0, "", err
+	}
+	baseSHA, err := self.transport.GetFirstCompleteLOBFromList(candidateBaseSHAs)
+	if err != nil {
+		return 0, "", err
+	}
+	if baseSHA == "" {
+		// no common base
+		return 0, "", nil
+	}
+	sz, err := self.transport.DownloadDeltaPrepare(baseSHA, sha)
+	if err != nil {
+		return 0, baseSHA, err
+	}
+	return sz, baseSHA, nil
+}
+
 // Download delta of LOB content (must be applied later)
-func (self *SmartSyncProviderImpl) DownloadDelta(remoteName, basesha, targetsha, destfile string, callback providers.SyncProgressCallback) error {
-	// TODO
-	return nil
+func (self *SmartSyncProviderImpl) DownloadDelta(remoteName, basesha, targetsha string, out io.Writer, callback providers.SyncProgressCallback) error {
+	err := self.connect(remoteName)
+	if err != nil {
+		return err
+	}
+	description := fmt.Sprintf("Delta %v..%v", basesha[:7], targetsha[:7])
+	localcallback := func(bytesDone, totalBytes int64) {
+		callback(description, util.ProgressTransferBytes, bytesDone, totalBytes)
+	}
+	ok, err := self.transport.DownloadDelta(basesha, targetsha, 1024*1024*1024, out, localcallback)
+	if !ok {
+		return fmt.Errorf("Server chose not to provide a delta for %v", targetsha)
+	}
+	return err
 }
 
 // Upload delta of LOB content (must be calculated first)
-func (self *SmartSyncProviderImpl) UploadDelta(remoteName, basesha, targetsha, fromfile string, callback providers.SyncProgressCallback) error {
-	// TODO
-	return nil
+func (self *SmartSyncProviderImpl) UploadDelta(remoteName, basesha, targetsha string, in io.Reader, size int64, callback providers.SyncProgressCallback) error {
+	err := self.connect(remoteName)
+	if err != nil {
+		return err
+	}
+	description := fmt.Sprintf("Delta %v..%v", basesha[:7], targetsha[:7])
+	localcallback := func(bytesDone, totalBytes int64) {
+		callback(description, util.ProgressTransferBytes, bytesDone, totalBytes)
+	}
+	ok, err := self.transport.UploadDelta(basesha, targetsha, size, in, localcallback)
+	if !ok {
+		return fmt.Errorf("Server chose not to accept a delta for %v", targetsha)
+	}
+	return err
 }
 
 // Init core smart providers

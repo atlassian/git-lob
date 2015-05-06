@@ -663,11 +663,8 @@ type DownloadDeltaStartRequest struct {
 	Size         int64
 }
 
-// Generate and download a binary delta that the client can apply locally to generate a new LOB
-// Deltas apply to whole LOB content and are not per-chunk
-// The server should respect sizeLimit and if the delta is larger than that, abandon the process
-// Return a bool to indicate whether the delta went ahead or not (client will fall back to non-delta on false)
-func (self *PersistentTransport) DownloadDelta(baseSHA, targetSHA string, sizeLimit int64, out io.Writer, callback TransportProgressCallback) (bool, error) {
+// Prepare a binary delta between 2 LOBs and report the size
+func (self *PersistentTransport) DownloadDeltaPrepare(baseSHA, targetSHA string) (int64, error) {
 	prepparams := DownloadDeltaPrepareRequest{
 		BaseLobSHA:   baseSHA,
 		TargetLobSHA: targetSHA,
@@ -675,20 +672,32 @@ func (self *PersistentTransport) DownloadDelta(baseSHA, targetSHA string, sizeLi
 	resp := DownloadDeltaPrepareResponse{}
 	err := self.doFullJSONRequestResponse("DownloadDeltaPrepare", &prepparams, &resp)
 	if err != nil {
-		return false, fmt.Errorf("Error in DownloadDeltaPrepare from %v to %v: %v", baseSHA, targetSHA, err.Error())
+		return 0, fmt.Errorf("Error in DownloadDeltaPrepare from %v to %v: %v", baseSHA, targetSHA, err.Error())
 	}
-	if resp.Size > sizeLimit {
+	return resp.Size, nil
+}
+
+// Generate and download a binary delta that the client can apply locally to generate a new LOB
+// Deltas apply to whole LOB content and are not per-chunk
+// The server should respect sizeLimit and if the delta is larger than that, abandon the process
+// Return a bool to indicate whether the delta went ahead or not (client will fall back to non-delta on false)
+func (self *PersistentTransport) DownloadDelta(baseSHA, targetSHA string, sizeLimit int64, out io.Writer, callback TransportProgressCallback) (bool, error) {
+	sz, err := self.DownloadDeltaPrepare(baseSHA, targetSHA)
+	if err != nil {
+		return false, err
+	}
+	if sz > sizeLimit {
 		// delta is too big
 		return false, nil
 	}
 	startparams := DownloadDeltaStartRequest{
 		BaseLobSHA:   baseSHA,
 		TargetLobSHA: targetSHA,
-		Size:         resp.Size,
+		Size:         sz,
 	}
 
 	// Response is just raw byte data - no callback as small enough not to need one
-	err = self.doJSONRequestDownload("DownloadDeltaStart", &startparams, resp.Size, out, callback)
+	err = self.doJSONRequestDownload("DownloadDeltaStart", &startparams, sz, out, callback)
 	if err != nil {
 		return false, fmt.Errorf("Error while downloading LOB delta from %v to %v: %v", baseSHA, targetSHA, err.Error())
 	}

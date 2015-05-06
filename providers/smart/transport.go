@@ -50,7 +50,9 @@ type Transport interface {
 	// On true, server must return nil error only after data is fully received, applied, saved as targetSHA and the
 	// integrity confirmed by recalculating the SHA of the final patched data.
 	UploadDelta(baseSHA, targetSHA string, deltaSize int64, data io.Reader, callback TransportProgressCallback) (bool, error)
-	// Generate and download a binary delta that the client can apply locally to generate a new LOB
+	// Prepare a binary delta between 2 LOBs and report the size
+	DownloadDeltaPrepare(baseSHA, targetSHA string) (int64, error)
+	// Generate (if not already cached) and download a binary delta that the client can apply locally to generate a new LOB
 	// Deltas apply to whole LOB content and are not per-chunk
 	// The server should respect sizeLimit and if the delta is larger than that, abandon the process
 	// Return a bool to indicate whether the delta went ahead or not (client will fall back to non-delta on false)
