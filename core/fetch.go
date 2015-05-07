@@ -227,12 +227,7 @@ func fetchLOBs(lobshas map[string]string, provider providers.SyncProvider, remot
 	var files []string
 	var deltas []*LOBDelta
 	var deltaTotalBytes int64
-	var smartProvider providers.SmartSyncProvider
-	switch p := provider.(type) {
-	case providers.SmartSyncProvider:
-		smartProvider = p
-	default:
-	}
+	smartProvider := providers.UpgradeToSmartSyncProvider(provider)
 
 	callback(&util.ProgressCallbackData{util.ProgressCalculate, "Calculating content files to download",
 		0, 0, 0, 0})

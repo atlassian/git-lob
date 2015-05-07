@@ -99,6 +99,17 @@ func GetSyncProvider(typeID string) (SyncProvider, error) {
 	return p, nil
 }
 
+// 'Upgrade' a pointer to a SyncProvider to a SmartSyncProvider, if possible (returns nil if not)
+func UpgradeToSmartSyncProvider(provider SyncProvider) SmartSyncProvider {
+	switch p := provider.(type) {
+	case SmartSyncProvider:
+		return p
+	default:
+		return nil
+	}
+
+}
+
 // Install the core providers
 func InitCoreProviders() {
 	RegisterSyncProvider(&FileSystemSyncProvider{})
