@@ -292,7 +292,7 @@ func fetchLOBs(lobshas map[string]string, provider providers.SyncProvider, remot
 }
 
 func prepareFetchDelta(lobsha, filename string, provider providers.SmartSyncProvider, remoteName string) *LOBDelta {
-	othershas, err := GetGitLOBHistoryForFile(filename, lobsha)
+	othershas, err := GetGitAllLOBHistoryForFile(filename, lobsha)
 	if err != nil {
 		util.LogErrorf("Unable to prepare delta for %v(%v): %v\n", lobsha, filename, err.Error())
 		return nil

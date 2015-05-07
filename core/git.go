@@ -923,11 +923,14 @@ func walkGitAllLOBsInRecentCommits(startcommit string, days int, includePaths, e
 }
 
 // Return a slice of LOB SHAs representing versions of filename, ordered by latest first
+// history is from all heads not just checked out
 // if shatoskip is supplied, this sha is excluded from the return if found
-func GetGitLOBHistoryForFile(filename, shatoskip string) ([]string, error) {
+func GetGitAllLOBHistoryForFile(filename, shatoskip string) ([]string, error) {
 
-	// Scan all history for this filename that includes a git-lob marker
+	// Scan ALL history for this filename that includes a git-lob marker
+	// not just history from checked out
 	args := []string{"log", `--format=commitsha: %H %P`, "-p",
+		"--all", "--topo-order", // ALL history in reverse order
 		"-G", SHALineRegexStr,
 		"--", filename}
 

@@ -833,11 +833,11 @@ var _ = Describe("Git tests", func() {
 			Expect(earliestCommit).To(Equal(firstFeature2Commit), "Earliest commit for feature2 should be first commit")
 
 			// Also check file history
-			shas, err := GetGitLOBHistoryForFile("file1.txt", "")
-			Expect(err).To(BeNil(), "Shouldn't be an error in GetGitLOBHistoryForFile")
+			shas, err := GetGitAllLOBHistoryForFile("file1.txt", "")
+			Expect(err).To(BeNil(), "Shouldn't be an error in GetGitAllLOBHistoryForFile")
 			Expect(shas).To(Equal([]string{lobshas[2], lobshas[0]}), "Should be correct SHAs in file history in right order (latest first)")
-			shas, err = GetGitLOBHistoryForFile("file1.txt", lobshas[2])
-			Expect(err).To(BeNil(), "Shouldn't be an error in GetGitLOBHistoryForFile")
+			shas, err = GetGitAllLOBHistoryForFile("file1.txt", lobshas[2])
+			Expect(err).To(BeNil(), "Shouldn't be an error in GetGitAllLOBHistoryForFile")
 			Expect(shas).To(Equal([]string{lobshas[0]}), "Should be correct SHAs in file history (exclude latest)")
 
 		})
