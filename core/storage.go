@@ -782,66 +782,6 @@ func IsLOBMissing(sha string, checkHash bool) bool {
 	return false
 }
 
-// Retrieve the list of local/shared filenames backing the list of LOB SHAs passed in
-// This finds this machine's storage of the SHAs in question, including the metadata file and
-// all of the chunks. If check = true (recommended) then the integrity of the files
-// is checked and only if all the files for a SHA are valid are they included in the
-// returned list.
-// If files are just missing, they are returned as a NotFoundError
-// If files are corrupt, an IntegrityError is returned instead
-// The filenames returned are relative to basedir, the root folder for all of the files
-// Note that 'check' only checks the surface level integrity (all the files are there & correct size). If you
-// want to do a deep integrity check (ensure all bytes are valid), use CheckLOBFilesForSHA with checkHash=true
-func GetLOBFilenamesWithBaseDir(shas []string, check bool) (files []string, basedir string, totalSize int64, err error) {
-	// Note how we always return the basedir as the local LOB root
-	// this is because all SHAs are hard linked here even when using shared storage
-	basedir = GetLocalLOBRoot()
-	var ret []string
-	var integrityerrorshas []string
-	var notfoundshas []string
-	var othererrormsgs []string
-	errorOccurred := false
-	var retSize int64
-	for _, sha := range shas {
-		// Do basic check, not content check
-		shafiles, shasize, shaerr := GetLOBFilesForSHA(sha, basedir, check, false)
-		if shaerr != nil {
-			errorOccurred = true
-			if IsNotFoundError(shaerr) {
-				notfoundshas = append(notfoundshas, sha)
-			} else if IsIntegrityError(shaerr) {
-				integrityerrorshas = append(integrityerrorshas, sha)
-			} else {
-				othererrormsgs = append(othererrormsgs, shaerr.Error())
-			}
-		} else {
-			ret = append(ret, shafiles...)
-			retSize += shasize
-		}
-	}
-	if errorOccurred {
-		var reterr error
-		msg := bytes.NewBufferString("")
-		for _, sha := range notfoundshas {
-			msg.WriteString(sha)
-			msg.WriteString(" missing\n")
-		}
-		for _, m := range othererrormsgs {
-			msg.WriteString(m)
-			msg.WriteString("\n")
-		}
-		if len(integrityerrorshas) > 0 {
-			reterr = NewIntegrityErrorWithAdditionalMessage(integrityerrorshas, msg.String())
-		} else if len(notfoundshas) > 0 {
-			reterr = NewNotFoundForSHAsError(shas)
-		} else {
-			reterr = errors.New(msg.String())
-		}
-		return ret, basedir, retSize, reterr
-	}
-	return ret, basedir, retSize, nil
-}
-
 // Get the correct size of a given chunk
 func getLOBExpectedChunkSize(info *LOBInfo, chunkIdx int) int64 {
 	if chunkIdx+1 < info.NumChunks {

@@ -4,21 +4,25 @@ import (
 	"bitbucket.org/sinbad/git-lob/providers"
 	"bitbucket.org/sinbad/git-lob/util"
 	"fmt"
+	"io/ioutil"
+	"os"
 )
 
 // Some temporary storage used to pre-calculate the amount of data we'll need to upload
 type PushCommitContentDetails struct {
-	CommitSHA  string   // the commit's SHA
-	Files      []string // list of files we'll need to upload, relative path
-	BaseDir    string   // the base dir of the above files
-	TotalBytes int64    // total bytes for all files in the list
-	Incomplete bool     // File list is not complete because of missing local data, we shouldn't mark this commit as pushed
+	CommitSHA  string      // the commit's SHA
+	Deltas     []*LOBDelta // delta uploads, items in here won't be in Files
+	Files      []string    // list of files we'll need to upload, relative path, if not doing deltas
+	BaseDir    string      // the base dir of the above files
+	TotalBytes int64       // total bytes for all files in the list (Files and Deltas)
+	Incomplete bool        // File list is not complete because of missing local data, we shouldn't mark this commit as pushed
 }
 
 func Push(provider providers.SyncProvider, remoteName string, refspecs []*GitRefSpec, dryRun, force, recheck bool,
 	callback util.ProgressCallback) error {
 
 	util.LogDebugf("Pushing to %v via %v\n", remoteName, provider.TypeID())
+	smartProvider := providers.UpgradeToSmartSyncProvider(provider)
 
 	// for use when --force used
 	filesUploaded := util.NewStringSet()
@@ -38,18 +42,45 @@ func Push(provider providers.SyncProvider, remoteName string, refspecs []*GitRef
 
 		// First we walk the commits to push & build up a picture of size etc
 		walkFunc := func(commit *CommitLOBRef) (quit bool, err error) {
-			filenames, basedir, totalSize, err := GetLOBFilenamesWithBaseDir(commit.LobSHAs, true)
+			var problemSHAs []string
+			var allfilenamesforcommit []string
+			var alldeltasforcommit []*LOBDelta
+			var totalFileSize int64
+			var totalDeltaSize int64
+			// Always use local LOB root since files are hardlinked there in shared case
+			basedir := GetLocalLOBRoot()
 			commitIncomplete := false
-			if err != nil {
-				var problemSHAs []string
-				switch errSpec := err.(type) {
-				case *NotFoundForSHAsError:
-					problemSHAs = errSpec.SHAsNotFound
-				case *IntegrityError:
-					return true, err
-				default:
-					return true, err
+			for _, filelob := range commit.FileLOBs {
+				var err error
+				filesMissing := false
+				// check size integrity but don't recalculate sha
+				filenames, filesize, err := GetLOBFilesForSHA(filelob.SHA, basedir, true, false)
+				if err != nil {
+					if IsNotFoundError(err) {
+						filesMissing = true
+						problemSHAs = append(problemSHAs, filelob.SHA)
+					} else {
+						return true, err
+					}
 				}
+				// Pre-check if we can/should do a delta
+				var delta *LOBDelta
+				if !filesMissing && smartProvider != nil && filesize > util.GlobalOptions.PushDeltasAboveSize {
+					// This will return nil if not possible
+					delta = preparePushDelta(filelob.SHA, filelob.Filename, smartProvider, remoteName)
+				}
+
+				if delta != nil {
+					// We'll try this as a delta; if it fails later then we'll fall back on normal
+					alldeltasforcommit = append(alldeltasforcommit, delta)
+					totalDeltaSize += delta.DeltaSize
+				} else {
+					allfilenamesforcommit = append(allfilenamesforcommit, filenames...)
+					totalFileSize += filesize
+				}
+
+			}
+			if len(problemSHAs) > 0 {
 				// If we got here it means one or more sets of files for SHAs were not available or were bad locally
 				// We still want to push the rest though, we want to be tolerant of partial data
 
@@ -85,12 +116,14 @@ func Push(provider providers.SyncProvider, remoteName string, refspecs []*GitRef
 
 			refCommitsToPush = append(refCommitsToPush, &PushCommitContentDetails{
 				CommitSHA:  commit.Commit,
-				Files:      filenames,
+				Files:      allfilenamesforcommit,
 				BaseDir:    basedir,
-				TotalBytes: totalSize,
-				Incomplete: commitIncomplete})
+				TotalBytes: totalFileSize + totalDeltaSize,
+				Incomplete: commitIncomplete,
+				Deltas:     alldeltasforcommit,
+			})
 
-			refCommitsSize += totalSize
+			refCommitsSize += totalFileSize + totalDeltaSize
 
 			return false, nil
 		}
@@ -99,6 +132,7 @@ func Push(provider providers.SyncProvider, remoteName string, refspecs []*GitRef
 		if err != nil {
 			return err
 		}
+		// TODO defer delete all delta files
 
 		if len(refCommitsToPush) == 0 {
 			callback(&util.ProgressCallbackData{util.ProgressCalculate, fmt.Sprintf(" * %v: Nothing to push", refspec),
@@ -278,11 +312,62 @@ func Push(provider providers.SyncProvider, remoteName string, refspecs []*GitRef
 
 }
 
+func preparePushDelta(lobsha, filename string, provider providers.SmartSyncProvider, remoteName string) *LOBDelta {
+	othershas, err := GetGitAllLOBHistoryForFile(filename, lobsha)
+	if err != nil {
+		util.LogErrorf("Unable to prepare delta for %v(%v): %v\n", lobsha, filename, err.Error())
+		return nil
+	}
+	// This is all the possible base shas, but we can only use ones we have locally too
+	// Right now we're not trying to cope with ordered downloads where we might have newer ones part way through fetch (too fiddly)
+	var localbaseshas []string
+	for _, sha := range othershas {
+		if !IsLOBMissing(sha, false) {
+			localbaseshas = append(localbaseshas, sha)
+		}
+	}
+	if len(localbaseshas) == 0 {
+		// no base shas, cannot do this
+		return nil
+	}
+	// Now ask the server to pick a sha
+	chosenbasesha, err := provider.GetFirstCompleteLOBFromList(remoteName, localbaseshas)
+	if err != nil {
+		util.LogErrorf("Unable to get common base for delta %v(%v): %v\n", lobsha, filename, err.Error())
+		return nil
+	}
+	// No common base to use
+	if chosenbasesha == "" {
+		return nil
+	}
+	// Now we calculate the delta locally
+	tempf, err := ioutil.TempFile("", "uploaddelta")
+	if err != nil {
+		util.LogErrorf("Unable to open temp file for delta %v(%v): %v\n", lobsha, filename, err.Error())
+		return nil
+	}
+	defer tempf.Close()
+	tempfilename := tempf.Name()
+	sz, err := GenerateLOBDelta(chosenbasesha, lobsha, tempf)
+	if err != nil {
+		util.LogErrorf("Error calculating delta %v(%v): %v\n", lobsha, filename, err.Error())
+		tempf.Close() // have to close before remove & defer is in wrong order
+		os.Remove(tempfilename)
+		return nil
+	}
+	return &LOBDelta{
+		BaseSHA:       chosenbasesha,
+		TargetSHA:     lobsha,
+		DeltaSize:     sz,
+		DeltaFilename: tempfilename,
+	}
+}
+
 // Push a single LOB to a remote
 func PushSingle(sha string, provider providers.SyncProvider, remoteName string, force bool,
 	callback util.ProgressCallback) error {
-
-	filenames, basedir, totalSize, err := GetLOBFilenamesWithBaseDir([]string{sha}, true)
+	basedir := GetLocalLOBRoot()
+	filenames, totalSize, err := GetLOBFilesForSHA(basedir, sha, true, false)
 	if err != nil {
 		return err
 	}
@@ -329,128 +414,4 @@ func PushSingle(sha string, provider providers.SyncProvider, remoteName string, 
 	}
 
 	return provider.Upload(remoteName, filenames, basedir, force, localcallback)
-}
-
-func cmdPushHelp() {
-	util.LogConsole(`Usage: git-lob push [options] [<remote> [<ref>...]]
-
-  Uploads binaries to a remote, sending only binaries required to ensure 
-  that remote has the binary resources referenced at a set of commits.
-
-  Behaves much like 'git push' except there are no destination refs, only
-  supporting binary files.
-
-Parameters:
-  <remote>: The destination to upload to. This should correspond to the 
-            name of a remote (no direct URLs permitted) which is configured
-            in .git/config. See REMOTES below for more details, additional
-            config parameters are required in the remote.
-
-            If no remote is specified, branch.*.remote configuration for the
-            current branch is consulted to determine where to push. If the 
-            configuration is missing, it defaults to origin.
-     <ref>: Which local reference(s) up to which we should make sure binaries
-            are uploaded for. You can specify zero, one, or many local refs.
-            There is no destination ref as in git push.
-
-            If no ref is specified, and --all is not used, then 
-            remote.<remotename>.push is used if present, otherwise push.default
-            is checked (matching, simple, current) to determine branches to 
-            push by default.
-
-            COMMIT RANGES
-
-            You can also specify a range of refs in the form <ref1>..<ref2> to
-            force git-lob push to check a specific range of commits for
-            binaries, instead of using its own records of which commits it
-            thinks are already up to date on this remote. 
-            See HISTORY CHECKING below.
-
-
-Options:
-  --all, -a     Push all branches; cannot be used with other refs.
-  --recheck, -r Re-check entire commit history to each ref instead of only 
-                back to last commit we believe is already pushed. 
-                See HISTORY CHECKING below for more details.
-  --force, -f   Always upload files even if the provider believes the file is 
-                already present on the remote. You shouldn't need this.
-  --quiet, -q   Print less output
-  --verbose, -v Print more output
-  --dry-run     Don't actually push anything, just report
-
-HISTORY CHECKING
-
-When pushing binaries for a given ref, git-lob performs a search for commits
-which reference git-lob binaries from that ref backwards, before checking
-which of those binaries it needs to upload. This is so that we only upload
-binaries that are actually referenced by the ref you're choosing to push, 
-and don't waste time on binaries in unpublished feature branches etc. 
-
-Because searching the whole of the git history can be slow on large 
-repositories, git-lob speeds this search up by keeping a record of which 
-commits it believes the remote already has all binaries for. 
-
-These records are updated whenever you git-lob push/pull. We do not use git's
-own remote branch refs to track this, because pushing commits can be done
-completely separately from binaries so we can't rely on that information.
-So pushing and pulling branches in git has no effect on this state, only
-git-lob push/pull.
-
-If for some reason these records are wrong, and you need to push binaries
-for a bigger range of commits, you can do this 2 ways:
-
-1. Use the --recheck option. This is the 'nuclear option'; it will scan the
-   entire history of the repo again to make 100% sure everything is correct.
-   Can take a while on large repos.
-
-2. Use a commit range for <ref>, i.e. <ref1>..<ref2>. git-lob will check that
-   entire range of commits for binary references which will then be checked
-   with the remote. 
-
-There are not many circumstances where you need to manually override the commit
-range that is checked for binaries. Even if you edit commits, rebase etc, 
-git-lob should not miss any binaries, because the commit SHAs would change and
-it would know to check any referenced binaries again. The main reason why
-you would need to override the history checking is if the remote changed, for
-example if someone manually deleted the remote binary store, or you moved to 
-a new URL without copying the data and needed to re-populate it from your local
-repo.
-
-REMOTES
-  Type 'git lob help remotes' for details
-
-`)
-}
-func cmdPushLobHelp() {
-	util.LogConsole(`Usage: git-lob push-lob [options] <remote> <sha>...
-
-  Uploads one or more specific binaries to a remote, identified by shas.
-
-  This is a low-level alternative to the main push command, allowing
-  you to manually upload a specific binary identified by its SHA.
-  Files already on the remote are still skipped unless you use --force.
-
-  Does not check or update the remote state cache recording what we
-  think has already been pushed to this remote.
-
-Parameters:
-  <remote>: The destination to upload to. This should correspond to the 
-            name of a remote (no direct URLs permitted) which is configured
-            in .git/config. See REMOTES below for more details, additional
-            config parameters are required in the remote.
-
-     <sha>: One or more 40-character SHAs identifying a binary. Note this is
-            the SHA of the binary, not of a git commit object. If you want
-            to push binaries for a commit, use regular 'git lob push'
-
-Options:
-  --force, -f   Always upload files even if the provider believes the file is 
-                already present on the remote. You shouldn't need this.
-  --quiet, -q   Print less output
-  --verbose, -v Print more output
-
-REMOTES
-  Type 'git lob help remotes' for details
-
-`)
 }
