@@ -62,6 +62,11 @@ type SmartSyncProvider interface {
 	PrepareDeltaForDownload(remoteName, sha string, candidateBaseSHAs []string) (sz int64, base string, e error)
 	// Download delta of LOB content (must be applied later)
 	DownloadDelta(remoteName, basesha, targetsha string, out io.Writer, callback SyncProgressCallback) error
+	// Return the LOB which the server has a complete copy of, from a list of candidates
+	// Server must test in the order provided & return the earliest one which is complete on the server
+	// Server doesn't have to test full integrity of LOB, just completeness (check size against meta)
+	// Return a blank string if none are available
+	GetFirstCompleteLOBFromList(remoteName string, candidateSHAs []string) (string, error)
 	// Upload delta of LOB content (must be calculated first)
 	UploadDelta(remoteName, basesha, targetsha string, in io.Reader, size int64, callback SyncProgressCallback) error
 }

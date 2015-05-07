@@ -475,6 +475,14 @@ func (self *SmartSyncProviderImpl) DownloadDelta(remoteName, basesha, targetsha 
 	return err
 }
 
+func (self *SmartSyncProviderImpl) GetFirstCompleteLOBFromList(remoteName string, candidateSHAs []string) (string, error) {
+	err := self.connect(remoteName)
+	if err != nil {
+		return "", err
+	}
+	return self.transport.GetFirstCompleteLOBFromList(candidateSHAs)
+}
+
 // Upload delta of LOB content (must be calculated first)
 func (self *SmartSyncProviderImpl) UploadDelta(remoteName, basesha, targetsha string, in io.Reader, size int64, callback providers.SyncProgressCallback) error {
 	err := self.connect(remoteName)
