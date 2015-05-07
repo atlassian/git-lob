@@ -618,11 +618,11 @@ var _ = Describe("Fetch", func() {
 			sha2 := setupOutputs[1].FileLOBs[0].SHA
 			sha3 := setupOutputs[2].FileLOBs[0].SHA
 			var delta12, delta13, delta23 bytes.Buffer
-			err = GenerateLOBDelta(sha1, sha2, &delta12)
+			_, err = GenerateLOBDelta(sha1, sha2, &delta12)
 			Expect(err).To(BeNil(), "Should not error trying to generate delta")
-			err = GenerateLOBDelta(sha2, sha3, &delta23)
+			_, err = GenerateLOBDelta(sha2, sha3, &delta23)
 			Expect(err).To(BeNil(), "Should not error trying to generate delta")
-			err = GenerateLOBDelta(sha1, sha3, &delta13)
+			_, err = GenerateLOBDelta(sha1, sha3, &delta13)
 			Expect(err).To(BeNil(), "Should not error trying to generate delta")
 			meta1, err := ioutil.ReadFile(GetLocalLOBMetaPath(sha1))
 			Expect(err).To(BeNil(), "Should not error trying to read metafile")

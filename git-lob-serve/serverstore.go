@@ -399,11 +399,11 @@ func downloadDeltaPrepare(req *smart.JsonRequest, in io.Reader, out io.Writer, c
 		// either there was no cache file or we need to regen
 		lobroot := getLOBRoot(config, path)
 		var deltabuf bytes.Buffer
-		err = core.GenerateLOBDeltaInBaseDir(lobroot, downreq.BaseLobSHA, downreq.TargetLobSHA, &deltabuf)
+		sz, err := core.GenerateLOBDeltaInBaseDir(lobroot, downreq.BaseLobSHA, downreq.TargetLobSHA, &deltabuf)
 		if err != nil {
 			return smart.NewJsonErrorResponse(req.Id, err.Error())
 		}
-		result.Size = int64(deltabuf.Len())
+		result.Size = sz
 
 		// Write this delta to cache, via temp + rename to ensure not interrupted
 		tempf, err := ioutil.TempFile("", "deltatemp")

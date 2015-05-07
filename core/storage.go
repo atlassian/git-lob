@@ -875,7 +875,8 @@ func IsLocalLOBStoreEmpty() bool {
 
 // Generates a diff between the contents of 2 LOBs
 // Automatically copes with chunking, the diff is one file across the entire content
-func GenerateLOBDelta(basesha, targetsha string, out io.Writer) error {
+// Returns the size of the compressed delta
+func GenerateLOBDelta(basesha, targetsha string, out io.Writer) (int64, error) {
 	return GenerateLOBDeltaInBaseDir(GetLocalLOBRoot(), basesha, targetsha, out)
 }
 
@@ -930,16 +931,17 @@ func GetLOBCompleteContentInBaseDir(basedir, sha string, out io.Writer) error {
 
 // Generates a diff between the contents of 2 LOBs, with a specified root storage
 // Automatically copes with chunking, the diff is one file across the entire content
-func GenerateLOBDeltaInBaseDir(basedir, basesha, targetsha string, out io.Writer) error {
+// Returns the size of the compressed delta
+func GenerateLOBDeltaInBaseDir(basedir, basesha, targetsha string, out io.Writer) (int64, error) {
 	// Read all of base file into memory to use as dictionary (pre-size from info)
 	baseinfo, err := getLOBInfoInBaseDir(basesha, basedir)
 	basebuf := bytes.NewBuffer(make([]byte, 0, baseinfo.Size))
 	if err != nil {
-		return err
+		return 0, err
 	}
 	err = GetLOBCompleteContentInBaseDir(basedir, basesha, basebuf)
 	if err != nil {
-		return fmt.Errorf("Error getting base file content for delta: %v", err.Error())
+		return 0, fmt.Errorf("Error getting base file content for delta: %v", err.Error())
 	}
 	comp := bm.NewCompressor()
 	baseDict := &bm.Dictionary{Dict: basebuf.Bytes()}
@@ -951,35 +953,35 @@ func GenerateLOBDeltaInBaseDir(basedir, basesha, targetsha string, out io.Writer
 	// Now we read all the targetsha's content and copy it into the compressor
 	targetinfo, err := getLOBInfoInBaseDir(targetsha, basedir)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	var targetbytesread int64
 	for i := 0; i < targetinfo.NumChunks; i++ {
 		chunkfile := filepath.Join(basedir, GetLOBChunkRelativePath(targetsha, i))
 		cf, err := os.OpenFile(chunkfile, os.O_RDONLY, 0644)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		defer cf.Close()
 		n, err := io.Copy(comp, cf)
 		if err != nil {
-			return fmt.Errorf("Error while copying data from target into compressor: %v", err.Error())
+			return 0, fmt.Errorf("Error while copying data from target into compressor: %v", err.Error())
 		}
 		targetbytesread += n
 	}
 	if targetbytesread != targetinfo.Size {
-		return fmt.Errorf("Incorrect number of bytes read for target file - expected %d actual %d", targetinfo.Size, targetbytesread)
+		return 0, fmt.Errorf("Incorrect number of bytes read for target file - expected %d actual %d", targetinfo.Size, targetbytesread)
 	}
 
 	// Now do the actual compression
 	// Maybe we can improve bm later so that it does it on the fly (less memory)
 	err = comp.Close()
 	if err != nil {
-		return fmt.Errorf("Error during compression of delta: %v", err.Error())
+		return 0, fmt.Errorf("Error during compression of delta: %v", err.Error())
 	}
 	// This has been written to out now so we're done
 
-	return nil
+	return int64(comp.CompressedSize()), nil
 }
 
 // Applies a diff to basesha and generates a LOB, with a specified root storage,
