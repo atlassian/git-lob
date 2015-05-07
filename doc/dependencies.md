@@ -82,6 +82,7 @@ godep save -r ./...
 
 Note the use of the '...' wildcard in the 'godep update' call, this is required
 for nested packages & is generally a good idea to be sure. 
+
 There is no '-r' option to 'godep update' so actually 'godep update' will 
 reverse the rewriting of the package names to the internal _workspace version.
 That's why you have to run 'godep save -r' again afterwards to fix this.
@@ -98,5 +99,8 @@ secondary remote of my fork and pulled the changes in from my fork there, before
 'godep save' (see above) to 'freeze' that version in this repo.
 
 So when customising a dependency you need to ensure that you have any existing customisations
-in your src/ folder, update the code, push to the fork, then godep save again, as
-described above in 'updating an existing dependency'.
+in your src/ folder (e.g. clone/pull from the fork), update the code, push to the fork, then:
+```
+godep update foo/bar/...
+godep save -r ./...
+```
