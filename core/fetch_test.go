@@ -4,8 +4,13 @@ import (
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
 	. "bitbucket.org/sinbad/git-lob/providers"
+	"bitbucket.org/sinbad/git-lob/providers/smart"
 	. "bitbucket.org/sinbad/git-lob/util"
+	"bytes"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -533,4 +538,300 @@ var _ = Describe("Fetch", func() {
 		})
 	})
 
+	Context("Delta fetch test", func() {
+		root := filepath.Join(os.TempDir(), "FetchTest")
+		originRoot := filepath.Join(os.TempDir(), "FetchOriginTest")
+		var oldwd string
+		var setupInputs []*TestCommitSetupInput
+		var setupOutputs []*CommitLOBRef
+		var fileshas []string
+
+		BeforeEach(func() {
+			CreateGitRepoForTest(root)
+			oldwd, _ = os.Getwd()
+			os.Chdir(root)
+			now := time.Now()
+
+			filebytes := make([][]byte, 3)
+
+			filebytes[0] = []byte("kajdflkajgsklfjgalsfalsgeflkajsjdbaclksuegfkacjsdmcabslkdfaiusegkcajbdsckjabiabilweubcilaweubkjbsecilawef")
+			filebytes[1] = []byte("kajdflkajgsklf34235falsgeflkajsjdbaclksuegfkacjsdmca22334455bslkdfaiusegkcajbdsckjabiabilweubcilaweubkjbsecilawef")
+			filebytes[2] = []byte("kajdflkajgsklf34235falsgeflkajsjdbaclksuegfkacjsdmca22334455bslkdfaiusegkcajbNOWYOUSEEMEdsckjabiabilweubcilaweubkjbsecilawefSUFFIXTIME")
+
+			// Set up commits
+			// We're only going to modify a single file since we're testing for deltas
+			setupInputs = []*TestCommitSetupInput{
+				&TestCommitSetupInput{ // 0
+					CommitDate: now.AddDate(0, 0, -5),
+					Files:      []string{"file1.txt"},
+					FileData:   [][]byte{filebytes[0]},
+				},
+				&TestCommitSetupInput{ // 1
+					CommitDate: now.AddDate(0, 0, -4),
+					Files:      []string{"file1.txt"},
+					FileData:   [][]byte{filebytes[1]},
+				},
+				&TestCommitSetupInput{ // 1
+					CommitDate: now.AddDate(0, 0, -3),
+					Files:      []string{"file1.txt"},
+					FileData:   [][]byte{filebytes[2]},
+				},
+			}
+
+			setupOutputs = SetupRepoForTest(setupInputs)
+
+			// now that we've stored all the data locally, let's move it to a remote so we have to fetch it
+
+			// Configure remote
+			CreateBareGitRepoForTest(originRoot)
+
+			// Make a file:// ref so we don't have hardlinks (more standard)
+			originPathUrl := strings.Replace(originRoot, "\\", "/", -1)
+			originPathUrl = "file://" + originPathUrl
+
+			// We'll use a dummy smart remote that can only respond to the necessary methods
+			// which provider delta data, then use a specific URL form to use it
+			originBinDummyURL := "dummy://something"
+
+			// Also replace backslashes with forward slashes for windows (git still expects forward)
+			f, err := os.OpenFile(filepath.Join(".git", "config"), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
+			Expect(err).To(BeNil(), "Should not error trying to open config file")
+			f.WriteString(fmt.Sprintf(`
+[remote "origin"]
+    url = %v
+    fetch = +refs/heads/*:refs/remotes/origin/*
+    git-lob-url = %v
+    git-lob-provider = smart
+`, originPathUrl, originBinDummyURL))
+			f.Close()
+
+			LoadConfig(GlobalOptions)
+			InitCoreProviders()
+			smart.InitCoreProviders()
+
+			// We need to set the delta threshold low enough that we'll always get deltas
+			GlobalOptions.FetchDeltasAboveSize = 0
+
+			// Now set up the dummy transport system which will fake remote comms
+			// We need to give the server the deltas and metadata required for the fetch (revs 2 & 3)
+			sha1 := setupOutputs[0].FileLOBs[0].SHA
+			sha2 := setupOutputs[1].FileLOBs[0].SHA
+			sha3 := setupOutputs[2].FileLOBs[0].SHA
+			var delta12, delta13, delta23 bytes.Buffer
+			err = GenerateLOBDelta(sha1, sha2, &delta12)
+			Expect(err).To(BeNil(), "Should not error trying to generate delta")
+			err = GenerateLOBDelta(sha2, sha3, &delta23)
+			Expect(err).To(BeNil(), "Should not error trying to generate delta")
+			err = GenerateLOBDelta(sha1, sha3, &delta13)
+			Expect(err).To(BeNil(), "Should not error trying to generate delta")
+			meta1, err := ioutil.ReadFile(GetLocalLOBMetaPath(sha1))
+			Expect(err).To(BeNil(), "Should not error trying to read metafile")
+			meta2, err := ioutil.ReadFile(GetLocalLOBMetaPath(sha2))
+			Expect(err).To(BeNil(), "Should not error trying to read metafile")
+			meta3, err := ioutil.ReadFile(GetLocalLOBMetaPath(sha3))
+			Expect(err).To(BeNil(), "Should not error trying to read metafile")
+			metamap := map[string][]byte{
+				sha1: meta1, // need to include this so dummy remote knows it exists
+				sha2: meta2,
+				sha3: meta3,
+			}
+			// inlcude deltas from 1-2, 2-3 and 1-3
+			deltamap := map[string][]byte{
+				fmt.Sprintf("%v:%v", sha1, sha2): delta12.Bytes(),
+				fmt.Sprintf("%v:%v", sha1, sha3): delta13.Bytes(),
+				fmt.Sprintf("%v:%v", sha2, sha3): delta23.Bytes(),
+			}
+			smart.RegisterTransportFactory(&DummyFetchTransportFactory{metamap, deltamap})
+
+			// now delete the second 2 revisions of LOBs, keeping only the first one
+			// and relying on deltas from the dummy server for the other 2
+			err = DeleteLOB(sha2)
+			Expect(err).To(BeNil(), "Should not error trying to delete LOB")
+			err = DeleteLOB(sha3)
+			Expect(err).To(BeNil(), "Should not error trying to delete LOB")
+
+			fileshas = append(fileshas, sha1, sha2, sha3)
+
+		})
+		AfterEach(func() {
+			os.Chdir(oldwd)
+			err := ForceRemoveAll(root)
+			if err != nil {
+				Fail(err.Error())
+			}
+			err = ForceRemoveAll(originRoot)
+			if err != nil {
+				Fail(err.Error())
+			}
+			// Reset any option changes
+			GlobalOptions = NewOptions()
+		})
+
+		It("Fetches deltas", func() {
+			var filesTransferred int
+			var filesSkipped int
+			var filesFailed int
+			var filesNotFound int
+			var messages []string
+			callback := func(data *ProgressCallbackData) (abort bool) {
+				switch data.Type {
+				case ProgressTransferBytes:
+					if data.ItemBytesDone == data.ItemBytes {
+						filesTransferred++
+					}
+				case ProgressSkip:
+					filesSkipped++
+				case ProgressError:
+					filesFailed++
+				case ProgressNotFound:
+					filesNotFound++
+				}
+				messages = append(messages, data.Desc)
+				return false
+			}
+			provider, err := GetProviderForRemote("origin")
+			Expect(err).To(BeNil(), "Shouldn't be an issue getting provider")
+
+			// dry run first, with no params so all recents
+			err = Fetch(provider, "origin", []*GitRefSpec{}, true, false, callback)
+			Expect(err).To(BeNil(), "Should be no error fetching")
+			Expect(FileExists(GetLocalLOBMetaPath(setupOutputs[1].FileLOBs[0].SHA))).To(BeFalse(), "Should not have downloaded anything")
+
+			// First try fetching the entire range
+			// Should try to generate deltas 1-2 and 1-3 in this case, because we only have SHA 1 locally
+			// *technically* if we did things in order all the time we could use 1-2 and 2-3 in one fetch but that's more complex
+			// results in some duplication when fetching many updates to the same file probably, but not worth it yet
+			err = Fetch(provider, "origin", []*GitRefSpec{}, false, false, callback)
+			Expect(err).To(BeNil(), "Should be no error fetching")
+			//fmt.Println(messages)
+			Expect(filesTransferred).To(BeEquivalentTo(2), "Should be correct number of files to transfer")
+			Expect(filesSkipped).To(BeEquivalentTo(0), "Should be no files skipped")
+			Expect(filesFailed).To(BeEquivalentTo(0), "Should be no files failed")
+			Expect(filesNotFound).To(BeEquivalentTo(0), "Should be no files not found")
+			lobstocheck := []string{
+				setupOutputs[1].FileLOBs[0].SHA,
+				setupOutputs[2].FileLOBs[0].SHA,
+			}
+			CheckLOBsExistForTest(lobstocheck, GetLocalLOBRoot())
+			filesTransferred = 0
+			// now let's delete LOB 3 and fetch again so it uses 2-3 delta
+			err = DeleteLOB(fileshas[2])
+			Expect(err).To(BeNil(), "Should not error trying to delete LOB")
+			err = Fetch(provider, "origin", []*GitRefSpec{}, false, false, callback)
+			Expect(err).To(BeNil(), "Should be no error fetching")
+			//fmt.Println(messages)
+			Expect(filesTransferred).To(BeEquivalentTo(1), "Should be correct number of files to transfer")
+			Expect(filesSkipped).To(BeEquivalentTo(0), "Should be no files skipped")
+			Expect(filesFailed).To(BeEquivalentTo(0), "Should be no files failed")
+			Expect(filesNotFound).To(BeEquivalentTo(0), "Should be no files not found")
+			lobstocheck = []string{
+				setupOutputs[2].FileLOBs[0].SHA,
+			}
+			CheckLOBsExistForTest(lobstocheck, GetLocalLOBRoot())
+
+		})
+
+	})
+
 })
+
+// We'll use a dummy smart remote that can only respond to the necessary methods
+// Set up a dummy transport that talks over a pipe
+type DummyFetchTransport struct {
+	// map of LOB sha -> meta content
+	MetaContentMap map[string][]byte
+	// map of "BASE:TARGET" -> delta content
+	DeltaContentMap map[string][]byte
+}
+
+func (*DummyFetchTransport) Release() {
+}
+func (*DummyFetchTransport) QueryCaps() ([]string, error) {
+	return []string{"binary_delta"}, nil
+}
+func (*DummyFetchTransport) SetEnabledCaps(caps []string) error {
+	return nil
+}
+func (self *DummyFetchTransport) MetadataExists(lobsha string) (ex bool, sz int64, e error) {
+	meta, ok := self.MetaContentMap[lobsha]
+	return ok, int64(len(meta)), nil
+}
+func (*DummyFetchTransport) ChunkExists(lobsha string, chunk int) (ex bool, sz int64, e error) {
+	// We don't need this
+	return true, 0, nil
+}
+func (*DummyFetchTransport) ChunkExistsAndIsOfSize(lobsha string, chunk int, sz int64) (bool, error) {
+	// We don't need this
+	return true, nil
+}
+func (*DummyFetchTransport) LOBExists(lobsha string) (ex bool, sz int64, e error) {
+	// We don't need this
+	return true, 0, nil
+}
+func (*DummyFetchTransport) UploadMetadata(lobsha string, sz int64, data io.Reader) error {
+	// We don't need this
+	return nil
+}
+func (*DummyFetchTransport) UploadChunk(lobsha string, chunk int, sz int64, data io.Reader, callback smart.TransportProgressCallback) error {
+	// We don't need this
+	return nil
+}
+func (self *DummyFetchTransport) DownloadMetadata(lobsha string, out io.Writer) error {
+	meta, ok := self.MetaContentMap[lobsha]
+	if ok {
+		out.Write(meta)
+		return nil
+	}
+	return fmt.Errorf("Meta not found: %v", lobsha)
+}
+func (*DummyFetchTransport) DownloadChunk(lobsha string, chunk int, out io.Writer, callback smart.TransportProgressCallback) error {
+	// We don't need this and to call it is a test failure
+	return fmt.Errorf("DownloadChunk Not implemented")
+}
+func (self *DummyFetchTransport) GetFirstCompleteLOBFromList(candidateSHAs []string) (string, error) {
+	for _, sha := range candidateSHAs {
+		_, metaok := self.MetaContentMap[sha]
+		if metaok {
+			return sha, nil
+		}
+	}
+	return "", nil
+}
+func (*DummyFetchTransport) UploadDelta(baseSHA, targetSHA string, deltaSize int64, data io.Reader, callback smart.TransportProgressCallback) (bool, error) {
+	// We don't need this
+	return false, nil
+}
+func (self *DummyFetchTransport) DownloadDeltaPrepare(baseSHA, targetSHA string) (int64, error) {
+	delta, ok := self.DeltaContentMap[fmt.Sprintf("%v:%v", baseSHA, targetSHA)]
+	if ok {
+		return int64(len(delta)), nil
+	}
+	return 0, fmt.Errorf("Not found delta %v->%v", baseSHA, targetSHA)
+}
+func (self *DummyFetchTransport) DownloadDelta(baseSHA, targetSHA string, sizeLimit int64, out io.Writer, callback smart.TransportProgressCallback) (bool, error) {
+	delta, ok := self.DeltaContentMap[fmt.Sprintf("%v:%v", baseSHA, targetSHA)]
+	if ok {
+		// Manually call callback just for test
+		totallen := int64(len(delta))
+		callback(0, totallen)
+		out.Write([]byte(delta))
+		callback(totallen, totallen)
+		return true, nil
+	}
+	return false, nil
+
+}
+
+type DummyFetchTransportFactory struct {
+	// map of LOB sha -> meta content string
+	MetaContentMap map[string][]byte
+	// map of "BASE:TARGET" -> delta content
+	DeltaContentMap map[string][]byte
+}
+
+func (self *DummyFetchTransportFactory) WillHandleUrl(u *url.URL) bool {
+	return u.Scheme == "dummy"
+}
+func (self *DummyFetchTransportFactory) Connect(u *url.URL) (smart.Transport, error) {
+	return &DummyFetchTransport{self.MetaContentMap, self.DeltaContentMap}, nil
+}
