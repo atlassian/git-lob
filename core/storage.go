@@ -1041,5 +1041,5 @@ type LOBDelta struct {
 	BaseSHA, TargetSHA string
 	DeltaSize          int64
 	// Optional already present delta filename, can be blank
-	Filename string
+	DeltaFilename string
 }

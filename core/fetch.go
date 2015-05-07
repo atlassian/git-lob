@@ -318,7 +318,6 @@ func prepareFetchDelta(lobsha, filename string, provider providers.SmartSyncProv
 		BaseSHA:   chosenbasesha,
 		TargetSHA: lobsha,
 		DeltaSize: sz,
-		Filename:  filename,
 	}
 }
 
