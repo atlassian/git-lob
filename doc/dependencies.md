@@ -8,9 +8,10 @@
   Dependency of goamz. MIT license
 * [Go-homedir](https://github.com/mitchellh/go-homedir)
   Library for detecting home directory without cgo, thus allowing cross-compiling.
-  MIT license
+* [bm (forked)](https://github.com/sinbad/bm) (Original: https://github.com/cloudflare/bm)
+  Go implementation of VCDIFF delta compression. BSD license
 
-## Build / test: ##
+## Build / test (not distributed): ##
 
 * [Ginkgo](https://github.com/onsi/ginkgo)
   Testing library. MIT license
@@ -84,3 +85,18 @@ for nested packages & is generally a good idea to be sure.
 There is no '-r' option to 'godep update' so actually 'godep update' will 
 reverse the rewriting of the package names to the internal _workspace version.
 That's why you have to run 'godep save -r' again afterwards to fix this.
+
+## Customising a dependency through a fork ##
+
+When we create forks of a dependency to change it, we don't change the identifying
+path of the dependency; e.g. my fork of goamz lives at https://github.com/sinbad/goamz
+but we stil refer to it as https://github.com/mitchellh/goamz to avoid breaking cross-refs
+inside the code. 
+
+This works because inside my local src/github.com/mitchellh/goamz repo I've created a 
+secondary remote of my fork and pulled the changes in from my fork there, before using
+'godep save' (see above) to 'freeze' that version in this repo.
+
+So when customising a dependency you need to ensure that you have any existing customisations
+in your src/ folder, update the code, push to the fork, then godep save again, as
+described above in 'updating an existing dependency'.
