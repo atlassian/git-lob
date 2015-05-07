@@ -205,12 +205,25 @@ func (self *SmartSyncProviderImpl) Download(remoteName string, filenames []strin
 }
 
 func (self *SmartSyncProviderImpl) parseFilename(filename string) (sha string, ischunk bool, chunk int) {
-	thesha := filename[:40]
-	if strings.HasSuffix(filename, "meta") {
+	parts := strings.FieldsFunc(filename, func(r rune) bool {
+		switch r {
+		case '/', '_':
+			return true
+		}
+		return false
+	})
+	if len(parts) < 2 {
+		// Invalid
+		return "", false, 0
+	}
+	// last part will be 'meta' or a number
+	suffix := parts[len(parts)-1]
+	// second to last will be sha
+	thesha := parts[len(parts)-2]
+	if suffix == "meta" {
 		return thesha, false, 0
 	} else {
-		parts := strings.Split(filename, "_")
-		c, _ := strconv.ParseInt(parts[1], 10, 32)
+		c, _ := strconv.ParseInt(suffix, 10, 32)
 		return thesha, true, int(c)
 	}
 }
