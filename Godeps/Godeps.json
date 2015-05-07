@@ -7,7 +7,7 @@
 	"Deps": [
 		{
 			"ImportPath": "github.com/cloudflare/bm",
-			"Rev": "46c5279f1a503a203b18f1ff693cef174b57ef01"
+			"Rev": "8f526543f783e83caf708ed2be32f0252f12af4f"
 		},
 		{
 			"ImportPath": "github.com/mitchellh/go-homedir",
