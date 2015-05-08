@@ -181,7 +181,7 @@ func Push(provider providers.SyncProvider, remoteName string, refspecs []*GitRef
 				callback(&util.ProgressCallbackData{util.ProgressCalculate, fmt.Sprintf(" * %v: %d commits with %v to push (if not already on remote)",
 					refspec, len(refCommitsToPush), util.FormatSize(refCommitsSize)), int64(i + 1), int64(len(refspecs)), 0, 0})
 				if deltaSavings > 0 {
-					callback(&util.ProgressCallbackData{util.ProgressCalculate, fmt.Sprintf("       Saving %v by using binary deltas",
+					callback(&util.ProgressCallbackData{util.ProgressCalculate, fmt.Sprintf("   Saving %v by using binary deltas",
 						util.FormatSize(deltaSavings)), int64(i + 1), int64(len(refspecs)), 0, 0})
 				}
 			} else {
@@ -228,7 +228,7 @@ func Push(provider providers.SyncProvider, remoteName string, refspecs []*GitRef
 					}
 
 				}
-				bytesDoneSoFar += refDeltaSize
+				bytesDoneSoFar += commit.DeltaBytes
 				// Then, do any regular file-based uploads (and also any delta fallbacks)
 				err := pushCommitStandard(commit, provider, remoteName, force, bytesDoneSoFar, refCommitsSize, callback)
 				if err != nil {
@@ -318,19 +318,15 @@ func pushCommitDeltas(commit *PushCommitContentDetails, provider providers.Smart
 			faileddeltas = append(faileddeltas, delta)
 			continue
 		}
-		bytesDoneSoFar += averageMetaSize
+		bytesDoneSoFar += ApproximateMetadataSize
 		// Now upload delta
+		completionSeen := false
 		deltacallback := func(txt string, progressType util.ProgressCallbackType, bytesDone, totalBytes int64) (abort bool) {
-
-			var ret bool
-			if bytesDone != totalBytes {
-				// only do part progress in here, do final outside to ensure it always happens regardless
-				ret = callback(&util.ProgressCallbackData{util.ProgressTransferBytes, getDeltaProgressDesc(delta), bytesDone, totalBytes,
-					bytesDoneSoFar + bytesDone, refDeltaBytes})
-
+			if bytesDone == totalBytes {
+				completionSeen = true
 			}
-
-			return ret
+			return callback(&util.ProgressCallbackData{util.ProgressTransferBytes, getDeltaProgressDesc(delta), bytesDone, totalBytes,
+				bytesDoneSoFar + bytesDone, refDeltaBytes})
 		}
 		in, err := os.OpenFile(delta.DeltaFilename, os.O_RDONLY, 0644)
 		if err != nil {
@@ -339,12 +335,19 @@ func pushCommitDeltas(commit *PushCommitContentDetails, provider providers.Smart
 		}
 		defer in.Close()
 		err = provider.UploadDelta(remoteName, delta.BaseSHA, delta.TargetSHA, in, delta.DeltaSize, deltacallback)
-		if err != nil {
-			faileddeltas = append(faileddeltas, delta)
-			continue
-		}
 		bytesDoneSoFar += delta.DeltaSize
 
+		if err != nil {
+			faileddeltas = append(faileddeltas, delta)
+			callback(&util.ProgressCallbackData{util.ProgressError, getDeltaProgressDesc(delta), delta.DeltaSize, delta.DeltaSize,
+				bytesDoneSoFar, refDeltaBytes})
+			continue
+		}
+		if !completionSeen {
+			// Do a final callback to make sure 100% is there
+			callback(&util.ProgressCallbackData{util.ProgressTransferBytes, getDeltaProgressDesc(delta), delta.DeltaSize, delta.DeltaSize,
+				bytesDoneSoFar, refDeltaBytes})
+		}
 	}
 	return faileddeltas
 }

@@ -422,6 +422,11 @@ func (self *SmartSyncProviderImpl) uploadSingleFile(remoteName, filename, fromDi
 		msg := fmt.Sprintf("Problem while uploading %v to %v: %v", srcfilename, remoteName, err)
 		errorList = append(errorList, msg)
 	}
+	if callback != nil {
+		if callback(filename, util.ProgressTransferBytes, srcfi.Size(), srcfi.Size()) {
+			return errorList, true
+		}
+	}
 
 	return errorList, abortAfterThisFile
 
