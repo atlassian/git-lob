@@ -227,6 +227,7 @@ func fetchLOBs(lobshas map[string]string, provider providers.SyncProvider, remot
 	var files []string
 	var deltas []*LOBDelta
 	var deltaTotalBytes int64
+	var deltaSavings int64
 	smartProvider := providers.UpgradeToSmartSyncProvider(provider)
 
 	callback(&util.ProgressCallbackData{util.ProgressCalculate, "Calculating content files to download",
@@ -248,6 +249,7 @@ func fetchLOBs(lobshas map[string]string, provider providers.SyncProvider, remot
 			if delta != nil {
 				deltas = append(deltas, delta)
 				deltaTotalBytes += delta.DeltaSize
+				deltaSavings += info.Size - (delta.DeltaSize + 100) // 100 for metadata which we don't save
 				// We'll do a delta for this so don't continue to determine files
 				continue
 			}
@@ -262,6 +264,10 @@ func fetchLOBs(lobshas map[string]string, provider providers.SyncProvider, remot
 	totalBytes := filesTotalBytes + deltaTotalBytes
 	callback(&util.ProgressCallbackData{util.ProgressCalculate, fmt.Sprintf("Metadata done, downloading content (%v)", util.FormatSize(totalBytes)),
 		0, 0, 0, 0})
+	if deltaSavings > 0 {
+		callback(&util.ProgressCallbackData{util.ProgressCalculate, fmt.Sprintf("Saving %v by fetching deltas", util.FormatSize(deltaSavings)),
+			0, 0, 0, 0})
+	}
 
 	// Download content now
 	if smartProvider != nil && len(deltas) > 0 {
