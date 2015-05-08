@@ -14,7 +14,8 @@ type PushCommitContentDetails struct {
 	Deltas     []*LOBDelta // delta uploads, items in here won't be in Files
 	Files      []string    // list of files we'll need to upload, relative path, if not doing deltas
 	BaseDir    string      // the base dir of the above files
-	TotalBytes int64       // total bytes for all files in the list (Files and Deltas)
+	FileBytes  int64       // total bytes for all files in the list
+	DeltaBytes int64       // total bytes for all deltas in the list
 	Incomplete bool        // File list is not complete because of missing local data, we shouldn't mark this commit as pushed
 }
 
@@ -25,7 +26,8 @@ func Push(provider providers.SyncProvider, remoteName string, refspecs []*GitRef
 	smartProvider := providers.UpgradeToSmartSyncProvider(provider)
 
 	// for use when --force used
-	filesUploaded := util.NewStringSet()
+	shasAlreadyQueued := util.NewStringSet()
+
 	for i, refspec := range refspecs {
 		// We now perform a complete push per refspec before proceeding to the nex
 		// estimates & progress is measured within the refspec
@@ -38,21 +40,31 @@ func Push(provider providers.SyncProvider, remoteName string, refspecs []*GitRef
 				int64(i), int64(len(refspecs)), 0, 0})
 		}
 
-		var refCommitsSize int64
+		var refFileSize, refDeltaSize int64
+		var deltaSavings int64
 
 		// First we walk the commits to push & build up a picture of size etc
 		walkFunc := func(commit *CommitLOBRef) (quit bool, err error) {
 			var problemSHAs []string
 			var allfilenamesforcommit []string
 			var alldeltasforcommit []*LOBDelta
-			var totalFileSize int64
-			var totalDeltaSize int64
+			var commitFileSize int64
+			var commitDeltaSize int64
 			// Always use local LOB root since files are hardlinked there in shared case
 			basedir := GetLocalLOBRoot()
 			commitIncomplete := false
 			for _, filelob := range commit.FileLOBs {
 				var err error
 				filesMissing := false
+
+				// We can end up duplicating work (and uploads in --force mode) when a LOB is referred
+				// to multiple times in one push, so skip duplicates
+				// We still add the commit to the list, it just might not need anything done, but
+				// important to mark it as pushed anyway
+				if shasAlreadyQueued.Contains(filelob.SHA) {
+					continue
+				}
+
 				// check size integrity but don't recalculate sha
 				filenames, filesize, err := GetLOBFilesForSHA(filelob.SHA, basedir, true, false)
 				if err != nil {
@@ -67,17 +79,19 @@ func Push(provider providers.SyncProvider, remoteName string, refspecs []*GitRef
 				var delta *LOBDelta
 				if !filesMissing && smartProvider != nil && filesize > util.GlobalOptions.PushDeltasAboveSize {
 					// This will return nil if not possible
-					delta = preparePushDelta(filelob.SHA, filelob.Filename, smartProvider, remoteName)
+					delta = preparePushDelta(filelob.SHA, filelob.Filename, smartProvider, remoteName, force)
 				}
 
 				if delta != nil {
 					// We'll try this as a delta; if it fails later then we'll fall back on normal
 					alldeltasforcommit = append(alldeltasforcommit, delta)
-					totalDeltaSize += delta.DeltaSize
+					commitDeltaSize += delta.DeltaSize + 100 // add 100 for metadata which is done separately
+					deltaSavings += (delta.DeltaSize + 100) - filesize
 				} else {
 					allfilenamesforcommit = append(allfilenamesforcommit, filenames...)
-					totalFileSize += filesize
+					commitFileSize += filesize
 				}
+				shasAlreadyQueued.Add(filelob.SHA)
 
 			}
 			if len(problemSHAs) > 0 {
@@ -118,21 +132,32 @@ func Push(provider providers.SyncProvider, remoteName string, refspecs []*GitRef
 				CommitSHA:  commit.Commit,
 				Files:      allfilenamesforcommit,
 				BaseDir:    basedir,
-				TotalBytes: totalFileSize + totalDeltaSize,
+				FileBytes:  commitFileSize,
+				DeltaBytes: commitDeltaSize,
 				Incomplete: commitIncomplete,
 				Deltas:     alldeltasforcommit,
 			})
 
-			refCommitsSize += totalFileSize + totalDeltaSize
+			refDeltaSize += commitDeltaSize
+			refFileSize += commitFileSize
 
 			return false, nil
 		}
 
 		err := WalkGitCommitLOBsToPushForRefSpec(remoteName, refspec, recheck, walkFunc)
+		// defer delete any delta files we created so we always clean up
+		for _, commit := range refCommitsToPush {
+			for _, delta := range commit.Deltas {
+				if delta.DeltaFilename != "" {
+					defer os.Remove(delta.DeltaFilename)
+				}
+			}
+		}
 		if err != nil {
 			return err
 		}
-		// TODO defer delete all delta files
+
+		refCommitsSize := refFileSize + refDeltaSize
 
 		if len(refCommitsToPush) == 0 {
 			callback(&util.ProgressCallbackData{util.ProgressCalculate, fmt.Sprintf(" * %v: Nothing to push", refspec),
@@ -155,6 +180,10 @@ func Push(provider providers.SyncProvider, remoteName string, refspecs []*GitRef
 			if refCommitsSize > 0 {
 				callback(&util.ProgressCallbackData{util.ProgressCalculate, fmt.Sprintf(" * %v: %d commits with %v to push (if not already on remote)",
 					refspec, len(refCommitsToPush), util.FormatSize(refCommitsSize)), int64(i + 1), int64(len(refspecs)), 0, 0})
+				if deltaSavings > 0 {
+					callback(&util.ProgressCallbackData{util.ProgressCalculate, fmt.Sprintf("       Saving %v by using binary deltas",
+						util.FormatSize(deltaSavings)), int64(i + 1), int64(len(refspecs)), 0, 0})
+				}
 			} else {
 				callback(&util.ProgressCallbackData{util.ProgressCalculate, fmt.Sprintf(" * %v: Nothing to push, remote is up to date", refspec),
 					int64(i + 1), int64(len(refspecs)), 0, 0})
@@ -166,8 +195,6 @@ func Push(provider providers.SyncProvider, remoteName string, refspecs []*GitRef
 		}
 
 		if !dryRun && len(refCommitsToPush) > 0 {
-			filesdone := 0
-
 			// Even if size == 0 we still skim through marking them as pushed (must have been that data was on remote)
 			if refCommitsSize > 0 {
 				callback(&util.ProgressCallbackData{util.ProgressCalculate,
@@ -175,90 +202,42 @@ func Push(provider providers.SyncProvider, remoteName string, refspecs []*GitRef
 					0, 0, 0, 0})
 			}
 
-			var bytesFromFilesDoneSoFar int64
+			var bytesDoneSoFar int64
 			previousCommitIncomplete := false
 			previousCommitSHA := ""
+			basedir := GetLocalLOBRoot()
 			for _, commit := range refCommitsToPush {
-				// Upload now
-				var lastFilename string
-				var lastFileBytes int64
-				localcallback := func(fileInProgress string, progressType util.ProgressCallbackType, bytesDone, totalBytes int64) (abort bool) {
-					if lastFilename != fileInProgress {
-						// New file, always callback
-						if lastFilename != "" {
-							// we obviously never got a 100% call for previous file
-							filesdone++
-							bytesFromFilesDoneSoFar += lastFileBytes
-							callback(&util.ProgressCallbackData{util.ProgressTransferBytes, lastFilename, lastFileBytes, lastFileBytes,
-								bytesFromFilesDoneSoFar, refCommitsSize})
-							lastFilename = ""
+
+				// Push this one
+				// Firstly, do any deltas (may be some deltas and some not in one commit)
+				if smartProvider != nil && len(commit.Deltas) > 0 {
+					// add any failed deltas back to the regular file-based upload for the next step
+					faileddeltas := pushCommitDeltas(commit, smartProvider, remoteName, force, bytesDoneSoFar, refCommitsSize, callback)
+					for _, delta := range faileddeltas {
+						// Add the files for failed deltas to the standard route
+						filenames, filesize, err := GetLOBFilesForSHA(delta.TargetSHA, basedir, true, false)
+						if err != nil {
+							// We already checked local files were there earlier so this is fatal
+							return fmt.Errorf("Error while trying to fall back from delta to standard push: %v", err)
 						}
-						if progressType == util.ProgressSkip || progressType == util.ProgressNotFound {
-							// 'not found' will have caused an error earlier anyway so just pass through
-							filesdone++
-							bytesFromFilesDoneSoFar += totalBytes
-							callback(&util.ProgressCallbackData{progressType, fileInProgress, totalBytes, totalBytes,
-								bytesFromFilesDoneSoFar, refCommitsSize})
-						} else {
-							// Start new file
-							callback(&util.ProgressCallbackData{util.ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
-								bytesFromFilesDoneSoFar + bytesDone, refCommitsSize})
-							lastFilename = fileInProgress
-							lastFileBytes = totalBytes
-						}
-					} else {
-						if bytesDone == totalBytes {
-							// finished
-							filesdone++
-							bytesFromFilesDoneSoFar += totalBytes
-							callback(&util.ProgressCallbackData{util.ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
-								bytesFromFilesDoneSoFar, refCommitsSize})
-							lastFilename = ""
-						} else {
-							// Otherwise this is a progress callback
-							return callback(&util.ProgressCallbackData{util.ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
-								bytesFromFilesDoneSoFar + bytesDone, refCommitsSize})
-						}
+						commit.Files = append(commit.Files, filenames...)
+						// Just add the filesize on, don't subtract the delta size since we'll mark that as done
+						commit.FileBytes += filesize
+						refFileSize += filesize
+						refCommitsSize += filesize
 					}
-					return false
+
 				}
-				var err error
-				if force {
-					// We can end up duplicating uploads when in force mode because the underlying provider will not
-					// stop the upload in force mode if it's already there. So instead, make sure we only upload each
-					// file at most once
-					commitFilesSet := util.NewStringSetFromSlice(commit.Files)
-					newFilesSet := commitFilesSet.Difference(filesUploaded)
-					if len(newFilesSet) > 0 {
-						newFiles := make([]string, 0, len(newFilesSet))
-						for f := range newFilesSet {
-							newFiles = append(newFiles, f)
-						}
-						err = provider.Upload(remoteName, newFiles, commit.BaseDir, force, localcallback)
-						if err == nil {
-							for f := range newFilesSet {
-								filesUploaded.Add(f)
-							}
-						}
-					}
-				} else {
-					// It IS possible to have a commit here with no files to upload. E.g. missing data locally (see above)
-					// which was present on remote. We still include it in the commit list for completeness
-					if len(commit.Files) > 0 {
-						err = provider.Upload(remoteName, commit.Files, commit.BaseDir, force, localcallback)
-					}
-				}
+				bytesDoneSoFar += refDeltaSize
+				// Then, do any regular file-based uploads (and also any delta fallbacks)
+				err := pushCommitStandard(commit, provider, remoteName, force, bytesDoneSoFar, refCommitsSize, callback)
 				if err != nil {
-					// Stop at commit we can't upload
+					// stop at commit we can't push
 					return err
 				}
-				if lastFilename != "" {
-					// We obviously never got a 100% progress update from the last file
-					bytesFromFilesDoneSoFar += lastFileBytes
-					callback(&util.ProgressCallbackData{util.ProgressTransferBytes, lastFilename, lastFileBytes, lastFileBytes,
-						bytesFromFilesDoneSoFar, refCommitsSize})
-					lastFilename = ""
-				}
+				// in the case of a failed delta & fallback we would have uploaded more bytes but gloss over this
+				bytesDoneSoFar += commit.FileBytes
+
 				// Otherwise mark commit as pushed IF complete
 				if commit.Incomplete {
 					previousCommitIncomplete = true
@@ -312,7 +291,139 @@ func Push(provider providers.SyncProvider, remoteName string, refspecs []*GitRef
 
 }
 
-func preparePushDelta(lobsha, filename string, provider providers.SmartSyncProvider, remoteName string) *LOBDelta {
+// Push deltas in a commit & report those which didn't make it
+func pushCommitDeltas(commit *PushCommitContentDetails, provider providers.SmartSyncProvider, remoteName string,
+	force bool, bytesDoneSoFar, refDeltaBytes int64, callback util.ProgressCallback) []*LOBDelta {
+
+	// First add up the sizes
+	averageMetaSize := int64(100)
+	var faileddeltas []*LOBDelta
+
+	for _, delta := range commit.Deltas {
+		// Push metadata for this individually
+		metacallback := func(fileInProgress string, progressType util.ProgressCallbackType, bytesDone, totalBytes int64) (abort bool) {
+			// Don't bother to track partial completion, only 100 bytes each
+			if progressType == util.ProgressSkip || progressType == util.ProgressNotFound {
+				callback(&util.ProgressCallbackData{progressType, fileInProgress, totalBytes, totalBytes,
+					bytesDoneSoFar + averageMetaSize, refDeltaBytes})
+				// Remote did not have this file
+			} else {
+				if bytesDone == totalBytes {
+					// finished
+					callback(&util.ProgressCallbackData{util.ProgressTransferBytes, fileInProgress, totalBytes, totalBytes,
+						bytesDoneSoFar + averageMetaSize, refDeltaBytes})
+				}
+			}
+			return false
+		}
+		metafile := GetLOBMetaRelativePath(delta.TargetSHA)
+		err := provider.Upload(remoteName, []string{metafile}, GetLocalLOBRoot(), force, metacallback)
+		if err != nil {
+			faileddeltas = append(faileddeltas, delta)
+			continue
+		}
+		bytesDoneSoFar += averageMetaSize
+		// Now upload delta
+		deltacallback := func(txt string, progressType util.ProgressCallbackType, bytesDone, totalBytes int64) (abort bool) {
+
+			var ret bool
+			if bytesDone != totalBytes {
+				// only do part progress in here, do final outside to ensure it always happens regardless
+				ret = callback(&util.ProgressCallbackData{util.ProgressTransferBytes, getDeltaProgressDesc(delta), bytesDone, totalBytes,
+					bytesDoneSoFar + bytesDone, refDeltaBytes})
+
+			}
+
+			return ret
+		}
+		in, err := os.OpenFile(delta.DeltaFilename, os.O_RDONLY, 0644)
+		if err != nil {
+			faileddeltas = append(faileddeltas, delta)
+			continue
+		}
+		defer in.Close()
+		err = provider.UploadDelta(remoteName, delta.BaseSHA, delta.TargetSHA, in, delta.DeltaSize, deltacallback)
+		if err != nil {
+			faileddeltas = append(faileddeltas, delta)
+			continue
+		}
+		bytesDoneSoFar += delta.DeltaSize
+
+	}
+	return faileddeltas
+}
+
+// Push a single commit using the standard approach
+func pushCommitStandard(commit *PushCommitContentDetails, provider providers.SyncProvider, remoteName string,
+	force bool, bytesDoneSoFar, refCommitsSize int64, callback util.ProgressCallback) error {
+	// Upload now
+	var lastFilename string
+	var lastFileBytes int64
+	localcallback := func(fileInProgress string, progressType util.ProgressCallbackType, bytesDone, totalBytes int64) (abort bool) {
+		if lastFilename != fileInProgress {
+			// New file, always callback
+			if lastFilename != "" {
+				// we obviously never got a 100% call for previous file
+				bytesDoneSoFar += lastFileBytes
+				callback(&util.ProgressCallbackData{util.ProgressTransferBytes, lastFilename, lastFileBytes, lastFileBytes,
+					bytesDoneSoFar, refCommitsSize})
+				lastFilename = ""
+			}
+			if progressType == util.ProgressSkip || progressType == util.ProgressNotFound {
+				// 'not found' will have caused an error earlier anyway so just pass through
+				bytesDoneSoFar += totalBytes
+				callback(&util.ProgressCallbackData{progressType, fileInProgress, totalBytes, totalBytes,
+					bytesDoneSoFar, refCommitsSize})
+			} else {
+				// Start new file
+				callback(&util.ProgressCallbackData{util.ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
+					bytesDoneSoFar + bytesDone, refCommitsSize})
+				lastFilename = fileInProgress
+				lastFileBytes = totalBytes
+			}
+		} else {
+			if bytesDone == totalBytes {
+				// finished
+				bytesDoneSoFar += totalBytes
+				callback(&util.ProgressCallbackData{util.ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
+					bytesDoneSoFar, refCommitsSize})
+				lastFilename = ""
+			} else {
+				// Otherwise this is a progress callback
+				return callback(&util.ProgressCallbackData{util.ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
+					bytesDoneSoFar + bytesDone, refCommitsSize})
+			}
+		}
+		return false
+	}
+	// It IS possible to have a commit here with no files to upload. E.g. missing data locally (see above)
+	// which was present on remote. We still include it in the commit list for completeness
+	if len(commit.Files) > 0 {
+		err := provider.Upload(remoteName, commit.Files, commit.BaseDir, force, localcallback)
+		if err != nil {
+			return err
+		}
+	}
+	if lastFilename != "" {
+		// We obviously never got a 100% progress update from the last file
+		bytesDoneSoFar += lastFileBytes
+		callback(&util.ProgressCallbackData{util.ProgressTransferBytes, lastFilename, lastFileBytes, lastFileBytes,
+			bytesDoneSoFar, refCommitsSize})
+		lastFilename = ""
+	}
+	return nil
+
+}
+
+func preparePushDelta(lobsha, filename string, provider providers.SmartSyncProvider, remoteName string, force bool) *LOBDelta {
+	// Don't bother to try to generate a delta if lob is already on remote & not force; will be skipped in regular upload
+	if !force {
+		exists, _ := provider.LOBExists(remoteName, lobsha)
+		if exists {
+			return nil
+		}
+	}
+
 	othershas, err := GetGitAllLOBHistoryForFile(filename, lobsha)
 	if err != nil {
 		util.LogErrorf("Unable to prepare delta for %v(%v): %v\n", lobsha, filename, err.Error())
