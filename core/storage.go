@@ -23,6 +23,8 @@ const BUFSIZE = 131072
 // This is only 'var' rather than 'const' to allow tests to modify
 var ChunkSize = int64(32 * 1024 * 1024)
 
+const ApproximateMetadataSize = 75
+
 // Information about a LOB
 type LOBInfo struct {
 	// SHA of the LOB

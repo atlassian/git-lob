@@ -85,8 +85,8 @@ func Push(provider providers.SyncProvider, remoteName string, refspecs []*GitRef
 				if delta != nil {
 					// We'll try this as a delta; if it fails later then we'll fall back on normal
 					alldeltasforcommit = append(alldeltasforcommit, delta)
-					commitDeltaSize += delta.DeltaSize + 100 // add 100 for metadata which is done separately
-					deltaSavings += (delta.DeltaSize + 100) - filesize
+					commitDeltaSize += delta.DeltaSize + ApproximateMetadataSize
+					deltaSavings += (delta.DeltaSize + ApproximateMetadataSize) - filesize
 				} else {
 					allfilenamesforcommit = append(allfilenamesforcommit, filenames...)
 					commitFileSize += filesize
@@ -296,23 +296,19 @@ func pushCommitDeltas(commit *PushCommitContentDetails, provider providers.Smart
 	force bool, bytesDoneSoFar, refDeltaBytes int64, callback util.ProgressCallback) []*LOBDelta {
 
 	// First add up the sizes
-	averageMetaSize := int64(100)
 	var faileddeltas []*LOBDelta
 
 	for _, delta := range commit.Deltas {
 		// Push metadata for this individually
 		metacallback := func(fileInProgress string, progressType util.ProgressCallbackType, bytesDone, totalBytes int64) (abort bool) {
-			// Don't bother to track partial completion, only 100 bytes each
+			// Don't bother to track partial completion, only small
 			if progressType == util.ProgressSkip || progressType == util.ProgressNotFound {
-				callback(&util.ProgressCallbackData{progressType, fileInProgress, totalBytes, totalBytes,
-					bytesDoneSoFar + averageMetaSize, refDeltaBytes})
+				return callback(&util.ProgressCallbackData{progressType, fileInProgress, totalBytes, totalBytes,
+					bytesDoneSoFar + ApproximateMetadataSize, refDeltaBytes})
 				// Remote did not have this file
 			} else {
-				if bytesDone == totalBytes {
-					// finished
-					callback(&util.ProgressCallbackData{util.ProgressTransferBytes, fileInProgress, totalBytes, totalBytes,
-						bytesDoneSoFar + averageMetaSize, refDeltaBytes})
-				}
+				return callback(&util.ProgressCallbackData{util.ProgressTransferBytes, fileInProgress, bytesDone, totalBytes,
+					bytesDoneSoFar + bytesDone, refDeltaBytes})
 			}
 			return false
 		}

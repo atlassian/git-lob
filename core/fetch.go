@@ -249,7 +249,7 @@ func fetchLOBs(lobshas map[string]string, provider providers.SyncProvider, remot
 			if delta != nil {
 				deltas = append(deltas, delta)
 				deltaTotalBytes += delta.DeltaSize
-				deltaSavings += info.Size - (delta.DeltaSize + 100) // 100 for metadata which we don't save
+				deltaSavings += info.Size - (delta.DeltaSize + ApproximateMetadataSize)
 				// We'll do a delta for this so don't continue to determine files
 				continue
 			}
@@ -329,23 +329,22 @@ func prepareFetchDelta(lobsha, filename string, provider providers.SmartSyncProv
 
 // Internal method for fetching
 func fetchMetadata(lobshas map[string]string, provider providers.SyncProvider, remoteName string, force bool, callback util.ProgressCallback) error {
-	// Use average metafile bytes as estimate of download, usually around 100 bytes of JSON
-	averageMetaSize := 100
-	metaTotalBytes := int64(len(lobshas) * averageMetaSize)
+	// Use average metafile bytes as estimate of download, usually < 100 bytes of JSON
+	metaTotalBytes := int64(len(lobshas) * ApproximateMetadataSize)
 	var metafilesDone int
 	metacallback := func(fileInProgress string, progressType util.ProgressCallbackType, bytesDone, totalBytes int64) (abort bool) {
 		// Don't bother to track partial completion, only 100 bytes each
 		if progressType == util.ProgressSkip || progressType == util.ProgressNotFound {
 			metafilesDone++
 			callback(&util.ProgressCallbackData{progressType, fileInProgress, totalBytes, totalBytes,
-				int64(metafilesDone * averageMetaSize), metaTotalBytes})
+				int64(metafilesDone * ApproximateMetadataSize), metaTotalBytes})
 			// Remote did not have this file
 		} else {
 			if bytesDone == totalBytes {
 				// finished
 				metafilesDone++
 				callback(&util.ProgressCallbackData{util.ProgressTransferBytes, fileInProgress, totalBytes, totalBytes,
-					int64(metafilesDone * averageMetaSize), metaTotalBytes})
+					int64(metafilesDone * ApproximateMetadataSize), metaTotalBytes})
 			}
 		}
 		return false
