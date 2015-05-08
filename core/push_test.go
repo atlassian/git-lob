@@ -4,12 +4,18 @@ import (
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
 	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
 	. "bitbucket.org/sinbad/git-lob/providers"
+	"bitbucket.org/sinbad/git-lob/providers/smart"
 	. "bitbucket.org/sinbad/git-lob/util"
+	"bytes"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 var _ = Describe("Push", func() {
@@ -324,4 +330,270 @@ var _ = Describe("Push", func() {
 
 	})
 
+	Context("Delta push test", func() {
+		root := filepath.Join(os.TempDir(), "PushTest")
+		originRoot := filepath.Join(os.TempDir(), "PushOriginTest")
+		var oldwd string
+		var setupInputs []*TestCommitSetupInput
+		var setupOutputs []*CommitLOBRef
+		var fileshas []string
+
+		BeforeEach(func() {
+			CreateGitRepoForTest(root)
+			oldwd, _ = os.Getwd()
+			os.Chdir(root)
+			now := time.Now()
+
+			filebytes := make([][]byte, 3)
+
+			filebytes[0] = []byte("kajdflkajgsklfjgalsfalsgeflkajsjdbaclksuegfkacjsdmcabslkdfaiusegkcajbdsckjabiabilweubcilaweubkjbsecilawef")
+			filebytes[1] = []byte("kajdflkajgsklf34235falsgeflkajsjdbaclksuegfkacjsdmca22334455bslkdfaiusegkcajbdsckjabiabilweubcilaweubkjbsecilawef")
+			filebytes[2] = []byte("kajdflkajgsklf34235falsgeflkajsjdbaclksuegfkacjsdmca22334455bslkdfaiusegkcajbNOWYOUSEEMEdsckjabiabilweubcilaweubkjbsecilawefSUFFIXTIME")
+
+			// Set up commits
+			// We're only going to modify a single file since we're testing for deltas
+			setupInputs = []*TestCommitSetupInput{
+				&TestCommitSetupInput{ // 0
+					CommitDate: now.AddDate(0, 0, -5),
+					Files:      []string{"file1.txt"},
+					FileData:   [][]byte{filebytes[0]},
+				},
+				&TestCommitSetupInput{ // 1
+					CommitDate: now.AddDate(0, 0, -4),
+					Files:      []string{"file1.txt"},
+					FileData:   [][]byte{filebytes[1]},
+				},
+				&TestCommitSetupInput{ // 1
+					CommitDate: now.AddDate(0, 0, -3),
+					Files:      []string{"file1.txt"},
+					FileData:   [][]byte{filebytes[2]},
+				},
+			}
+
+			setupOutputs = SetupRepoForTest(setupInputs)
+
+			// Configure remote
+			CreateBareGitRepoForTest(originRoot)
+
+			// Make a file:// ref so we don't have hardlinks (more standard)
+			originPathUrl := strings.Replace(originRoot, "\\", "/", -1)
+			originPathUrl = "file://" + originPathUrl
+
+			// We'll use a dummy smart remote that can only respond to the necessary methods
+			// which provider delta data, then use a specific URL form to use it
+			originBinDummyURL := "dummy://something"
+
+			// Also replace backslashes with forward slashes for windows (git still expects forward)
+			f, err := os.OpenFile(filepath.Join(".git", "config"), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
+			Expect(err).To(BeNil(), "Should not error trying to open config file")
+			f.WriteString(fmt.Sprintf(`
+[remote "origin"]
+    url = %v
+    fetch = +refs/heads/*:refs/remotes/origin/*
+    git-lob-url = %v
+    git-lob-provider = smart
+`, originPathUrl, originBinDummyURL))
+			f.Close()
+
+			LoadConfig(GlobalOptions)
+			InitCoreProviders()
+			smart.InitCoreProviders()
+
+			// We need to set the delta threshold low enough that we'll always get deltas
+			GlobalOptions.PushDeltasAboveSize = 0
+
+			// Now set up the dummy transport system which will fake remote comms
+			// We need to give the server the sha1 base data so it will accept delta pushes for 2 & 3
+			sha1 := setupOutputs[0].FileLOBs[0].SHA
+			sha2 := setupOutputs[1].FileLOBs[0].SHA
+			sha3 := setupOutputs[2].FileLOBs[0].SHA
+			meta1, err := ioutil.ReadFile(GetLocalLOBMetaPath(sha1))
+			Expect(err).To(BeNil(), "Should not error trying to read metafile")
+			metamap := map[string][]byte{
+				sha1: meta1,
+			}
+			// include content for 1
+			contentmap := map[string][]byte{
+				sha1: filebytes[0],
+			}
+			smart.RegisterTransportFactory(&DummyPushTransportFactory{metamap, contentmap})
+
+			fileshas = append(fileshas, sha1, sha2, sha3)
+			// mark first commit as pushed since we included the data in the transport
+			MarkBinariesAsPushed("origin", setupOutputs[0].Commit, "")
+
+		})
+		AfterEach(func() {
+			os.Chdir(oldwd)
+			err := ForceRemoveAll(root)
+			if err != nil {
+				Fail(err.Error())
+			}
+			err = ForceRemoveAll(originRoot)
+			if err != nil {
+				Fail(err.Error())
+			}
+			// Reset any option changes
+			GlobalOptions = NewOptions()
+		})
+
+		It("Pushes deltas", func() {
+			var filesTransferred int
+			var filesSkipped int
+			var filesFailed int
+			var filesNotFound int
+			var deltasSeen int
+			callback := func(data *ProgressCallbackData) (abort bool) {
+				switch data.Type {
+				case ProgressCalculate:
+					//fmt.Println(data.Desc)
+				case ProgressTransferBytes:
+					//fmt.Printf("%v : [%d/%d] Overall [%d/%d]\n", data.Desc, data.ItemBytesDone, data.ItemBytes, data.TotalBytesDone, data.TotalBytes)
+					if data.ItemBytesDone == data.ItemBytes {
+						filesTransferred++
+						if strings.HasPrefix(data.Desc, "Delta") {
+							deltasSeen++
+						}
+					}
+				case ProgressSkip:
+					filesSkipped++
+				case ProgressError:
+					filesFailed++
+				case ProgressNotFound:
+					filesNotFound++
+				}
+				return false
+			}
+			provider, err := GetProviderForRemote("origin")
+			Expect(err).To(BeNil(), "Shouldn't be an issue getting provider")
+
+			// dry run first
+			err = Push(provider, "origin", []*GitRefSpec{&GitRefSpec{Ref1: "master"}}, true, false, false, callback)
+			Expect(err).To(BeNil(), "Should be no error pushing")
+			Expect(filesTransferred).To(BeEquivalentTo(0), "Should be no files to transfer")
+			Expect(filesSkipped).To(BeEquivalentTo(0), "Should be no files skipped")
+			Expect(filesFailed).To(BeEquivalentTo(0), "Should be no files failed")
+			Expect(filesNotFound).To(BeEquivalentTo(0), "Should be no files not found")
+
+			// Now for real
+			err = Push(provider, "origin", []*GitRefSpec{&GitRefSpec{Ref1: "master"}}, false, false, false, callback)
+			Expect(err).To(BeNil(), "Should be no error pushing")
+			Expect(filesTransferred).To(BeEquivalentTo(2*2), "Should be correct no of files to transfer (2 meta, 2 deltas)")
+			Expect(deltasSeen).To(BeEquivalentTo(2), "Should see 2 completed deltas")
+			Expect(filesSkipped).To(BeEquivalentTo(0), "Should be no files skipped")
+			Expect(filesFailed).To(BeEquivalentTo(0), "Should be no files failed")
+			Expect(filesNotFound).To(BeEquivalentTo(0), "Should be no files not found")
+
+		})
+
+	})
+
 })
+
+// We'll use a dummy smart remote that can only respond to the necessary methods
+// Set up a dummy transport that talks over a pipe
+type DummyPushTransport struct {
+	// map of LOB sha -> meta content
+	MetaContentMap map[string][]byte
+	// map of LOB shas we already have
+	ContentMap map[string][]byte
+}
+
+func (*DummyPushTransport) Release() {
+}
+func (*DummyPushTransport) QueryCaps() ([]string, error) {
+	return []string{"binary_delta"}, nil
+}
+func (*DummyPushTransport) SetEnabledCaps(caps []string) error {
+	return nil
+}
+func (self *DummyPushTransport) MetadataExists(lobsha string) (ex bool, sz int64, e error) {
+	meta, ok := self.MetaContentMap[lobsha]
+	return ok, int64(len(meta)), nil
+}
+func (*DummyPushTransport) ChunkExists(lobsha string, chunk int) (ex bool, sz int64, e error) {
+	// We don't need this
+	return true, 0, nil
+}
+func (*DummyPushTransport) ChunkExistsAndIsOfSize(lobsha string, chunk int, sz int64) (bool, error) {
+	// We don't need this
+	return true, nil
+}
+func (self *DummyPushTransport) LOBExists(lobsha string) (ex bool, sz int64, e error) {
+	content, contentok := self.ContentMap[lobsha]
+	_, metaok := self.MetaContentMap[lobsha]
+	return metaok && contentok, int64(len(content)), nil
+}
+func (self *DummyPushTransport) UploadMetadata(lobsha string, sz int64, data io.Reader) error {
+	var buf bytes.Buffer
+	n, err := io.CopyN(&buf, data, sz)
+	if err != nil {
+		return err
+	} else if n != sz {
+		return fmt.Errorf("Wrong size of data read from meta reader, expected %d got %d", sz, n)
+	}
+	self.MetaContentMap[lobsha] = buf.Bytes()
+	return nil
+}
+func (*DummyPushTransport) UploadChunk(lobsha string, chunk int, sz int64, data io.Reader, callback smart.TransportProgressCallback) error {
+	// We don't need this and to call it is a test failure
+	return fmt.Errorf("UploadChunk Not implemented")
+}
+func (self *DummyPushTransport) DownloadMetadata(lobsha string, out io.Writer) error {
+	// Not needed
+	return nil
+}
+func (*DummyPushTransport) DownloadChunk(lobsha string, chunk int, out io.Writer, callback smart.TransportProgressCallback) error {
+	// Not needed
+	return nil
+}
+func (self *DummyPushTransport) GetFirstCompleteLOBFromList(candidateSHAs []string) (string, error) {
+	for _, sha := range candidateSHAs {
+		exists, _, _ := self.LOBExists(sha)
+		if exists {
+			return sha, nil
+		}
+	}
+	return "", nil
+}
+func (self *DummyPushTransport) UploadDelta(baseSHA, targetSHA string, deltaSize int64, data io.Reader, callback smart.TransportProgressCallback) (bool, error) {
+	_, ok := self.ContentMap[baseSHA]
+	if !ok {
+		return false, nil
+	}
+	// Manually call callback just for test
+	callback(0, deltaSize)
+	var buf bytes.Buffer
+	n, err := io.CopyN(&buf, data, deltaSize)
+	if err != nil {
+		return false, err
+	} else if n != deltaSize {
+		return false, fmt.Errorf("Wrong size of data read from delta reader, expected %d got %d", deltaSize, n)
+	}
+	// we won't actually apply the delta, just acknowledge & discard (test will check for this callback)
+	callback(deltaSize, deltaSize)
+	return true, nil
+
+}
+func (self *DummyPushTransport) DownloadDeltaPrepare(baseSHA, targetSHA string) (int64, error) {
+	// We don't need this
+	return 0, nil
+}
+func (self *DummyPushTransport) DownloadDelta(baseSHA, targetSHA string, sizeLimit int64, out io.Writer, callback smart.TransportProgressCallback) (bool, error) {
+	// We don't need this
+	return false, nil
+}
+
+type DummyPushTransportFactory struct {
+	// map of LOB sha -> meta content
+	MetaContentMap map[string][]byte
+	// map of LOB shas we already have
+	ContentMap map[string][]byte
+}
+
+func (self *DummyPushTransportFactory) WillHandleUrl(u *url.URL) bool {
+	return u.Scheme == "dummy"
+}
+func (self *DummyPushTransportFactory) Connect(u *url.URL) (smart.Transport, error) {
+	return &DummyPushTransport{self.MetaContentMap, self.ContentMap}, nil
+}
