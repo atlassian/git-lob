@@ -85,6 +85,8 @@ func (self *SshTransportFactory) Connect(u *url.URL) (Transport, error) {
 		return nil, fmt.Errorf("No valid host found in url %v", u.String())
 	}
 
+	util.LogDebugf("Connecting to %v over SSH...", host)
+
 	// Let's invoke ssh
 	args := make([]string, 0, 2)
 	if isTortoise {
@@ -111,6 +113,9 @@ func (self *SshTransportFactory) Connect(u *url.URL) (Transport, error) {
 		path = path[1:]
 	}
 	args = append(args, path)
+
+	util.LogDebugf("SSH command is: %v %v", ssh, strings.Join(args, " "))
+
 	cmd := exec.Command(ssh, args...)
 
 	outp, err := cmd.StdoutPipe()
@@ -136,6 +141,8 @@ func (self *SshTransportFactory) Connect(u *url.URL) (Transport, error) {
 		stdout: outp,
 		stderr: errp,
 	}
+
+	util.LogDebugf("SSH connection successful to %v", host)
 
 	return NewPersistentTransport(conn), nil
 
