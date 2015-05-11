@@ -34,7 +34,7 @@ func MainImpl() int {
 		fmt.Fprintf(os.Stderr, "Missing required configuration setting: base-path\n")
 		return 12
 	}
-	if util.DirExists(cfg.BasePath) {
+	if !util.DirExists(cfg.BasePath) {
 		fmt.Fprintf(os.Stderr, "Invalid value for base-path: %v\nDirectory must exist.\n", cfg.BasePath)
 		return 14
 	}
