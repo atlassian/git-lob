@@ -88,6 +88,8 @@ func ReportProgressToConsole(callbackChan <-chan *ProgressCallbackData, op strin
 				// unless it's general infoo or we're in verbose mode
 				switch data.Type {
 				case ProgressCalculate:
+					finalDownloadProgress = nil
+					LogConsole(data.Desc)
 				case ProgressError:
 					finalDownloadProgress = nil
 					LogConsole(data.Desc)
