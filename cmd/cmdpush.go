@@ -149,7 +149,7 @@ func Push() int {
 	pushCounts := util.ReportProgressToConsole(callbackChan, "Push", time.Millisecond*500)
 
 	if pusherr != nil {
-		util.LogErrorf("git-lob: push error(s):\n%v", pusherr.Error())
+		util.LogErrorf("git-lob: push error(s):\n%v\n", pusherr.Error())
 		return 12
 	}
 	if util.GlobalOptions.DryRun {
@@ -255,7 +255,7 @@ func PushLob() int {
 	pushCounts := util.ReportProgressToConsole(callbackChan, "Push", time.Millisecond*500)
 
 	if pusherr != nil {
-		util.LogErrorf("git-lob: push error(s):\n%v", pusherr.Error())
+		util.LogErrorf("git-lob: push error(s):\n%v\n", pusherr.Error())
 		return 12
 	}
 	if pushCounts.ErrorCount > 0 {
