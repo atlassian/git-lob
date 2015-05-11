@@ -108,7 +108,7 @@ func (self *SshTransportFactory) Connect(u *url.URL) (Transport, error) {
 	// u.Path includes a preceding '/', strip off manually
 	// rooted paths in the URL will be '//path/to/blah'
 	// this is just how Go's URL parsing works
-	path := u.Path
+	path := urlCleaned.Path
 	if len(path) > 0 && strings.HasPrefix(path, "/") {
 		path = path[1:]
 	}
