@@ -61,7 +61,7 @@ func LoadConfig() *Config {
 		}
 	}
 
-	var settings map[string]string
+	var settings = make(map[string]string)
 	for _, conf := range configFiles {
 		confsettings, err := util.ReadConfigFile(conf)
 		if err == nil {
