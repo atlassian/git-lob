@@ -472,7 +472,7 @@ func GitRefToFullSHA(ref string) (string, error) {
 	cmd := exec.Command("git", "rev-parse", ref)
 	outp, err := cmd.Output()
 	if err != nil {
-		return ref, fmt.Errorf("Can't convert %v to a SHA: %v", ref, err.Error())
+		return ref, fmt.Errorf("Unknown or ambiguous ref %v", ref)
 	}
 	return strings.TrimSpace(string(outp)), nil
 }
