@@ -178,8 +178,12 @@ func Push(provider providers.SyncProvider, remoteName string, refspecs []*GitRef
 
 		} else {
 			if refCommitsSize > 0 {
-				callback(&util.ProgressCallbackData{util.ProgressCalculate, fmt.Sprintf(" * %v: %d commits with %v to push (if not already on remote)",
-					refspec, len(refCommitsToPush), util.FormatSize(refCommitsSize)), int64(i + 1), int64(len(refspecs)), 0, 0})
+				forcenotforcemsg := "if not already on remote"
+				if force {
+					forcenotforcemsg = "forced upload"
+				}
+				callback(&util.ProgressCallbackData{util.ProgressCalculate, fmt.Sprintf(" * %v: %d commits with %v to push (%v)",
+					refspec, len(refCommitsToPush), util.FormatSize(refCommitsSize), forcenotforcemsg), int64(i + 1), int64(len(refspecs)), 0, 0})
 				if deltaSavings > 0 {
 					callback(&util.ProgressCallbackData{util.ProgressCalculate, fmt.Sprintf("   Saving %v by using binary deltas",
 						util.FormatSize(deltaSavings)), int64(i + 1), int64(len(refspecs)), 0, 0})
