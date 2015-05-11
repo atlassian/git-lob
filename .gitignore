@@ -1,2 +1,4 @@
 git-lob
+git-lob_*
 *.test
+git-lob-serve_*
