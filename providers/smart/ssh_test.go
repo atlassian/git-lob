@@ -16,6 +16,7 @@ var _ = Describe("SSH", func() {
 			// Bare url with no port and relative path
 			u, err := url.Parse("git@host.com:path/to/repo")
 			Expect(err).To(BeNil(), "Should not be a problem parsing initial URL")
+			Expect(factory.WillHandleUrl(u)).To(BeTrue(), "Should handle URL")
 			// At this point the entire URL will just be in Path
 			// So clean it up
 			u = factory.cleanupBareUrl(u)
@@ -28,9 +29,22 @@ var _ = Describe("SSH", func() {
 			Expect(host).To(Equal("host.com"), "Host should be extracted correctly")
 			Expect(port).To(Equal(""), "Port should be extracted correctly")
 
+			// Clean bare url with no FQDN & simple repo
+			u, err = url.Parse("git@host:repo")
+			Expect(err).To(BeNil(), "Should not be a problem parsing initial URL")
+			Expect(factory.WillHandleUrl(u)).To(BeTrue(), "Should handle URL")
+			// At this point the entire URL will just be in Path
+			// So clean it up
+			u = factory.cleanupBareUrl(u)
+			Expect(u.Scheme).To(Equal("ssh"), "Scheme should be parsed correctly")
+			Expect(u.Host).To(Equal("host"), "Host should be parsed correctly")
+			Expect(u.User.Username()).To(Equal("git"), "User should be parsed correctly")
+			Expect(u.Path).To(Equal("/repo"), "Path should be parsed correctly; path will have '/' added but that doesn't make it rooted")
+
 			// Bare url with no port and rooted path
 			u, err = url.Parse("git@host.com:/rooted/path/to/repo")
 			Expect(err).To(BeNil(), "Should not be a problem parsing initial URL")
+			Expect(factory.WillHandleUrl(u)).To(BeTrue(), "Should handle URL")
 			// At this point the entire URL will just be in Path
 			// So clean it up
 			u = factory.cleanupBareUrl(u)
@@ -42,6 +56,7 @@ var _ = Describe("SSH", func() {
 			// Bare url with custom port
 			u, err = url.Parse("git@host.com:1002:path/to/repo")
 			Expect(err).To(BeNil(), "Should not be a problem parsing initial URL")
+			Expect(factory.WillHandleUrl(u)).To(BeTrue(), "Should handle URL")
 			// At this point the entire URL will just be in Path
 			// So clean it up
 			u = factory.cleanupBareUrl(u)
@@ -59,6 +74,7 @@ var _ = Describe("SSH", func() {
 			// Standard url with no port and relative path
 			u, err := url.Parse("ssh://git@host.com/path/to/repo")
 			Expect(err).To(BeNil(), "Should not be a problem parsing initial URL")
+			Expect(factory.WillHandleUrl(u)).To(BeTrue(), "Should handle URL")
 			// At this point the entire URL will just be in Path
 			// So clean it up
 			u = factory.cleanupBareUrl(u)
@@ -74,6 +90,7 @@ var _ = Describe("SSH", func() {
 			// Standard url with no port and rooted path
 			u, err = url.Parse("ssh://git@host.com//rooted/path/to/repo")
 			Expect(err).To(BeNil(), "Should not be a problem parsing initial URL")
+			Expect(factory.WillHandleUrl(u)).To(BeTrue(), "Should handle URL")
 			// At this point the entire URL will just be in Path
 			// So clean it up
 			u = factory.cleanupBareUrl(u)
@@ -85,6 +102,7 @@ var _ = Describe("SSH", func() {
 			// Standard url with custom port
 			u, err = url.Parse("ssh://git@host.com:1002/path/to/repo")
 			Expect(err).To(BeNil(), "Should not be a problem parsing initial URL")
+			Expect(factory.WillHandleUrl(u)).To(BeTrue(), "Should handle URL")
 			// At this point the entire URL will just be in Path
 			// So clean it up
 			u = factory.cleanupBareUrl(u)
