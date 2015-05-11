@@ -81,7 +81,7 @@ func RegisterTransportFactory(f TransportFactory) {
 // Retrieve the best ConnectionFactory for a given URL (or nil)
 func GetTransportFactory(u *url.URL) TransportFactory {
 	// Iterate in reverse order
-	for i := len(transportFactories) - 1; i > 0; i-- {
+	for i := len(transportFactories) - 1; i >= 0; i-- {
 		if transportFactories[i].WillHandleUrl(u) {
 			return transportFactories[i]
 		}
