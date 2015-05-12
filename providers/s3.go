@@ -161,6 +161,12 @@ func (self *S3SyncProvider) getS3Connection() (*s3.S3, error) {
 	}
 	return self.S3Connection, nil
 }
+
+func (self *S3SyncProvider) Release() {
+	self.S3Connection = nil
+	self.Buckets = nil
+}
+
 func (self *S3SyncProvider) getBucketName(remoteName string) (string, error) {
 	bucketsetting := fmt.Sprintf("remote.%v.git-lob-s3-bucket", remoteName)
 	bucket := strings.TrimSpace(util.GlobalOptions.GitConfig[bucketsetting])

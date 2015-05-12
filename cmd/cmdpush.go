@@ -149,7 +149,7 @@ func Push() int {
 	pushCounts := util.ReportProgressToConsole(callbackChan, "Push", time.Millisecond*500)
 
 	if pusherr != nil {
-		util.LogErrorf("git-lob: push error(s):\n%v", pusherr.Error())
+		util.LogErrorf("git-lob: push error(s):\n%v\n", pusherr.Error())
 		return 12
 	}
 	if util.GlobalOptions.DryRun {
@@ -165,6 +165,7 @@ func Push() int {
 			util.LogConsole("Successfully pushed binaries to", remoteName)
 		}
 	}
+	provider.Release()
 
 	return 0
 }
@@ -255,7 +256,7 @@ func PushLob() int {
 	pushCounts := util.ReportProgressToConsole(callbackChan, "Push", time.Millisecond*500)
 
 	if pusherr != nil {
-		util.LogErrorf("git-lob: push error(s):\n%v", pusherr.Error())
+		util.LogErrorf("git-lob: push error(s):\n%v\n", pusherr.Error())
 		return 12
 	}
 	if pushCounts.ErrorCount > 0 {
@@ -265,6 +266,8 @@ func PushLob() int {
 	} else {
 		util.LogConsole("Successfully pushed binaries to", remoteName)
 	}
+
+	provider.Release()
 
 	return 0
 }

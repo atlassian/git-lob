@@ -264,6 +264,26 @@ func CreateAndStoreLOBFileForTest(sz int64, filename string) *LOBInfo {
 	return info
 }
 
+// Store specific data in a file LOB, then overwrite with placeholder ready for commit (without filters)
+func WriteAndStoreLOBFileForTest(data []byte, filename string) *LOBInfo {
+	err := ioutil.WriteFile(filename, data, 0644)
+	if err != nil {
+		Fail(fmt.Sprintf("Failed to write data to file %v: %v", filename, err))
+	}
+	info, err := StoreLOBForTest(filename)
+	if err != nil {
+		Fail(fmt.Sprintf("Failed to store test LOB %v: %v", filename, err))
+	}
+	// now overwrite with placeholder ready for adding to git
+	err = ioutil.WriteFile(filename,
+		[]byte(fmt.Sprintf("git-lob: %v", info.SHA)), 0644)
+	if err != nil {
+		Fail(fmt.Sprintf("Failed to wite placeholder for %v: %v", filename, err))
+	}
+	return info
+
+}
+
 // generate a random list of SHAs for testing purposes
 // these SHAs are random and don't correspond to any valid data
 func GetListOfRandomSHAsForTest(num int) []string {
@@ -403,8 +423,11 @@ type TestCommitSetupInput struct {
 	CommitDate time.Time
 	// List of files to have LOB contents inserted at this commit
 	Files []string
-	// Optional list of sizes for the above files; if not specified defaults to 100 bytes
+	// Optional list of sizes for generating the above files; if not specified defaults to 100 bytes
 	FileSizes []int64
+	// Options list of data to use for the content of the files
+	// mutually exclusive with FileSizes
+	FileData [][]byte
 	// List of parent branches (all branches must have been created in a previous)
 	// Can be omitted to just use the parent of the previous commit
 	ParentBranches []string
@@ -462,12 +485,20 @@ func SetupRepoForTest(inputs []*TestCommitSetupInput) []*CommitLOBRef {
 		}
 		// Any files to write?
 		for fi, filename := range input.Files {
-			sz := int64(100)
-			if len(input.FileSizes) > fi {
-				sz = input.FileSizes[fi]
+			var info *LOBInfo
+			if len(input.FileData) > fi {
+				// Manually supplied data
+				info = WriteAndStoreLOBFileForTest(input.FileData[fi], filename)
+			} else {
+				// Generated data
+				sz := int64(100)
+				if len(input.FileSizes) > fi {
+					sz = input.FileSizes[fi]
+				}
+				info = CreateAndStoreLOBFileForTest(sz, filename)
 			}
-			info := CreateAndStoreLOBFileForTest(sz, filename)
 			output.LobSHAs = append(output.LobSHAs, info.SHA)
+			output.FileLOBs = append(output.FileLOBs, &FileLOB{Filename: filename, SHA: info.SHA})
 			RunGitCommandForTest(true, "add", filename)
 		}
 		// Now commit

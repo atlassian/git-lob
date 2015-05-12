@@ -24,6 +24,9 @@ type SyncProvider interface {
 	// Return whether the configuration for a given remote is valid
 	ValidateConfig(remoteName string) error
 
+	// Release any resources being used by the provider
+	Release()
+
 	// Upload a given list of files (binary storage). The paths are relative to fromDir and are provided
 	// like that to make it easier for the provider since it will likely use the same
 	// relative paths inside its own storage
@@ -49,20 +52,32 @@ type SyncProvider interface {
 	FileExistsAndIsOfSize(remoteName, filename string, sz int64) bool
 }
 
+// Smart sync provider interface with more options
+type SmartSyncProvider interface {
+	// Everything from core SyncProvider
+	SyncProvider
+
+	// Plus entire LOB-oriented calls
+
+	// Whether a LOB exists in full on the remote, and gets its size
+	LOBExists(remoteName, sha string) (ex bool, sz int64)
+	// Prepare a delta from a list of candidate shas and report the size of it, the chosen base SHA. If this fails caller should use standard Download()
+	PrepareDeltaForDownload(remoteName, sha string, candidateBaseSHAs []string) (sz int64, base string, e error)
+	// Download delta of LOB content (must be applied later)
+	DownloadDelta(remoteName, basesha, targetsha string, out io.Writer, callback SyncProgressCallback) error
+	// Return the LOB which the server has a complete copy of, from a list of candidates
+	// Server must test in the order provided & return the earliest one which is complete on the server
+	// Server doesn't have to test full integrity of LOB, just completeness (check size against meta)
+	// Return a blank string if none are available
+	GetFirstCompleteLOBFromList(remoteName string, candidateSHAs []string) (string, error)
+	// Upload delta of LOB content (must be calculated first)
+	UploadDelta(remoteName, basesha, targetsha string, in io.Reader, size int64, callback SyncProgressCallback) error
+}
+
 // Callback when progress is made uploading / downloading
 // fileInProgress: relative path of file, isSkipped: whether file was up to date, bytesDone/totalBytes: progress for current file
 // return true to abort the process for this and all other files in the batch
 type SyncProgressCallback func(fileInProgress string, progressType util.ProgressCallbackType, bytesDone, totalBytes int64) (abort bool)
-
-// Providers implementing this interface provide smart sync capabilities
-// These providers require server-side processing and are free to store data how they like
-// so long as they can fulfil the interface. Provides support for binary deltas to
-// speed up data transfers in both directions
-type SmartSyncProvider interface {
-	SyncProvider
-	// Just to make this different
-	PlaceholderTODO()
-}
 
 var (
 	syncProviders map[string]SyncProvider = make(map[string]SyncProvider, 0)
@@ -90,6 +105,17 @@ func GetSyncProvider(typeID string) (SyncProvider, error) {
 		return nil, errors.New(fmt.Sprintf("Requested unknown SyncProvider: %v", typeID))
 	}
 	return p, nil
+}
+
+// 'Upgrade' a pointer to a SyncProvider to a SmartSyncProvider, if possible (returns nil if not)
+func UpgradeToSmartSyncProvider(provider SyncProvider) SmartSyncProvider {
+	switch p := provider.(type) {
+	case SmartSyncProvider:
+		return p
+	default:
+		return nil
+	}
+
 }
 
 // Install the core providers

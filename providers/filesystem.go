@@ -64,6 +64,10 @@ func (*FileSystemSyncProvider) ValidateConfig(remoteName string) error {
 	return nil
 }
 
+func (*FileSystemSyncProvider) Release() {
+	// Nothing to do here
+}
+
 func (*FileSystemSyncProvider) uploadSingleFile(remoteName, filename, fromDir, toDir string, fileMode os.FileMode,
 	force bool, callback SyncProgressCallback) (errorList []string, abort bool) {
 	// Check to see if the file is already there, right size

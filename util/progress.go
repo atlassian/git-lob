@@ -90,6 +90,9 @@ func ReportProgressToConsole(callbackChan <-chan *ProgressCallbackData, op strin
 				case ProgressCalculate:
 					finalDownloadProgress = nil
 					LogConsole(data.Desc)
+				case ProgressError:
+					finalDownloadProgress = nil
+					LogConsole(data.Desc)
 				case ProgressSkip:
 					finalDownloadProgress = nil
 					results.SkippedCount++

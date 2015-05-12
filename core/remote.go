@@ -333,6 +333,29 @@ func GetCommitLOBsToPushForRef(remoteName string, ref string, recheck bool) ([]*
 // Check with a remote provider for the presence of all data required for a given LOB
 // Return nil if all data is there, NotFoundErr if not
 func CheckRemoteLOBFilesForSHA(sha string, provider providers.SyncProvider, remoteName string) error {
+	// Smart provider can do better
+	switch p := provider.(type) {
+	case providers.SmartSyncProvider:
+		return CheckRemoteLOBFilesForSHASmart(sha, p, remoteName)
+	case providers.SyncProvider:
+		return CheckRemoteLOBFilesForSHABasic(sha, p, remoteName)
+	}
+	return nil
+}
+
+// CheckRemoteLOBFilesForSHA on mart providers
+func CheckRemoteLOBFilesForSHASmart(sha string, provider providers.SmartSyncProvider, remoteName string) error {
+	// Smart providers can check themselves
+	exists, _ := provider.LOBExists(remoteName, sha)
+	if !exists {
+		return NewNotFoundError(fmt.Sprintf("Content for %v missing from %v", sha, remoteName), sha)
+	}
+	return nil
+}
+
+// CheckRemoteLOBFilesForSHA on non-smart providers
+func CheckRemoteLOBFilesForSHABasic(sha string, provider providers.SyncProvider, remoteName string) error {
+
 	// We need LOB info to know size / how many chunks it had
 	var info *LOBInfo
 	info, err := GetLOBInfo(sha)

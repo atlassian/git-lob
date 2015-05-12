@@ -5,6 +5,8 @@ import (
 	"bitbucket.org/sinbad/git-lob/util"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"os"
 	"path/filepath"
 	"time"
 )
@@ -20,7 +22,7 @@ func Fetch(provider providers.SyncProvider, remoteName string, refspecs []*GitRe
 
 	util.LogDebugf("Fetching from %v via %v\n", remoteName, provider.TypeID())
 
-	var lobsNeeded []string
+	var fileLobsNeeded []*FileLOB
 	var fetchranges []*GitRefSpec
 	if len(refspecs) == 0 {
 		// No refs specified, use 'Recent' fetch algorithm
@@ -29,16 +31,16 @@ func Fetch(provider providers.SyncProvider, remoteName string, refspecs []*GitRe
 				int64(0), int64(1), 0, 0})
 		}
 		// Get HEAD LOBs first
-		headlobs, earliestCommit, err := GetGitAllLOBsToCheckoutAtCommitAndRecent("HEAD", util.GlobalOptions.FetchCommitsPeriodHEAD,
+		headfilelobs, earliestCommit, err := GetGitAllFileLOBsToCheckoutAtCommitAndRecent("HEAD", util.GlobalOptions.FetchCommitsPeriodHEAD,
 			util.GlobalOptions.FetchIncludePaths, util.GlobalOptions.FetchExcludePaths)
 		if err != nil {
 			return errors.New(fmt.Sprintf("Error determining recent HEAD commits: %v", err.Error()))
 		}
 		if util.GlobalOptions.Verbose {
-			callback(&util.ProgressCallbackData{util.ProgressCalculate, fmt.Sprintf(" * HEAD: %d binary references", len(headlobs)),
+			callback(&util.ProgressCallbackData{util.ProgressCalculate, fmt.Sprintf(" * HEAD: %d binary references", len(headfilelobs)),
 				0, 0, 0, 0})
 		}
-		lobsNeeded = headlobs
+		fileLobsNeeded = headfilelobs
 		headSHA, err := GitRefToFullSHA("HEAD")
 		if err != nil {
 			return errors.New(fmt.Sprintf("Error determining HEAD sha: %v", err.Error()))
@@ -62,7 +64,7 @@ func Fetch(provider providers.SyncProvider, remoteName string, refspecs []*GitRe
 				}
 				refSHAsDone.Add(ref.CommitSHA)
 
-				recentreflobs, earliestCommit, err := GetGitAllLOBsToCheckoutAtCommitAndRecent(ref.Name, util.GlobalOptions.FetchCommitsPeriodOther,
+				recentreflobs, earliestCommit, err := GetGitAllFileLOBsToCheckoutAtCommitAndRecent(ref.Name, util.GlobalOptions.FetchCommitsPeriodOther,
 					util.GlobalOptions.FetchIncludePaths, util.GlobalOptions.FetchExcludePaths)
 				if err != nil {
 					return errors.New(fmt.Sprintf("Error determining recent commits on %v: %v", ref, err.Error()))
@@ -71,7 +73,7 @@ func Fetch(provider providers.SyncProvider, remoteName string, refspecs []*GitRe
 					callback(&util.ProgressCallbackData{util.ProgressCalculate, fmt.Sprintf(" * %v: %d binary references", ref, len(recentreflobs)),
 						int64(i), int64(len(refspecs)), 0, 0})
 				}
-				lobsNeeded = append(lobsNeeded, recentreflobs...)
+				fileLobsNeeded = append(fileLobsNeeded, recentreflobs...)
 
 				fetchranges = append(fetchranges, &GitRefSpec{fmt.Sprintf("^%v", earliestCommit), "..", ref.CommitSHA})
 			}
@@ -84,7 +86,7 @@ func Fetch(provider providers.SyncProvider, remoteName string, refspecs []*GitRe
 				callback(&util.ProgressCallbackData{util.ProgressCalculate, fmt.Sprintf("Calculating data to fetch for %v", refspec),
 					int64(i), int64(len(refspecs)), 0, 0})
 			}
-			refshas, err := GetGitAllLOBsToCheckoutInRefSpec(refspec, util.GlobalOptions.FetchIncludePaths, util.GlobalOptions.FetchExcludePaths)
+			reffileshas, err := GetGitAllFilesAndLOBsToCheckoutInRefSpec(refspec, util.GlobalOptions.FetchIncludePaths, util.GlobalOptions.FetchExcludePaths)
 			if err != nil {
 				return errors.New(fmt.Sprintf("Error determining LOBs to fetch for %v: %v", refspec, err.Error()))
 			}
@@ -92,12 +94,12 @@ func Fetch(provider providers.SyncProvider, remoteName string, refspecs []*GitRe
 				callback(&util.ProgressCallbackData{util.ProgressCalculate, fmt.Sprintf(" * %v: %d binary references", refspec, len(refspecs)),
 					int64(i), int64(len(refspecs)), 0, 0})
 			}
-			lobsNeeded = append(lobsNeeded, refshas...)
+			fileLobsNeeded = append(fileLobsNeeded, reffileshas...)
 
 			if refspec.IsRange() {
 				fetchranges = append(fetchranges, refspec)
 			} else {
-				fetchranges = append(fetchranges, &GitRefSpec{fmt.Sprintf("^%v", refspec.Ref1), "..", refspec.Ref2})
+				fetchranges = append(fetchranges, &GitRefSpec{fmt.Sprintf("^%v", refspec.Ref1), "..", refspec.Ref1})
 			}
 		}
 	}
@@ -131,7 +133,12 @@ func Fetch(provider providers.SyncProvider, remoteName string, refspecs []*GitRe
 			// These are all ranges, Ref1 being exclusive so that's where we measure from
 			WalkGitCommitLOBsToPush(remoteName, fetchrange.Ref1, false, unpushedCallback)
 			if !anyCommitsUnpushed || allUnpushedCommitsAreOnRemote {
-				commitsToMarkPushedAfterFetching = append(commitsToMarkPushedAfterFetching, fetchrange.Ref2)
+				pushedsha := fetchrange.Ref2
+				if !GitRefIsFullSHA(pushedsha) {
+					// Was probably a manual ref, convert to SHA
+					pushedsha, _ = GitRefToFullSHA(pushedsha)
+				}
+				commitsToMarkPushedAfterFetching = append(commitsToMarkPushedAfterFetching, pushedsha)
 				util.LogDebugf("Will mark %v as pushed after fetch since there are no unpushed LOBs in ancestors that aren't on %v\n", fetchrange.Ref2, remoteName)
 			} else {
 				util.LogDebugf("%v will not be marked as pushed after fetch since there are unpushed LOBs in ancestors that aren't on %v\n", fetchrange.Ref2, remoteName)
@@ -142,7 +149,7 @@ func Fetch(provider providers.SyncProvider, remoteName string, refspecs []*GitRe
 
 	fetchAnyNotFound := false
 
-	if len(lobsNeeded) == 0 {
+	if len(fileLobsNeeded) == 0 {
 		callback(&util.ProgressCallbackData{util.ProgressCalculate, "No binaries to download.",
 			int64(len(refspecs)), int64(len(refspecs)), 0, 0})
 	} else {
@@ -150,14 +157,18 @@ func Fetch(provider providers.SyncProvider, remoteName string, refspecs []*GitRe
 		// Duplicates are not eliminated by methods we call, for efficiency
 		// We need to remove them though because otherwise we can report much higher download requirements
 		// than necessary when multiple refs include the same SHA
-		util.StringRemoveDuplicates(&lobsNeeded)
+		// We use this opportunity to build a straight list of unduplicated LOB shas which is also map to a filename
+		// which we may use in smart servers to determine other versions to generate deltas on
 
-		var lobsToDownload []string
-		if force {
-			// Just download all
-			lobsToDownload = lobsNeeded
-		} else {
-			lobsToDownload = GetMissingLOBs(lobsNeeded, false)
+		lobsToDownload := ConvertFileLOBSliceToMap(fileLobsNeeded)
+		if !force {
+			// Eliminate any that are OK locally
+			// It's safe to delete as you iterate in Go! refreshing :)
+			for sha, _ := range lobsToDownload {
+				if !IsLOBMissing(sha, false) {
+					delete(lobsToDownload, sha)
+				}
+			}
 		}
 
 		if len(lobsToDownload) == 0 {
@@ -205,7 +216,7 @@ func Fetch(provider providers.SyncProvider, remoteName string, refspecs []*GitRe
 }
 
 // Internal method for fetching
-func fetchLOBs(lobshas []string, provider providers.SyncProvider, remoteName string, force bool, callback util.ProgressCallback) error {
+func fetchLOBs(lobshas map[string]string, provider providers.SyncProvider, remoteName string, force bool, callback util.ProgressCallback) error {
 	// Download metafiles first
 	// This will allow us to estimate the time required
 	callback(&util.ProgressCallbackData{util.ProgressCalculate, "Downloading metadata",
@@ -216,11 +227,17 @@ func fetchLOBs(lobshas []string, provider providers.SyncProvider, remoteName str
 	}
 
 	// So now we have all the metadata available locally, we can know what files to download
+
 	var filesTotalBytes int64
 	var files []string
+	var deltas []*LOBDelta
+	var deltaTotalBytes int64
+	var deltaSavings int64
+	smartProvider := providers.UpgradeToSmartSyncProvider(provider)
+
 	callback(&util.ProgressCallbackData{util.ProgressCalculate, "Calculating content files to download",
 		0, 0, 0, 0})
-	for _, sha := range lobshas {
+	for sha, filename := range lobshas {
 		info, err := GetLOBInfo(sha)
 		if err != nil {
 			// If we could not get the lob data, it means that we could not download the meta file
@@ -230,46 +247,116 @@ func fetchLOBs(lobshas []string, provider providers.SyncProvider, remoteName str
 			// We notified earlier
 			continue
 		}
+		// If this is a smart provider, try to download deltas where appropriate
+		if info.Size > util.GlobalOptions.FetchDeltasAboveSize && smartProvider != nil {
+			// This doesn't download, just prepares and gets size
+			delta := prepareFetchDelta(sha, filename, smartProvider, remoteName)
+			if delta != nil {
+				deltas = append(deltas, delta)
+				deltaTotalBytes += delta.DeltaSize
+				deltaSavings += info.Size - (delta.DeltaSize + ApproximateMetadataSize)
+				// We'll do a delta for this so don't continue to determine files
+				continue
+			}
+		}
+		// fallback to basic file download
 		filesTotalBytes += info.Size
 		for i := 0; i < info.NumChunks; i++ {
 			// get relative filename for download purposes
 			files = append(files, GetLOBChunkRelativePath(sha, i))
 		}
 	}
-	callback(&util.ProgressCallbackData{util.ProgressCalculate, fmt.Sprintf("Metadata done, downloading content (%v)", util.FormatSize(filesTotalBytes)),
+	totalBytes := filesTotalBytes + deltaTotalBytes
+	callback(&util.ProgressCallbackData{util.ProgressCalculate, fmt.Sprintf("Metadata done, downloading content (%v)", util.FormatSize(totalBytes)),
 		0, 0, 0, 0})
+	if deltaSavings > 0 {
+		callback(&util.ProgressCallbackData{util.ProgressCalculate, fmt.Sprintf("Saving %v by fetching deltas", util.FormatSize(deltaSavings)),
+			0, 0, 0, 0})
+	}
 
 	// Download content now
+	if smartProvider != nil && len(deltas) > 0 {
+		// First try deltas, if any fail fall back on regular download
+		failedDeltas := fetchDeltas(deltas, deltaTotalBytes, smartProvider, remoteName, force, callback)
+		if len(failedDeltas) > 0 {
+			for _, delta := range failedDeltas {
+				// Slightly costly but this should be rare for prepare to work and download not to
+				info, err := GetLOBInfo(delta.TargetSHA)
+				if err != nil {
+					return fmt.Errorf("LOB info for %v went missing, this should be impossible: %v", delta.TargetSHA, err.Error())
+				}
+				filesTotalBytes += info.Size
+				for i := 0; i < info.NumChunks; i++ {
+					// get relative filename for download purposes
+					files = append(files, GetLOBChunkRelativePath(info.SHA, i))
+				}
+			}
+		}
+	}
 	return fetchContentFiles(files, filesTotalBytes, provider, remoteName, force, callback)
 
 }
 
+func prepareFetchDelta(lobsha, filename string, provider providers.SmartSyncProvider, remoteName string) *LOBDelta {
+	othershas, err := GetGitAllLOBHistoryForFile(filename, lobsha)
+	if err != nil {
+		util.LogErrorf("Unable to prepare delta for %v(%v): %v\n", lobsha, filename, err.Error())
+		return nil
+	}
+	// This is all the possible base shas, but we can only use ones we have locally too
+	// Right now we're not trying to cope with ordered downloads where we might have newer ones part way through fetch (too fiddly)
+	var localbaseshas []string
+	for _, sha := range othershas {
+		if !IsLOBMissing(sha, false) {
+			localbaseshas = append(localbaseshas, sha)
+		}
+	}
+	if len(localbaseshas) == 0 {
+		// no base shas, cannot do this
+		return nil
+	}
+	// Now ask the server to pick a sha, generate a delta, cache it and tell us how big it is
+	sz, chosenbasesha, err := provider.PrepareDeltaForDownload(remoteName, lobsha, localbaseshas)
+	if err != nil {
+		util.LogErrorf("Unable to prepare delta %v(%v): %v\n", lobsha, filename, err.Error())
+		return nil
+	}
+	// No common base to use
+	if chosenbasesha == "" {
+		return nil
+	}
+	return &LOBDelta{
+		BaseSHA:   chosenbasesha,
+		TargetSHA: lobsha,
+		DeltaSize: sz,
+	}
+}
+
 // Internal method for fetching
-func fetchMetadata(lobshas []string, provider providers.SyncProvider, remoteName string, force bool, callback util.ProgressCallback) error {
-	// Use average metafile bytes as estimate of download, usually around 100 bytes of JSON
-	averageMetaSize := 100
-	metaTotalBytes := int64(len(lobshas) * averageMetaSize)
+func fetchMetadata(lobshas map[string]string, provider providers.SyncProvider, remoteName string, force bool, callback util.ProgressCallback) error {
+	// Use average metafile bytes as estimate of download, usually < 100 bytes of JSON
+	metaTotalBytes := int64(len(lobshas) * ApproximateMetadataSize)
 	var metafilesDone int
 	metacallback := func(fileInProgress string, progressType util.ProgressCallbackType, bytesDone, totalBytes int64) (abort bool) {
 		// Don't bother to track partial completion, only 100 bytes each
 		if progressType == util.ProgressSkip || progressType == util.ProgressNotFound {
 			metafilesDone++
 			callback(&util.ProgressCallbackData{progressType, fileInProgress, totalBytes, totalBytes,
-				int64(metafilesDone * averageMetaSize), metaTotalBytes})
+				int64(metafilesDone * ApproximateMetadataSize), metaTotalBytes})
 			// Remote did not have this file
 		} else {
 			if bytesDone == totalBytes {
 				// finished
 				metafilesDone++
 				callback(&util.ProgressCallbackData{util.ProgressTransferBytes, fileInProgress, totalBytes, totalBytes,
-					int64(metafilesDone * averageMetaSize), metaTotalBytes})
+					int64(metafilesDone * ApproximateMetadataSize), metaTotalBytes})
 			}
 		}
 		return false
 	}
 	// Download all meta files
 	var metafilesToDownload []string
-	for _, sha := range lobshas {
+	for sha, _ := range lobshas {
 		// Note get relative file name
 		metafilesToDownload = append(metafilesToDownload, GetLOBMetaRelativePath(sha))
 	}
@@ -379,14 +466,105 @@ func fetchContentFiles(files []string, filesTotalBytes int64, provider providers
 	return err
 }
 
+// Fetch via deltas which have already been picked & prepared on the server. Any that fail for any reason are added
+// to the faileddeltas return list and will be re-tried using the standard download
+func fetchDeltas(deltas []*LOBDelta, deltaTotalBytes int64, provider providers.SmartSyncProvider, remoteName string,
+	force bool, callback util.ProgressCallback) (faileddeltas []*LOBDelta) {
+
+	var failed []*LOBDelta
+	var bytesDoneSoFar int64
+	for _, delta := range deltas {
+
+		err := fetchSingleDelta(delta, bytesDoneSoFar, deltaTotalBytes, provider, remoteName, force, callback)
+		bytesDoneSoFar += delta.DeltaSize
+		if err != nil {
+			failed = append(failed, delta)
+			msg := fmt.Sprintf("Error applying %v: %v. Falling back to non-delta download", getDeltaProgressDesc(delta), err.Error())
+			callback(&util.ProgressCallbackData{util.ProgressError, msg, delta.DeltaSize, delta.DeltaSize,
+				bytesDoneSoFar, deltaTotalBytes})
+		}
+
+	}
+	return failed
+
+}
+
+func getDeltaProgressDesc(delta *LOBDelta) string {
+	return fmt.Sprintf("Delta %v..%v", delta.BaseSHA[:7], delta.TargetSHA[:7])
+}
+
+func fetchSingleDelta(delta *LOBDelta, bytesSoFar int64, deltaTotalBytes int64, provider providers.SmartSyncProvider, remoteName string,
+	force bool, callback util.ProgressCallback) error {
+
+	// Description for progress
+	desc := getDeltaProgressDesc(delta)
+
+	// Initial 0% call
+	callback(&util.ProgressCallbackData{util.ProgressTransferBytes, desc, 0, delta.DeltaSize,
+		bytesSoFar, deltaTotalBytes})
+
+	// We could pipe download output directly into ApplyDelta via a goroutine
+	// But for simplicity of fail states, use a temp file
+	tempf, err := ioutil.TempFile("", "deltadownload")
+	if err != nil {
+		return err
+	}
+	tempfilename := tempf.Name()
+	defer os.Remove(tempfilename) // ensure always removed
+	defer tempf.Close()           // only used in panic cases, we close manually
+	localcallback := func(txt string, progressType util.ProgressCallbackType, bytesDone, totalBytes int64) (abort bool) {
+
+		var ret bool
+		if bytesDone != totalBytes {
+			// only do part progress in here, do final outside to ensure it always happens regardless
+			ret = callback(&util.ProgressCallbackData{util.ProgressTransferBytes, desc, bytesDone, totalBytes,
+				bytesSoFar + bytesDone, deltaTotalBytes})
+
+		}
+
+		return ret
+	}
+
+	err = provider.DownloadDelta(remoteName, delta.BaseSHA, delta.TargetSHA, tempf, localcallback)
+	tempf.Close() // Close so available to read back
+	if err != nil {
+		return err
+	}
+	// finished download OK, now apply
+	deltain, err := os.OpenFile(tempfilename, os.O_RDONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer deltain.Close()
+	// Apply to shared or local
+	err = ApplyLOBDeltaInBaseDir(getFetchDestination(), delta.BaseSHA, delta.TargetSHA, deltain)
+	if err != nil {
+		return err
+	}
+
+	// Also if downloading to shared store, link into local
+	if IsUsingSharedStorage() {
+		ok := recoverLocalLOBFilesFromSharedStore(delta.TargetSHA)
+		if !ok {
+			return fmt.Errorf("%v was applied to shared store but linking to local failed", desc)
+		}
+	}
+
+	// yay, call final 100%
+	callback(&util.ProgressCallbackData{util.ProgressTransferBytes, desc, delta.DeltaSize, delta.DeltaSize,
+		bytesSoFar + delta.DeltaSize, deltaTotalBytes})
+
+	return nil
+
+}
+
 // Fetch the files required for a single LOB
 func FetchSingle(lobsha string, provider providers.SyncProvider, remoteName string, force bool, callback util.ProgressCallback) error {
 
-	var lobToDownload []string
-	if force {
-		lobToDownload = append(lobToDownload, lobsha)
-	} else {
-		lobToDownload = GetMissingLOBs([]string{lobsha}, false)
+	var lobToDownload map[string]string
+	if force || IsLOBMissing(lobsha, false) {
+		// We don't know the filename, this is forced
+		lobToDownload[lobsha] = ""
 	}
 
 	if len(lobToDownload) > 0 {

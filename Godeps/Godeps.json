@@ -1,7 +1,14 @@
 {
 	"ImportPath": "bitbucket.org/sinbad/git-lob",
 	"GoVersion": "go1.4.2",
+	"Packages": [
+		"./..."
+	],
 	"Deps": [
+		{
+			"ImportPath": "github.com/cloudflare/bm",
+			"Rev": "8f526543f783e83caf708ed2be32f0252f12af4f"
+		},
 		{
 			"ImportPath": "github.com/mitchellh/go-homedir",
 			"Rev": "7d2d8c8a4e078ce3c58736ab521a40b37a504c52"
