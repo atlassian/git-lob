@@ -99,7 +99,7 @@ func Fetch(provider providers.SyncProvider, remoteName string, refspecs []*GitRe
 			if refspec.IsRange() {
 				fetchranges = append(fetchranges, refspec)
 			} else {
-				fetchranges = append(fetchranges, &GitRefSpec{fmt.Sprintf("^%v", refspec.Ref1), "..", refspec.Ref2})
+				fetchranges = append(fetchranges, &GitRefSpec{fmt.Sprintf("^%v", refspec.Ref1), "..", refspec.Ref1})
 			}
 		}
 	}
@@ -133,7 +133,12 @@ func Fetch(provider providers.SyncProvider, remoteName string, refspecs []*GitRe
 			// These are all ranges, Ref1 being exclusive so that's where we measure from
 			WalkGitCommitLOBsToPush(remoteName, fetchrange.Ref1, false, unpushedCallback)
 			if !anyCommitsUnpushed || allUnpushedCommitsAreOnRemote {
-				commitsToMarkPushedAfterFetching = append(commitsToMarkPushedAfterFetching, fetchrange.Ref2)
+				pushedsha := fetchrange.Ref2
+				if !GitRefIsFullSHA(pushedsha) {
+					// Was probably a manual ref, convert to SHA
+					pushedsha, _ = GitRefToFullSHA(pushedsha)
+				}
+				commitsToMarkPushedAfterFetching = append(commitsToMarkPushedAfterFetching, pushedsha)
 				util.LogDebugf("Will mark %v as pushed after fetch since there are no unpushed LOBs in ancestors that aren't on %v\n", fetchrange.Ref2, remoteName)
 			} else {
 				util.LogDebugf("%v will not be marked as pushed after fetch since there are unpushed LOBs in ancestors that aren't on %v\n", fetchrange.Ref2, remoteName)
