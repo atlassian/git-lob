@@ -17,6 +17,8 @@
   Testing library. MIT license
 * [Gomega](https://github.com/onsi/gomega)
   Matcher library for Ginkgo. MIT license
+* [Gox](https://github.com/mitchellh/gox)
+  Cross-compilation tool
 
 
 ## A note about godep ##

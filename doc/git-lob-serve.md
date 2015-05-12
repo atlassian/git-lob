@@ -4,6 +4,27 @@ While git-lob can sync to simple server storage locations like filesystem and s3
 
 When using the 'smart' sync provider and using an SSH URL (either ssh://user@host/path or user@host:/path), git-lob will automatically open an SSH connection to the host specified and run the command specified by the config parameter ```git-lob.ssh-server```, which if not specified defaults to ```git-lob-serve```. Simply copying this program onto your server (no dependencies required, it's stand-alone and works on Windows, Linux and Mac servers) and providing authenticated SSH users access to it is enough to provide a reference implementation of a smart server on your own host.
 
+## Installation ##
+
+From the root, build the server in whatever architecture you want using gox (https://github.com/mitchellh/gox) and upload the binary to your server's path:
+```
+gox -build-toolchain
+gox -osarch="linux/386" ./git-lob-serve
+scp git-lob-serve_linux_386 admin@host.com:/usr/local/bin/git-lob-serve
+```
+
+Make sure the user you'll be using to connect has access to this binary and also the base path (see configuration below).
+
+## sshd configuration for groups ##
+
+On many Linux distros, 'ssh url command' uses a default umask of 022 which means that uploaded file permissions are read only except for the user. If you want people to use their own username in their SSH url & give permission to files via groups, you should edit /etc/pam.d/sshd and add:
+```
+# Setting UMASK for all ssh based connections (ssh, sftp, scp)
+# always allow group perms
+session    optional     pam_umask.so umask=0002
+```
+git-lob-serve will copy the permissions of the base path when creating new files & directories but it can't do that if the umask filters out the write bits. You can't fix this with 'umask' in /etc/profile because that only applies to interactive ssh terminals, not 'ssh url command' forms.
+
 ## Invocation ##
 
 git-lob will generally handle this, but to invoke the server binary you simply need to run it by name and pass a single 'path' argument. This path is to support multiple binary stores on the remote server end; you might want to have a separate binary store for each repo, or for each user, or for each team, or just a single path for everything (binaries are immutable so technically can be shared between everyone, if permissions aren't an issue).
