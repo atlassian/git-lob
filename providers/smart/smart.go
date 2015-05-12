@@ -336,8 +336,12 @@ func (self *SmartSyncProviderImpl) downloadSingleFile(remoteName, filename, toDi
 		os.Remove(tmpfilename)
 	}()
 	var abortAfterThisFile bool
+	completecallbackdone := false
 	localcallback := func(bytesDone, totalBytes int64) {
 		if callback != nil {
+			if bytesDone == totalBytes {
+				completecallbackdone = true
+			}
 			if callback(filename, util.ProgressTransferBytes, bytesDone, totalBytes) {
 				// Can't abort in the middle of a transfer with smart protocol
 				abortAfterThisFile = true
@@ -361,6 +365,12 @@ func (self *SmartSyncProviderImpl) downloadSingleFile(remoteName, filename, toDi
 		msg := fmt.Sprintf("Problem while downloading %v from %v: %v", filename, remoteName, err)
 		errorList = append(errorList, msg)
 		return errorList, abortAfterThisFile
+	}
+	// Make sure we do completion
+	if callback != nil && !completecallbackdone {
+		if callback(filename, util.ProgressTransferBytes, sz, sz) {
+			return errorList, true
+		}
 	}
 	// Move to correct location - remove before to deal with force or bad size cases
 	os.Remove(destfilename)
@@ -408,8 +418,12 @@ func (self *SmartSyncProviderImpl) uploadSingleFile(remoteName, filename, fromDi
 		}
 	}
 	var abortAfterThisFile bool
+	completecallbackdone := false
 	localcallback := func(bytesDone, totalBytes int64) {
 		if callback != nil {
+			if bytesDone == totalBytes {
+				completecallbackdone = true
+			}
 			if callback(filename, util.ProgressTransferBytes, bytesDone, totalBytes) {
 				// Can't abort in the middle of a transfer with smart protocol
 				abortAfterThisFile = true
@@ -432,7 +446,8 @@ func (self *SmartSyncProviderImpl) uploadSingleFile(remoteName, filename, fromDi
 		msg := fmt.Sprintf("Problem while uploading %v to %v: %v", srcfilename, remoteName, err)
 		errorList = append(errorList, msg)
 	}
-	if callback != nil {
+	// Make sure we do completion
+	if callback != nil && !completecallbackdone {
 		if callback(filename, util.ProgressTransferBytes, srcfi.Size(), srcfi.Size()) {
 			return errorList, true
 		}
