@@ -102,13 +102,26 @@ func NewPersistentTransport(conn io.ReadWriteCloser) *PersistentTransport {
 	}
 }
 
+type ExitRequest struct {
+}
+type ExitResponse struct {
+}
+
 // Release any resources associated with this transport (including any persostent connections)
 func (self *PersistentTransport) Release() {
-	self.BufferedReader = nil
 	if self.Connection != nil {
+		// terminate server-side
+		params := ExitRequest{}
+		resp := ExitResponse{}
+		err := self.doFullJSONRequestResponse("Exit", &params, &resp)
+		if err != nil {
+			fmt.Println("Problem exiting persistent transport:", err)
+		}
+
 		self.Connection.Close()
 		self.Connection = nil
 	}
+	self.BufferedReader = nil
 }
 
 // Perform a full JSON-RPC style call with JSON request and response

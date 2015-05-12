@@ -57,6 +57,14 @@ func Serve(in io.Reader, out io.Writer, outerr io.Writer, config *Config, path s
 			return 22
 		}
 
+		// Special case 'Exit'
+		if req.Method == "Exit" {
+			result := &smart.ExitResponse{}
+			resp, _ := smart.NewJsonResponse(req.Id, result)
+			sendResponse(resp, out)
+			return 0
+		}
+
 		// Get function to handle method
 		f, ok := methodMap[req.Method]
 		var resp *smart.JsonResponse

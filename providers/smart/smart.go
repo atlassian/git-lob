@@ -76,6 +76,16 @@ func (self *SmartSyncProviderImpl) ValidateConfig(remoteName string) error {
 	return self.retrieveUrl(remoteName)
 }
 
+func (self *SmartSyncProviderImpl) Release() {
+	if self.transport != nil {
+		self.transport.Release()
+		self.transport = nil
+	}
+	self.serverCaps = nil
+	self.serverUrl = nil
+	self.remoteName = ""
+}
+
 func (self *SmartSyncProviderImpl) retrieveUrl(remoteName string) error {
 	urlsetting := fmt.Sprintf("remote.%v.git-lob-url", remoteName)
 	urlstr := util.GlobalOptions.GitConfig[urlsetting]

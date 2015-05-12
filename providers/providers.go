@@ -24,6 +24,9 @@ type SyncProvider interface {
 	// Return whether the configuration for a given remote is valid
 	ValidateConfig(remoteName string) error
 
+	// Release any resources being used by the provider
+	Release()
+
 	// Upload a given list of files (binary storage). The paths are relative to fromDir and are provided
 	// like that to make it easier for the provider since it will likely use the same
 	// relative paths inside its own storage

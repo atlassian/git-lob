@@ -151,3 +151,10 @@ Protocol methods
 |               | TargetLobSHA (string): the SHA of the binary file content we want to reconstruct from base + delta|
 |               | Size (Number): size in bytes of delta as reported from __DownloadDeltaPrepare__.| 
 |**Result**     | A pure binary stream of data of exactly Size bytes. Client must read all the bytes and use to apply to base LOB to create new content.|
+
+|||
+|-----------|-------------|
+|**Method**     | __Exit__|
+|**Purpose**    | Exit the server-side process|
+|**Params**     |None|
+|**Result**     |None|

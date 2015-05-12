@@ -165,6 +165,7 @@ func Push() int {
 			util.LogConsole("Successfully pushed binaries to", remoteName)
 		}
 	}
+	provider.Release()
 
 	return 0
 }
@@ -265,6 +266,8 @@ func PushLob() int {
 	} else {
 		util.LogConsole("Successfully pushed binaries to", remoteName)
 	}
+
+	provider.Release()
 
 	return 0
 }

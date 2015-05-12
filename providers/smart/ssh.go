@@ -173,14 +173,14 @@ func (self *SshConnection) Write(p []byte) (n int, err error) {
 func (self *SshConnection) Close() error {
 	// Docs say "It is incorrect to call Wait before all writes to the pipe have completed."
 	// But that actually means in parallel https://github.com/golang/go/issues/9307 so we're ok here
+	errbytes, readerr := ioutil.ReadAll(self.stderr)
+	if readerr == nil && len(errbytes) > 0 {
+		// Copy to our stderr for info
+		fmt.Fprintf(os.Stderr, "Messages from SSH server:\n%v", string(errbytes))
+	}
 	err := self.cmd.Wait()
 	if err != nil {
-		errbytes, readerr := ioutil.ReadAll(self.stderr)
-		if readerr != nil {
-			return fmt.Errorf("Error closing ssh connection: %v", err.Error())
-		} else {
-			return fmt.Errorf("Error closing ssh connection: %v\nstderr: %v", err.Error(), string(errbytes))
-		}
+		return fmt.Errorf("Error closing ssh connection: %v\nstderr: %v", err.Error(), string(errbytes))
 	}
 
 	return nil

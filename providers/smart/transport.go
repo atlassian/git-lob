@@ -12,7 +12,7 @@ type TransportProgressCallback func(bytesDone, totalBytes int64)
 // or it might process each request as a discrete request/response pair over REST
 // Note each transport instance is stateful and associated with a server/connection, see SmartTransportFactory for how they are created
 type Transport interface {
-	// Release any resources associated with this transport (including any persostent connections)
+	// Release any resources associated with this transport (including closing any persistent connections)
 	Release()
 	// Ask the server for a list of capabilities
 	QueryCaps() ([]string, error)
