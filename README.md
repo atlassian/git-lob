@@ -34,6 +34,7 @@ On Mac/Linux:
 [filter "lob"]
   clean = "$GOPATH/bin/git-lob filter-clean %f"
   smudge = "$GOPATH/bin/git-lob filter-smudge %f"
+  required = true
 ```
 
 On Windows:
@@ -41,6 +42,7 @@ On Windows:
 [filter "lob"]
   clean = "%GOPATH%/bin/git-lob.exe filter-clean %f"
   smudge = "%GOPATH%/bin/git-lob.exe filter-smudge %f"
+  required = true
 ```
 
 You can expand $GOTPATH/%GOPATH% inline if you need to support usage where GOPATH is not defined. Again on Windows, always use forward slashes, for example c:/path/to/git-lob.exe
