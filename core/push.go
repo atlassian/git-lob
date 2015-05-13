@@ -86,7 +86,7 @@ func Push(provider providers.SyncProvider, remoteName string, refspecs []*GitRef
 					// We'll try this as a delta; if it fails later then we'll fall back on normal
 					alldeltasforcommit = append(alldeltasforcommit, delta)
 					commitDeltaSize += delta.DeltaSize + ApproximateMetadataSize
-					deltaSavings += (delta.DeltaSize + ApproximateMetadataSize) - filesize
+					deltaSavings += filesize - (delta.DeltaSize + ApproximateMetadataSize)
 				} else {
 					allfilenamesforcommit = append(allfilenamesforcommit, filenames...)
 					commitFileSize += filesize
