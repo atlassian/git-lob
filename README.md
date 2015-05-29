@@ -1,4 +1,28 @@
 # git-lob #
+## IMPORTANT ##
+**TL;DR: use [Git LFS](https://git-lfs.github.com) instead of this project.**
+
+**git-lob** was an experiment into Git large file handling by [Atlassian]
+(https://www.atlassian.com) in late 2014 / early 2015. Unbeknownst to us, GitHub
+had already started working on this problem too and announced [Git LFS]
+(https://git-lfs.github.com) in May 2015. 
+
+Atlassian are keenly aware that it's in the community's interest not to fragment
+this space any further, and GitHub's approach turned out to be very similar to
+our own (they even picked the same language, [Go](http://golang.org)). Therefore
+we've shelved this project and are now contributing to 
+[Git LFS](https://git-lfs.github.com) instead.
+
+We're releasing the source to this project anyway, even though we have no 
+intention of developing it further. We'd intended to make it open source anyway, 
+and there may be some useful code in here for others - including for porting 
+features to Git LFS where it doesn't have them yet (which we'll be doing 
+ourselves too). 
+
+You might want to experiment with this project to see how it compares but it is 
+**not** supported by Atlassian, nor will it have any further updates.
+
+# Original documentation #
 ## About ##
 git-lob is a git extension for efficiently handling binary files in [Git](http://git-scm.com). Instead of storing the binary file content inside the git repo, it is hashed & externalised, with the git commit only referring to the hash. The binary store is synchronised separately from the commits. 
 
