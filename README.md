@@ -56,8 +56,8 @@ You must have git 1.8+ installed and on your path.
 
 If you want to build from source, make sure you have a Go environment already set up, with $GOPATH/bin already on your $PATH (on Windows, %GOPATH%\bin on your %PATH%). Then run the following in a console:
 ```bash
-> go get bitbucket.org/sinbad/git-lob
-> go install bitbucket.org/sinbad/git-lob
+> go get github.com/atlassian/git-lob
+> go install github.com/atlassian/git-lob
 ```
 
 Now edit your main .gitconfig file in your user directory and add a new filter definition. 
