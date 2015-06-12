@@ -8,18 +8,27 @@ had already started working on this problem too and announced [Git LFS]
 (https://git-lfs.github.com) in May 2015. 
 
 Atlassian are keenly aware that it's in the community's interest not to fragment
-this space any further, and GitHub's approach turned out to be very similar to
-our own (they even picked the same language, [Go](http://golang.org)). Therefore
+this space any further, and GitHub's thinking turned out to be very similar to
+our own, even picking the same language, [Go](http://golang.org). Therefore
 we've shelved this project and are now contributing to 
 [Git LFS](https://git-lfs.github.com) instead.
 
-We're releasing the source to this project anyway, even though we have no 
-intention of developing it further. We'd intended to make it open source anyway, 
-and there may be some useful code in here for others - including for porting 
-features to Git LFS where it doesn't have them yet (which we'll be doing 
-ourselves too). 
+We're releasing the source to git-lob anyway, even though we have no 
+intention of developing it further. We'd always intended to make it open source, 
+and others might find this code useful. We'll probably be porting some of the features
+here to Git LFS ourselves but other people are welcome to pick some things up too.
+Here are some of the features that could be ported:
 
-You might want to experiment with this project to see how it compares but it is 
+1. SSH native API (we're porting this right now)
+2. Support for large file storage on S3 and file stores (no server required - probably won't be ported)
+3. Chunked uploads/downloads for easier resuming
+4. Pushing / fetching binaries separately from git commits
+5. Pruning old binaries
+6. Include / exclude paths (only download binaries in areas you work in)
+7. Binary deltas using VCDIFF to reduce upload/download time
+8. Shared local binary stores
+
+You're free to experiment with this project of course but it is 
 **not** supported by Atlassian, nor will it have any further updates.
 
 # Original documentation #
