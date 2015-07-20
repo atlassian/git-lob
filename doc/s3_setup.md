@@ -1,4 +1,4 @@
-# S3 Recommended Setup # 
+# S3 Recommended Setup #
 
 By default all resources in S3 are private to the account. While you can assign
 ACLs explicitly to allow other people access, you have to do this with each
@@ -38,10 +38,11 @@ this group to have permissions to your git-lob bucket.
 
 1. Create an Inline Policy in the bottom section
 2. Select Policy Generator
-3. Effect: Allow
-   AWS Service: Amazon S3
-   Actions: All Actions
-   Amazon Resource Name (ARN): arn:aws:s3:::*[bucket_name]*
+3. Set the following options: <br/>
+      Effect: Allow<br/>
+      AWS Service: Amazon S3<br/>
+      Actions: All Actions<br/>
+      Amazon Resource Name (ARN): arn:aws:s3:::*[bucket_name]*/*
 4. Click Add Statement then Next
 5. Give it a meaningful name e.g. 'Readwrite_git-lob' then Apply Policy 
 
