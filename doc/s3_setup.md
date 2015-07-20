@@ -42,7 +42,7 @@ this group to have permissions to your git-lob bucket.
       Effect: Allow<br/>
       AWS Service: Amazon S3<br/>
       Actions: All Actions<br/>
-      Amazon Resource Name (ARN): arn:aws:s3:::*[bucket_name]*/*
+      Amazon Resource Name (ARN): arn:aws:s3:::*[bucket_name]*, arn:aws:s3:::*[bucket_name]*/*
 4. Click Add Statement then Next
 5. Give it a meaningful name e.g. 'Readwrite_git-lob' then Apply Policy 
 
