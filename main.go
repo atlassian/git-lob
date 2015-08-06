@@ -1,8 +1,9 @@
 package main
 
 import (
-	"bitbucket.org/sinbad/git-lob/cmd"
 	"os"
+
+	"github.com/atlassian/git-lob/cmd"
 )
 
 func main() {

@@ -1,11 +1,12 @@
 package main
 
 import (
-	"bitbucket.org/sinbad/git-lob/util"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime/debug"
+
+	"github.com/atlassian/git-lob/util"
 )
 
 func main() {

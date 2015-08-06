@@ -18,10 +18,10 @@ import (
 	"reflect"
 	"time"
 
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega/internal/assertion"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega/internal/asyncassertion"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega/internal/testingtsupport"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega/types"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/gomega/internal/assertion"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/gomega/internal/asyncassertion"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/gomega/internal/testingtsupport"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/gomega/types"
 )
 
 const GOMEGA_VERSION = "1.0"

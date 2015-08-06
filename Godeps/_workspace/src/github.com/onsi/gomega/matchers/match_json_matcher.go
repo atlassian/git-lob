@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega/format"
 	"reflect"
+
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/gomega/format"
 )
 
 type MatchJSONMatcher struct {

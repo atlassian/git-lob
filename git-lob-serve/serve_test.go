@@ -1,11 +1,6 @@
 package main
 
 import (
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/cloudflare/bm"
-	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
-	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
-	"bitbucket.org/sinbad/git-lob/core"
-	"bitbucket.org/sinbad/git-lob/providers/smart"
 	"bytes"
 	"crypto/sha1"
 	"encoding/json"
@@ -16,6 +11,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/cloudflare/bm"
+	. "github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
+	. "github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
+	"github.com/atlassian/git-lob/core"
+	"github.com/atlassian/git-lob/providers/smart"
 )
 
 var _ = Describe("git-lob-serve tests", func() {

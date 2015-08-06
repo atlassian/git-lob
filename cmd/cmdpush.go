@@ -1,13 +1,14 @@
 package cmd
 
 import (
-	"bitbucket.org/sinbad/git-lob/core"
-	"bitbucket.org/sinbad/git-lob/providers"
-	"bitbucket.org/sinbad/git-lob/util"
 	"fmt"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/atlassian/git-lob/core"
+	"github.com/atlassian/git-lob/providers"
+	"github.com/atlassian/git-lob/util"
 )
 
 // Push command line tool

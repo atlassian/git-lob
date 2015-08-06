@@ -1,9 +1,9 @@
 package matchers_test
 
 import (
-	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
-	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
-	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega/matchers"
+	. "github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
+	. "github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
+	. "github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/gomega/matchers"
 )
 
 var _ = Describe("AssignableToTypeOf", func() {

@@ -1,8 +1,6 @@
 package core
 
 import (
-	"bitbucket.org/sinbad/git-lob/providers"
-	"bitbucket.org/sinbad/git-lob/util"
 	"bufio"
 	"errors"
 	"fmt"
@@ -12,6 +10,9 @@ import (
 	"path/filepath"
 	"regexp"
 	"time"
+
+	"github.com/atlassian/git-lob/providers"
+	"github.com/atlassian/git-lob/util"
 )
 
 type PruneCallbackType int

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"reflect"
 
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega/format"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega/matchers/support/goraph/bipartitegraph"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/gomega/format"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/gomega/matchers/support/goraph/bipartitegraph"
 )
 
 type ConsistOfMatcher struct {

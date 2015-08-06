@@ -1,12 +1,13 @@
 package main
 
 import (
-	"bitbucket.org/sinbad/git-lob/providers/smart"
-	"bitbucket.org/sinbad/git-lob/util"
 	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
+
+	"github.com/atlassian/git-lob/providers/smart"
+	"github.com/atlassian/git-lob/util"
 )
 
 type MethodFunc func(req *smart.JsonRequest, in io.Reader, out io.Writer, config *Config, path string) *smart.JsonResponse

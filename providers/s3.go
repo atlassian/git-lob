@@ -1,10 +1,6 @@
 package providers
 
 import (
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/mitchellh/go-homedir"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/mitchellh/goamz/aws"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/mitchellh/goamz/s3"
-	"bitbucket.org/sinbad/git-lob/util"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +8,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/mitchellh/go-homedir"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/mitchellh/goamz/aws"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/mitchellh/goamz/s3"
+	"github.com/atlassian/git-lob/util"
 )
 
 // S3SyncProvider implements the basic SyncProvider interface for S3

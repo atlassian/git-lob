@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"regexp"
 
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega/format"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/gomega/format"
 )
 
 //Objects satisfying the BufferProvider can be used with the Say matcher.

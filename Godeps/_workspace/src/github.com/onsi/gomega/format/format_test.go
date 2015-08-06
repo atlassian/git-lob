@@ -3,10 +3,11 @@ package format_test
 import (
 	"fmt"
 	"strings"
-	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
-	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
-	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega/format"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega/types"
+
+	. "github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
+	. "github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
+	. "github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/gomega/format"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/gomega/types"
 )
 
 //recursive struct

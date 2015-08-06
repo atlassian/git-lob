@@ -3,10 +3,11 @@ package remote
 import (
 	"bytes"
 	"encoding/json"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/config"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/types"
 	"io"
 	"net/http"
+
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/config"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/types"
 )
 
 //An interface to net/http's client to allow the injection of fakes under test

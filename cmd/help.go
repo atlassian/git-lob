@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"bitbucket.org/sinbad/git-lob/providers"
-	"bitbucket.org/sinbad/git-lob/util"
+	"github.com/atlassian/git-lob/providers"
+	"github.com/atlassian/git-lob/util"
 )
 
 func HelpUsage() {

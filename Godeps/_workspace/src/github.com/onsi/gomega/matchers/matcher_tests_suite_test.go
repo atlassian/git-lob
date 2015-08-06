@@ -2,8 +2,9 @@ package matchers_test
 
 import (
 	"testing"
-	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
-	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
+
+	. "github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
+	. "github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
 )
 
 type myStringer struct {

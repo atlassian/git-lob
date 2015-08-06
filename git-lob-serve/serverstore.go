@@ -1,15 +1,16 @@
 package main
 
 import (
-	"bitbucket.org/sinbad/git-lob/core"
-	"bitbucket.org/sinbad/git-lob/providers/smart"
-	"bitbucket.org/sinbad/git-lob/util"
 	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+
+	"github.com/atlassian/git-lob/core"
+	"github.com/atlassian/git-lob/providers/smart"
+	"github.com/atlassian/git-lob/util"
 )
 
 // A server could choose to store LOBs however it likes

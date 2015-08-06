@@ -20,16 +20,16 @@ import (
 	"strings"
 	"time"
 
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/config"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/internal/codelocation"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/internal/failer"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/internal/remote"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/internal/suite"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/internal/testingtproxy"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/internal/writer"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/reporters"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/reporters/stenographer"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/types"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/config"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/internal/codelocation"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/internal/failer"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/internal/remote"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/internal/suite"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/internal/testingtproxy"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/internal/writer"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/reporters"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/reporters/stenographer"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/types"
 )
 
 const GINKGO_VERSION = config.VERSION

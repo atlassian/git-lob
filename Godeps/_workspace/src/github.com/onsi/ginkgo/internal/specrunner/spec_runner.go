@@ -7,12 +7,12 @@ import (
 	"sync"
 	"syscall"
 
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/config"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/internal/leafnodes"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/internal/spec"
-	Writer "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/internal/writer"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/reporters"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/types"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/config"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/internal/leafnodes"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/internal/spec"
+	Writer "github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/internal/writer"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/reporters"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/types"
 
 	"time"
 )

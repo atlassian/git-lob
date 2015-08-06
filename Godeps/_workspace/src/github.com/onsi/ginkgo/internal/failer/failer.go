@@ -1,8 +1,9 @@
 package failer
 
 import (
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/types"
 	"sync"
+
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/types"
 )
 
 type Failer struct {

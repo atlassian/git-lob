@@ -1,7 +1,6 @@
 package providers
 
 import (
-	"bitbucket.org/sinbad/git-lob/util"
 	"errors"
 	"fmt"
 	"io"
@@ -9,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/atlassian/git-lob/util"
 )
 
 // FileSystemSyncProvider implements the basic SyncProvider interface

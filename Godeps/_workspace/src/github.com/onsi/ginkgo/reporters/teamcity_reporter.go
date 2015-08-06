@@ -10,10 +10,11 @@ package reporters
 
 import (
 	"fmt"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/config"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/types"
 	"io"
 	"strings"
+
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/config"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/types"
 )
 
 const (

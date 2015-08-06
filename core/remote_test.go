@@ -1,11 +1,12 @@
 package core
 
 import (
-	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
-	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
 	"os"
 	"path/filepath"
 	"time"
+
+	. "github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
+	. "github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
 )
 
 var _ = Describe("Remote", func() {

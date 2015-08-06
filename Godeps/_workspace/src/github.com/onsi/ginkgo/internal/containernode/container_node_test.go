@@ -2,14 +2,15 @@ package containernode_test
 
 import (
 	"math/rand"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/internal/leafnodes"
 
-	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
-	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/internal/leafnodes"
 
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/internal/codelocation"
-	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/internal/containernode"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/types"
+	. "github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
+	. "github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
+
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/internal/codelocation"
+	. "github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/internal/containernode"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/types"
 )
 
 var _ = Describe("Container Node", func() {

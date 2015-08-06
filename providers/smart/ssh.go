@@ -1,7 +1,6 @@
 package smart
 
 import (
-	"bitbucket.org/sinbad/git-lob/util"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -11,6 +10,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/atlassian/git-lob/util"
 )
 
 // factory for creating SSH connections

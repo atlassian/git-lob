@@ -1,9 +1,10 @@
 package cmd
 
 import (
-	"bitbucket.org/sinbad/git-lob/core"
-	"bitbucket.org/sinbad/git-lob/util"
 	"path/filepath"
+
+	"github.com/atlassian/git-lob/core"
+	"github.com/atlassian/git-lob/util"
 )
 
 func Checkout() int {

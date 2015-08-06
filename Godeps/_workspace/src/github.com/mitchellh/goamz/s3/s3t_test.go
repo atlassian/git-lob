@@ -1,10 +1,10 @@
 package s3_test
 
 import (
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/mitchellh/goamz/aws"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/mitchellh/goamz/s3"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/mitchellh/goamz/s3/s3test"
-	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/motain/gocheck"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/mitchellh/goamz/aws"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/mitchellh/goamz/s3"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/mitchellh/goamz/s3/s3test"
+	. "github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/motain/gocheck"
 )
 
 type LocalServer struct {

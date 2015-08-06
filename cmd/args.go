@@ -1,10 +1,11 @@
 package cmd
 
 import (
-	"bitbucket.org/sinbad/git-lob/util"
 	"fmt"
 	"os"
 	"regexp"
+
+	"github.com/atlassian/git-lob/util"
 )
 
 // Parse incoming arguments and convert to useful structure, with validation

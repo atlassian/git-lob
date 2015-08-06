@@ -11,7 +11,7 @@
       On Mac/Linux, edit ~/.profile or ~/.bash_profile and export GOPATH=blah
   4. If you wish, add $GOPATH/bin to your PATH the same way
 3. If you want to cross-compile, install [Gox](https://github.com/mitchellh/gox)
-4. Make sure you cloned git-lob into $GOPATH/src/bitbucket.org/sinbad/git-lob 
+4. Make sure you cloned git-lob into $GOPATH/src/github.com/atlassian/git-lob 
 
 ## A note about dependencies ##
 

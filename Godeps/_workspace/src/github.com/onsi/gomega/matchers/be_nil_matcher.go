@@ -1,6 +1,6 @@
 package matchers
 
-import "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega/format"
+import "github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/gomega/format"
 
 type BeNilMatcher struct {
 }

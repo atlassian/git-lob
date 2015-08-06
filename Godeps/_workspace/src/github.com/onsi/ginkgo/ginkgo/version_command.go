@@ -3,7 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/config"
+
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/config"
 )
 
 func BuildVersionCommand() *Command {

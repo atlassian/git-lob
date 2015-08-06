@@ -1,8 +1,6 @@
 package main
 
 import (
-	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
-	"bitbucket.org/sinbad/git-lob/util"
 	"bufio"
 	cryptorand "crypto/rand"
 	"fmt"
@@ -12,6 +10,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	. "github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
+	"github.com/atlassian/git-lob/util"
 )
 
 // Utility methods for testing only

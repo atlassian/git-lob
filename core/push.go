@@ -1,11 +1,12 @@
 package core
 
 import (
-	"bitbucket.org/sinbad/git-lob/providers"
-	"bitbucket.org/sinbad/git-lob/util"
 	"fmt"
 	"io/ioutil"
 	"os"
+
+	"github.com/atlassian/git-lob/providers"
+	"github.com/atlassian/git-lob/util"
 )
 
 // Some temporary storage used to pre-calculate the amount of data we'll need to upload

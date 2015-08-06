@@ -1,7 +1,7 @@
 package s3
 
 import (
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/mitchellh/goamz/aws"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/mitchellh/goamz/aws"
 )
 
 var originalStrategy = attempts

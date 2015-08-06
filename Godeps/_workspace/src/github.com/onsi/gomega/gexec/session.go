@@ -11,8 +11,8 @@ import (
 	"sync"
 	"syscall"
 
-	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega/gbytes"
+	. "github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/gomega/gbytes"
 )
 
 const INVALID_EXIT_CODE = 254

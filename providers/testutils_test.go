@@ -1,7 +1,6 @@
 package providers
 
 import (
-	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
 	"bufio"
 	cryptorand "crypto/rand"
 	"crypto/sha1"
@@ -11,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+
+	. "github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
 )
 
 // generate a list of (relative) file names

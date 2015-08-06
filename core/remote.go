@@ -1,14 +1,15 @@
 package core
 
 import (
-	"bitbucket.org/sinbad/git-lob/providers"
-	"bitbucket.org/sinbad/git-lob/util"
 	"bufio"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
+
+	"github.com/atlassian/git-lob/providers"
+	"github.com/atlassian/git-lob/util"
 )
 
 // Do we have a remote state cache for this remote yet?

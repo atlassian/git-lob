@@ -1,9 +1,10 @@
 package cmd
 
 import (
-	"bitbucket.org/sinbad/git-lob/core"
-	"bitbucket.org/sinbad/git-lob/util"
 	"strings"
+
+	"github.com/atlassian/git-lob/core"
+	"github.com/atlassian/git-lob/util"
 )
 
 // Missing command line tool

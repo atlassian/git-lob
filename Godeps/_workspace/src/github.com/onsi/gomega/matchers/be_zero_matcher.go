@@ -1,8 +1,9 @@
 package matchers
 
 import (
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega/format"
 	"reflect"
+
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/gomega/format"
 )
 
 type BeZeroMatcher struct {

@@ -1,16 +1,17 @@
 package providers
 
 import (
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/mitchellh/goamz/aws"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/mitchellh/goamz/s3"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/mitchellh/goamz/testutil"
-	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
-	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
-	. "bitbucket.org/sinbad/git-lob/util"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/mitchellh/goamz/aws"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/mitchellh/goamz/s3"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/mitchellh/goamz/testutil"
+	. "github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
+	. "github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
+	. "github.com/atlassian/git-lob/util"
 )
 
 var _ = Describe("S3", func() {

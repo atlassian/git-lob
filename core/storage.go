@@ -1,8 +1,6 @@
 package core
 
 import (
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/cloudflare/bm"
-	"bitbucket.org/sinbad/git-lob/util"
 	"bytes"
 	"crypto/sha1"
 	"encoding/json"
@@ -13,6 +11,9 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/cloudflare/bm"
+	"github.com/atlassian/git-lob/util"
 )
 
 const BUFSIZE = 131072

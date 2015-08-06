@@ -1,8 +1,9 @@
 package main
 
 import (
-	"bitbucket.org/sinbad/git-lob/providers/smart"
 	"io"
+
+	"github.com/atlassian/git-lob/providers/smart"
 )
 
 func queryCaps(req *smart.JsonRequest, in io.Reader, out io.Writer, config *Config, path string) *smart.JsonResponse {

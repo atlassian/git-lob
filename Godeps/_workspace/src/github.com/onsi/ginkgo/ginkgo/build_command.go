@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/ginkgo/testrunner"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/ginkgo/testrunner"
 )
 
 func BuildBuildCommand() *Command {

@@ -1,8 +1,9 @@
 package nodot_test
 
 import (
-	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/ginkgo/nodot"
 	"strings"
+
+	. "github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/ginkgo/nodot"
 )
 
 var _ = Describe("ApplyNoDot", func() {

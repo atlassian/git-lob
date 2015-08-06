@@ -113,7 +113,7 @@ import (
 	"regexp"
 	"sync"
 
-	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
+	. "github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
 )
 
 func new() *Server {

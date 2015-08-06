@@ -1,10 +1,11 @@
 package providers
 
 import (
-	"bitbucket.org/sinbad/git-lob/util"
 	"errors"
 	"fmt"
 	"io"
+
+	"github.com/atlassian/git-lob/util"
 )
 
 // General interface that all sync providers must implement

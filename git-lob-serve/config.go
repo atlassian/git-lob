@@ -1,13 +1,14 @@
 package main
 
 import (
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/mitchellh/go-homedir"
-	"bitbucket.org/sinbad/git-lob/util"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/mitchellh/go-homedir"
+	"github.com/atlassian/git-lob/util"
 )
 
 type Config struct {

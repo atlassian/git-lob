@@ -2,8 +2,9 @@ package testutil
 
 import (
 	"flag"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/mitchellh/goamz/aws"
-	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/motain/gocheck"
+
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/mitchellh/goamz/aws"
+	. "github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/motain/gocheck"
 )
 
 // Amazon must be used by all tested packages to determine whether to

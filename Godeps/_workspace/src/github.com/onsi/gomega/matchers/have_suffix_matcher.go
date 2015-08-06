@@ -2,7 +2,8 @@ package matchers
 
 import (
 	"fmt"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega/format"
+
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/gomega/format"
 )
 
 type HaveSuffixMatcher struct {

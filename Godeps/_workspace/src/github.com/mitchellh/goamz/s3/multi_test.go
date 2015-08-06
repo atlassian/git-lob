@@ -2,11 +2,12 @@ package s3_test
 
 import (
 	"encoding/xml"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/mitchellh/goamz/s3"
-	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/motain/gocheck"
 	"io"
 	"io/ioutil"
 	"strings"
+
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/mitchellh/goamz/s3"
+	. "github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/motain/gocheck"
 )
 
 func (s *S) TestInitMulti(c *C) {

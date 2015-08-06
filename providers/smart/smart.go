@@ -1,8 +1,6 @@
 package smart
 
 import (
-	"bitbucket.org/sinbad/git-lob/providers"
-	"bitbucket.org/sinbad/git-lob/util"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +10,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/atlassian/git-lob/providers"
+	"github.com/atlassian/git-lob/util"
 )
 
 // The smart sync provider implements everything the standard SyncProvider does, but in addition

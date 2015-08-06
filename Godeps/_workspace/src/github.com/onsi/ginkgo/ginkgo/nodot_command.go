@@ -3,11 +3,12 @@ package main
 import (
 	"bufio"
 	"flag"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/ginkgo/nodot"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
+
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/ginkgo/nodot"
 )
 
 func BuildNodotCommand() *Command {

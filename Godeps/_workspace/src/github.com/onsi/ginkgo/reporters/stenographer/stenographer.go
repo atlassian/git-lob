@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"strings"
 
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/types"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo/types"
 )
 
 const defaultStyle = "\x1b[0m"

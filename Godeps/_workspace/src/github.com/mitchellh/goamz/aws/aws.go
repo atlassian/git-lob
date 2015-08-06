@@ -17,8 +17,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/mitchellh/go-homedir"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/vaughan0/go-ini"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/mitchellh/go-homedir"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/vaughan0/go-ini"
 )
 
 // Region defines the URLs where AWS services may be accessed.

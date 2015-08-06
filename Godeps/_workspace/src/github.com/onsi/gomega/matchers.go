@@ -3,8 +3,8 @@ package gomega
 import (
 	"time"
 
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega/matchers"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega/types"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/gomega/matchers"
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/gomega/types"
 )
 
 //Equal uses reflect.DeepEqual to compare actual with expected.  Equal is strict about

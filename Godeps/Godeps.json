@@ -1,5 +1,5 @@
 {
-	"ImportPath": "bitbucket.org/sinbad/git-lob",
+	"ImportPath": "github.com/atlassian/git-lob",
 	"GoVersion": "go1.4.2",
 	"Packages": [
 		"./..."

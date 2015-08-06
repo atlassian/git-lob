@@ -1,9 +1,6 @@
 package main
 
 import (
-	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
-	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
-	. "bitbucket.org/sinbad/git-lob/core"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -11,6 +8,10 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	. "github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
+	. "github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
+	. "github.com/atlassian/git-lob/core"
 )
 
 // This test file is about running git commands with git filters configured

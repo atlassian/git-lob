@@ -1,13 +1,14 @@
 package cmd
 
 import (
-	"bitbucket.org/sinbad/git-lob/providers"
-	"bitbucket.org/sinbad/git-lob/providers/smart"
-	"bitbucket.org/sinbad/git-lob/util"
 	"fmt"
 	"os"
 	"runtime/debug"
 	"strings"
+
+	"github.com/atlassian/git-lob/providers"
+	"github.com/atlassian/git-lob/providers/smart"
+	"github.com/atlassian/git-lob/util"
 )
 
 // Actual implementation of main()

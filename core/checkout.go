@@ -1,12 +1,13 @@
 package core
 
 import (
-	"bitbucket.org/sinbad/git-lob/util"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+
+	"github.com/atlassian/git-lob/util"
 )
 
 // Callback can report skip,transfer (on complete), error

@@ -1,9 +1,6 @@
 package core
 
 import (
-	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
-	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
-	"bitbucket.org/sinbad/git-lob/util"
 	"bufio"
 	"bytes"
 	cryptorand "crypto/rand"
@@ -19,6 +16,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	. "github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
+	. "github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
+	"github.com/atlassian/git-lob/util"
 )
 
 // Utility methods for testing only

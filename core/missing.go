@@ -1,12 +1,13 @@
 package core
 
 import (
-	"bitbucket.org/sinbad/git-lob/util"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
+
+	"github.com/atlassian/git-lob/util"
 )
 
 type MissingCallbackType int

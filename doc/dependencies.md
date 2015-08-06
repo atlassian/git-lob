@@ -46,7 +46,7 @@ means everything works as if nothing happened.
 Remember to reference *existing* dependencies using their local workspace
 path, i.e.
 ```
-import "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/foo/bar"
+import "github.com/atlassian/git-lob/Godeps/_workspace/src/foo/bar"
 ```
 and not
 ```
@@ -69,7 +69,7 @@ godep save -r ./...
 The './...' parameter is to ensure godep looks in all of our packages. 
 
 Note that while adding the dependency you use the external package name foo/bar
-but that after 'godep save -r' this is re-written to "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/foo/bar", which you should use from then on.
+but that after 'godep save -r' this is re-written to "github.com/atlassian/git-lob/Godeps/_workspace/src/foo/bar", which you should use from then on.
 
 Referencing it as its original package name is required pre-godep save.
 

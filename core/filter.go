@@ -1,9 +1,10 @@
 package core
 
 import (
-	"bitbucket.org/sinbad/git-lob/util"
 	"io"
 	"regexp"
+
+	"github.com/atlassian/git-lob/util"
 )
 
 // Prefix which identifies file contents as a git-lob SHA entry

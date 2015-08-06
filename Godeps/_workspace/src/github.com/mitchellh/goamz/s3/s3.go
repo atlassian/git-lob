@@ -16,7 +16,6 @@ import (
 	"encoding/base64"
 	"encoding/xml"
 	"fmt"
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/mitchellh/goamz/aws"
 	"io"
 	"io/ioutil"
 	"log"
@@ -27,6 +26,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/mitchellh/goamz/aws"
 )
 
 const debug = false

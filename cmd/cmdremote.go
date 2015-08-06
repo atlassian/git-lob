@@ -1,10 +1,11 @@
 package cmd
 
 import (
-	"bitbucket.org/sinbad/git-lob/core"
-	"bitbucket.org/sinbad/git-lob/util"
 	"regexp"
 	"strings"
+
+	"github.com/atlassian/git-lob/core"
+	"github.com/atlassian/git-lob/util"
 )
 
 // Command line low-level tool to manually mark a remote/commit combo as pushed

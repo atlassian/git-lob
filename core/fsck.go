@@ -1,11 +1,12 @@
 package core
 
 import (
-	"bitbucket.org/sinbad/git-lob/util"
 	"errors"
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/atlassian/git-lob/util"
 )
 
 type FsckCallbackType int

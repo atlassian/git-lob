@@ -1,10 +1,11 @@
 package cmd
 
 import (
-	"bitbucket.org/sinbad/git-lob/core"
-	"bitbucket.org/sinbad/git-lob/util"
 	"fmt"
 	"strings"
+
+	"github.com/atlassian/git-lob/core"
+	"github.com/atlassian/git-lob/util"
 )
 
 // Fsck command line tool

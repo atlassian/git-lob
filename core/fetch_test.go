@@ -1,11 +1,6 @@
 package core
 
 import (
-	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
-	. "bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
-	. "bitbucket.org/sinbad/git-lob/providers"
-	"bitbucket.org/sinbad/git-lob/providers/smart"
-	. "bitbucket.org/sinbad/git-lob/util"
 	"bytes"
 	"fmt"
 	"io"
@@ -16,6 +11,12 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	. "github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/ginkgo"
+	. "github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/onsi/gomega"
+	. "github.com/atlassian/git-lob/providers"
+	"github.com/atlassian/git-lob/providers/smart"
+	. "github.com/atlassian/git-lob/util"
 )
 
 var _ = Describe("Fetch", func() {

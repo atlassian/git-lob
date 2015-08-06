@@ -1,7 +1,6 @@
 package util
 
 import (
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/mitchellh/go-homedir"
 	"bytes"
 	"fmt"
 	"io"
@@ -12,6 +11,8 @@ import (
 	"runtime"
 	"runtime/debug"
 	"strings"
+
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/mitchellh/go-homedir"
 )
 
 var (

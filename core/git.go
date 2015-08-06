@@ -1,7 +1,6 @@
 package core
 
 import (
-	"bitbucket.org/sinbad/git-lob/util"
 	"bufio"
 	"errors"
 	"fmt"
@@ -11,6 +10,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/atlassian/git-lob/util"
 )
 
 // Git specification of a commit or range of commits (a reference or reference range)

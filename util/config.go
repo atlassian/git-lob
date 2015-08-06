@@ -1,7 +1,6 @@
 package util
 
 import (
-	"bitbucket.org/sinbad/git-lob/Godeps/_workspace/src/github.com/mitchellh/go-homedir"
 	"bufio"
 	"fmt"
 	"io"
@@ -12,6 +11,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/atlassian/git-lob/Godeps/_workspace/src/github.com/mitchellh/go-homedir"
 )
 
 // Options (command line or config file)
